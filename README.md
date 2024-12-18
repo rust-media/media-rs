@@ -5,4 +5,4 @@
 [![License](https://img.shields.io/badge/License-Apache%202-blue.svg)](LICENSE-APACHE)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE-MIT)
 
-A pure rust implementation of media framework
+A pure Rust implementation of media framework for handling multimedia tasks such as audio and video processing.

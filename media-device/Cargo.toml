@@ -1,0 +1,71 @@
+[package]
+name = "media-device"
+description = "Wrapper for capture and playback devices"
+homepage.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/media-device"
+version = "0.1.0"
+authors.workspace = true
+license.workspace = true
+categories.workspace = true
+keywords = ["audio", "video", "camera", "capture", "playback"]
+edition.workspace = true
+
+[dependencies.media-base]
+workspace = true
+
+[dependencies]
+cfg-if = "1.0"
+os-ver = "0.2"
+thiserror = "1.0"
+x-variant = "0.1"
+
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+av-foundation = "0.5"
+dispatch2 = "0.1"
+core-audio-types = "0.1"
+core-foundation = "0.10"
+core-media = "0.5"
+core-video = { version = "0.4", default-features = false, features = ["link"] }
+objc2 = "0.5"
+objc2-foundation = { version = "0.2", features = ["NSArray", "NSDictionary", "NSObject"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-core = "0.58"
+
+[target.'cfg(target_os = "windows")'.dependencies.windows]
+version = "0.58"
+features = [
+    "implement",
+    "Win32",
+    "Win32_Foundation",
+    "Win32_Media",
+    "Win32_Media_DirectShow",
+    "Win32_Media_MediaFoundation",
+    "Win32_System_Com"
+]
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+wasm-bindgen = "0.2"
+web-time = "1.1"
+js-sys = "0.3"
+
+[target.'cfg(target_family = "wasm")'.dependencies.web-sys]
+version = "0.3"
+features = [
+    "ImageData",
+    "MediaDeviceInfo",
+    "MediaDeviceKind",
+    "MediaDevices",
+    "MediaStream",
+    "MediaStreamConstraints",
+    "MediaStreamTrack",
+    "MediaStreamTrackState",
+    "MediaTrackConstraints",
+    "MediaTrackSettings",
+    "MediaTrackSupportedConstraints",
+    "Navigator",
+]
+
+[target.'cfg(target_family = "wasm")'.dev-dependencies]
+console_error_panic_hook = "0.1"

@@ -3,7 +3,7 @@ use std::{
     num::{NonZeroU32, NonZeroU8},
 };
 
-use crate::{
+use super::{
     media_frame::{MemoryPlanes, PlaneInformation},
     time,
 };

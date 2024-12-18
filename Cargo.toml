@@ -1,27 +1,32 @@
-[package]
-name = "media"
-description = "A pure rust implementation of media framework"
+[workspace]
+resolver = "2"
+members = [
+    "media-base",
+    "media-codec",
+    "media-device",
+    "media-filter",
+    "media",
+    # examples
+    "media-examples",
+]
+
+[workspace.package]
 homepage = "https://github.com/rust-media"
 repository = "https://github.com/rust-media/media-rs"
-documentation = "https://docs.rs/media"
-version = "0.1.0"
 authors = ["Zhou Wei <zhouwei@ehom.net>"]
 license = "MIT OR Apache-2.0"
 categories = ["multimedia", "multimedia::audio", "multimedia::video"]
 keywords = ["audio", "media", "video"]
 edition = "2021"
 
-[dependencies]
-bitflags = "2.6"
-cfg-if = "1.0"
-num_enum = "0.7"
-os-ver = "0.2"
-smallvec = "1.13"
-thiserror = "1.0"
-x-variant = "0.1"
+[workspace.dependencies.media-base]
+path = "media-base"
+version = "0.1.0"
 
-[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
-core-audio-types = "0.1"
-core-foundation = "0.10"
-core-media = "0.5"
-core-video = { version = "0.4", default-features = false, features = ["link"] }
+[workspace.dependencies.media-device]
+path = "media-device"
+version = "0.1.0"
+
+[workspace.dependencies.media]
+path = "media"
+version = "0.1.1"

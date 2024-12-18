@@ -8,7 +8,7 @@ use std::{
 use bitflags::bitflags;
 use num_enum::TryFromPrimitive;
 
-use crate::{
+use super::{
     align_to, ceil_rshift,
     media_frame::{MemoryPlanes, PlaneInformation},
 };
@@ -230,6 +230,18 @@ pub enum CompressionFormat {
 pub enum VideoFormat {
     Pixel(PixelFormat),
     Compression(CompressionFormat),
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum ChromaLocation {
+    #[default]
+    Unspecified,
+    Left,
+    Center,
+    TopLeft,
+    Top,
+    BottomLeft,
+    Bottom,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

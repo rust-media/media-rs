@@ -1,13 +1,13 @@
 use std::num::NonZeroU32;
 
-use crate::{
+use super::{
     error::MediaError,
-    invalid_param_error,
     media::MediaFrameType,
     media_frame::{Data, MediaFrame, MediaFrameData, MediaFrameDescription, MemoryData, MemoryPlanes, PlaneInformation},
     video::{PixelFormat, VideoFrameDescription},
     DEFAULT_ALIGNMENT,
 };
+use crate::invalid_param_error;
 
 impl<'a> MemoryData<'a> {
     pub fn new_video_data(format: PixelFormat, width: NonZeroU32, height: NonZeroU32) -> Result<Self, MediaError> {

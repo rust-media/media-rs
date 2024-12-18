@@ -1,6 +1,6 @@
 use std::num::{NonZeroU32, NonZeroU8};
 
-use crate::{
+use super::{
     audio::{AudioFormat, AudioFrameDescription},
     error::MediaError,
     media::MediaFrameType,
