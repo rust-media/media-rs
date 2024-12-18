@@ -1,8 +1,9 @@
-use crate::{
+use variant::Variant;
+
+use super::{
     data::{DataFormat, DataFrameDescription},
     media::MediaFrameType,
     media_frame::{MediaFrame, MediaFrameData, MediaFrameDescription},
-    variant::Variant,
 };
 
 impl<'a> MediaFrame<'a> {

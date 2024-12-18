@@ -3,11 +3,10 @@ use std::sync::{Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 use core_video::pixel_buffer::CVPixelBuffer;
 use smallvec::SmallVec;
+use variant::Variant;
 
-use crate::{
-    audio::AudioFrameDescription, data::DataFrameDescription, error::MediaError, media::MediaFrameType, unsupported_error, variant::Variant,
-    video::VideoFrameDescription,
-};
+use super::{audio::AudioFrameDescription, data::DataFrameDescription, error::MediaError, media::MediaFrameType, video::VideoFrameDescription};
+use crate::unsupported_error;
 
 pub const MEDIA_FRAME_MAX_PLANES: usize = 8;
 

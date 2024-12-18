@@ -1,0 +1,9 @@
+[package]
+name = "examples"
+edition = "2021"
+
+[dev-dependencies]
+media = { path = "../media" }
+
+[[example]]
+name = "camera"

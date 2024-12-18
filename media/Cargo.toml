@@ -1,0 +1,23 @@
+[package]
+name = "media"
+description = "Pure rust implementation of media framework"
+homepage.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/media"
+version = "0.1.2"
+authors.workspace = true
+license.workspace = true
+categories.workspace = true
+keywords.workspace = true
+edition.workspace = true
+readme = "../README.md"
+
+[dependencies.media-base]
+workspace = true
+
+[dependencies.media-device]
+workspace = true
+optional = true
+
+[features]
+default = ["media-device"]
