@@ -1,7 +1,7 @@
 use std::{
     cmp,
     fmt::{Display, Formatter},
-    iter,
+    iter, mem,
     num::NonZeroU32,
 };
 
@@ -828,7 +828,7 @@ impl PixelFormat {
                 planes.push(PlaneInformation::Video(stride, height));
                 size = stride * height;
                 for i in 1..desc.components as usize {
-                    let stride = align_to(ceil_rshift(width, desc.chroma_shift_x as u32) * desc.component_bytes[i as usize] as u32, alignment);
+                    let stride = align_to(ceil_rshift(width, desc.chroma_shift_x as u32) * desc.component_bytes[i] as u32, alignment);
                     let height = ceil_rshift(height, desc.chroma_shift_y as u32);
                     planes.push(PlaneInformation::Video(stride, height));
                     size += stride * height;
@@ -847,10 +847,10 @@ impl PixelFormat {
         planes.push(PlaneInformation::Video(stride, height));
         size = stride * height;
         for i in 1..desc.components as usize {
-            let plane_stride = ceil_rshift(stride, desc.chroma_shift_x as u32) * desc.component_bytes[i as usize] as u32;
+            let plane_stride = ceil_rshift(stride, desc.chroma_shift_x as u32) * desc.component_bytes[i] as u32;
             let plane_height = ceil_rshift(height, desc.chroma_shift_y as u32);
             planes.push(PlaneInformation::Video(plane_stride, plane_height));
-            size = size + plane_stride * plane_height;
+            size += plane_stride * plane_height;
         }
 
         (size, planes)
@@ -862,7 +862,7 @@ impl TryFrom<usize> for PixelFormat {
 
     fn try_from(value: usize) -> Result<Self, Self::Error> {
         if value <= PixelFormat::MAX as usize {
-            Ok(unsafe { std::mem::transmute(value as u8) })
+            Ok(unsafe { mem::transmute::<u8, PixelFormat>(value as u8) })
         } else {
             Err(())
         }
@@ -978,9 +978,9 @@ impl VideoFormat {
 
 const COMPRESSION_MASK: u32 = 0x8000;
 
-impl Into<u32> for VideoFormat {
-    fn into(self) -> u32 {
-        match self {
+impl From<VideoFormat> for u32 {
+    fn from(val: VideoFormat) -> Self {
+        match val {
             VideoFormat::Pixel(format) => format as u32,
             VideoFormat::Compression(format) => format as u32 | COMPRESSION_MASK,
         }

@@ -23,7 +23,7 @@ impl<'a> MemoryData<'a> {
         let (size, planes) = format.calc_data(width.get(), height.get(), 1);
 
         if buffer.len() != size as usize {
-            return Err(MediaError::Invalid("buffer size".to_string()).into());
+            return Err(MediaError::Invalid("buffer size".to_string()));
         }
 
         Ok(Self {
@@ -40,13 +40,13 @@ impl<'a> MemoryData<'a> {
         buffer: &'a [u8],
     ) -> Result<Self, MediaError> {
         if stride.get() < width.get() {
-            return Err(invalid_param_error!(stride).into());
+            return Err(invalid_param_error!(stride));
         }
 
         let (size, planes) = format.calc_data_with_stride(height.get(), stride.get());
 
         if buffer.len() != size as usize {
-            return Err(MediaError::Invalid("buffer size".to_string()).into());
+            return Err(MediaError::Invalid("buffer size".to_string()));
         }
 
         let data = Self {
@@ -59,11 +59,11 @@ impl<'a> MemoryData<'a> {
 
     pub fn attach_packed_video_data(format: PixelFormat, height: NonZeroU32, stride: NonZeroU32, buffer: &'a [u8]) -> Result<Self, MediaError> {
         if !format.is_packed() {
-            return Err(MediaError::Unsupported("format".to_string()).into());
+            return Err(MediaError::Unsupported("format".to_string()));
         }
 
         if buffer.len() != (stride.get() * height.get()) as usize {
-            return Err(MediaError::Invalid("buffer size".to_string()).into());
+            return Err(MediaError::Invalid("buffer size".to_string()));
         }
 
         let planes = MemoryPlanes::from_slice(&[PlaneInformation::Video(stride.get(), height.get())]);

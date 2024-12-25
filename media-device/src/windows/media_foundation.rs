@@ -36,11 +36,11 @@ use windows::{
     },
 };
 
-use crate::{camera::CameraFormat, Device, DeviceEvent, DeviceInformation, DeviceManager, OutputDevice};
+use crate::{camera::CameraFormat, Device, DeviceEvent, DeviceEventHandler, DeviceInformation, DeviceManager, OutputDevice, OutputHandler};
 
 pub struct MediaFoundationDeviceManager {
     devices: Option<Vec<MediaFoundationDevice>>,
-    handler: Option<Box<dyn Fn(&DeviceEvent) + Send + Sync>>,
+    handler: Option<DeviceEventHandler>,
 }
 
 impl DeviceManager for MediaFoundationDeviceManager {
@@ -115,6 +115,12 @@ impl DeviceManager for MediaFoundationDeviceManager {
     }
 }
 
+impl Default for MediaFoundationDeviceManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MediaFoundationDeviceManager {
     pub fn new() -> Self {
         Self {
@@ -167,7 +173,7 @@ impl DeviceInformation {
                 .map_err(|err| MediaError::Failed(err.message()))?;
         }
         if symbolic_link_ptr.is_null() {
-            return Err(none_param_error!(symbolic_link_ptr).into());
+            return Err(none_param_error!(symbolic_link_ptr));
         }
         let id = unsafe {
             let symbolic_link = symbolic_link_ptr.to_string().map_err(|err| MediaError::Failed(err.to_string()));
@@ -183,7 +189,7 @@ impl DeviceInformation {
                 .map_err(|err| MediaError::Failed(err.message()))?;
         }
         if friendly_name_ptr.is_null() {
-            return Err(none_param_error!(friendly_name_ptr).into());
+            return Err(none_param_error!(friendly_name_ptr));
         }
         let name = unsafe {
             let name = friendly_name_ptr.to_string().map_err(|err| MediaError::Failed(err.to_string()));
@@ -286,14 +292,14 @@ struct SourceReaderCallback {
     info: DeviceInformation,
     current_format: Option<CameraFormat>,
     stride_cache: Option<i32>,
-    handler: Arc<dyn Fn(MediaFrame) -> Result<(), MediaError> + Send + Sync>,
+    handler: OutputHandler,
     source_reader: Weak<Mutex<IMFSourceReader>>,
     running: AtomicBool,
     signal: Option<Arc<(Mutex<bool>, Condvar)>>,
 }
 
 impl SourceReaderCallback {
-    pub fn new(info: DeviceInformation, handler: Arc<dyn Fn(MediaFrame) -> Result<(), MediaError> + Send + Sync>) -> Self {
+    pub fn new(info: DeviceInformation, handler: OutputHandler) -> Self {
         Self {
             info,
             current_format: None,
@@ -339,7 +345,7 @@ impl IMFSourceReaderCallback_Impl for SourceReaderCallback_Impl {
         lltimestamp: i64,
         psample: Option<&IMFSample>,
     ) -> windows_core::Result<()> {
-        if hrstatus.is_err() || self.running.load(SeqCst) == false {
+        if hrstatus.is_err() || !self.running.load(SeqCst) {
             return Ok(());
         }
 
@@ -543,7 +549,7 @@ fn get_default_stride_with_width(source_reader: &IMFSourceReader, width: u32) ->
 
 fn start_internal(source_reader: &IMFSourceReader, callback: &mut SourceReaderCallback, camera_format: &CameraFormat) {
     callback.set_current_format(camera_format.clone());
-    if let Some(stride) = get_default_stride_with_width(&source_reader, camera_format.width) {
+    if let Some(stride) = get_default_stride_with_width(source_reader, camera_format.width) {
         callback.set_default_stride(stride);
     }
 
@@ -640,7 +646,7 @@ pub struct MediaFoundationDevice {
     running: bool,
     formats: Option<Vec<CameraFormat>>,
     current_format: Option<CameraFormat>,
-    handler: Option<Arc<dyn Fn(MediaFrame) -> Result<(), MediaError> + Send + Sync>>,
+    handler: Option<OutputHandler>,
     source_reader: Option<(Arc<Mutex<IMFSourceReader>>, IMFSourceReaderCallback)>,
 }
 
@@ -727,10 +733,10 @@ impl Device for MediaFoundationDevice {
                         start_internal(&source_reader, callback, &camera_format);
                         Some(camera_format)
                     }
-                    None => return Err(MediaError::Unsupported("format".to_string()).into()),
+                    None => return Err(MediaError::Unsupported("format".to_string())),
                 }
             } else {
-                return Err(MediaError::Unsupported("format".to_string()).into());
+                return Err(MediaError::Unsupported("format".to_string()));
             }
         } else {
             Some(CameraFormat {
@@ -767,7 +773,7 @@ impl Device for MediaFoundationDevice {
             format["format"] = (Into::<u32>::into(video_format.format)).into();
             format["width"] = video_format.width.into();
             format["height"] = video_format.height.into();
-            format["frame-rates"] = video_format.frame_rates.iter().map(|frame_rate| Variant::from(frame_rate.clone())).collect();
+            format["frame-rates"] = video_format.frame_rates.iter().map(|frame_rate| Variant::from(*frame_rate)).collect();
             formats.array_add(format);
         }
 
@@ -824,6 +830,7 @@ impl MediaFoundationDevice {
             let source_reader =
                 unsafe { MFCreateSourceReaderFromMediaSource(&media_source, &attributes).map_err(|err| MediaError::CreationFailed(err.message()))? };
 
+            #[allow(clippy::arc_with_non_send_sync)]
             let source_reader = Arc::new(Mutex::new(source_reader));
 
             unsafe {
