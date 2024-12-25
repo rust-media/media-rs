@@ -343,7 +343,7 @@ impl<'a> DataMappable<'a> for MediaFrameData<'a> {
             MediaFrameData::Memory(data) => data.map(),
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             MediaFrameData::PixelBuffer(data) => data.map(),
-            MediaFrameData::Variant(_) => Err(unsupported_error!(Variant).into()),
+            MediaFrameData::Variant(_) => Err(unsupported_error!(Variant)),
         }
     }
 
@@ -352,7 +352,7 @@ impl<'a> DataMappable<'a> for MediaFrameData<'a> {
             MediaFrameData::Memory(data) => data.map_mut(),
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             MediaFrameData::PixelBuffer(data) => data.map_mut(),
-            MediaFrameData::Variant(_) => Err(unsupported_error!(Variant).into()),
+            MediaFrameData::Variant(_) => Err(unsupported_error!(Variant)),
         }
     }
 
@@ -361,7 +361,7 @@ impl<'a> DataMappable<'a> for MediaFrameData<'a> {
             MediaFrameData::Memory(data) => data.unmap(),
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             MediaFrameData::PixelBuffer(data) => data.unmap(),
-            MediaFrameData::Variant(_) => Err(unsupported_error!(Variant).into()),
+            MediaFrameData::Variant(_) => Err(unsupported_error!(Variant)),
         }
     }
 
@@ -370,7 +370,7 @@ impl<'a> DataMappable<'a> for MediaFrameData<'a> {
             MediaFrameData::Memory(data) => data.unmap_mut(),
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             MediaFrameData::PixelBuffer(data) => data.unmap_mut(),
-            MediaFrameData::Variant(_) => Err(unsupported_error!(Variant).into()),
+            MediaFrameData::Variant(_) => Err(unsupported_error!(Variant)),
         }
     }
 
@@ -428,12 +428,10 @@ impl<'a> MediaFrame<'a> {
     }
 }
 
+#[derive(Clone)]
 pub struct SharedMediaFrame {
     inner: Arc<RwLock<MediaFrame<'static>>>,
 }
-
-unsafe impl Send for SharedMediaFrame {}
-unsafe impl Sync for SharedMediaFrame {}
 
 impl SharedMediaFrame {
     pub fn new(media_frame: MediaFrame<'static>) -> Self {

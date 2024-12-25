@@ -17,11 +17,12 @@ use smallvec::SmallVec;
 
 use crate::{
     error::MediaError,
+    invalid_param_error,
     media::MediaFrameType,
     media_frame::*,
+    none_param_error,
     video::{ColorMatrix, ColorPrimaries, ColorRange, ColorTransferCharacteristics, PixelFormat, VideoFrameDescription},
 };
-use crate::{invalid_param_error, none_param_error};
 
 const ITU_R_601_4: &str = "ITU_R_601_4";
 const ITU_R_709_2: &str = "ITU_R_709_2";
@@ -74,8 +75,8 @@ fn from_cv_format(format: u32) -> (Option<PixelFormat>, ColorRange) {
 
 fn into_cv_color_matrix(color_matrix: ColorMatrix) -> Option<CFString> {
     match color_matrix {
-        ColorMatrix::BT470BG | ColorMatrix::SMPTE170M => return Some(CVImageBufferYCbCrMatrix::ITU_R_601_4.into()),
-        ColorMatrix::BT709 => return Some(CVImageBufferYCbCrMatrix::ITU_R_709_2.into()),
+        ColorMatrix::BT470BG | ColorMatrix::SMPTE170M => Some(CVImageBufferYCbCrMatrix::ITU_R_601_4.into()),
+        ColorMatrix::BT709 => Some(CVImageBufferYCbCrMatrix::ITU_R_709_2.into()),
         ColorMatrix::BT2020CL | ColorMatrix::BT2020NCL => {
             #[cfg(target_os = "macos")]
             {
@@ -91,9 +92,9 @@ fn into_cv_color_matrix(color_matrix: ColorMatrix) -> Option<CFString> {
                 }}
             }
 
-            return Some(CFString::from_static_string(ITU_R_2020));
+            Some(CFString::from_static_string(ITU_R_2020))
         }
-        ColorMatrix::SMPTE240M => return Some(CVImageBufferYCbCrMatrix::SMPTE_240M_1995.into()),
+        ColorMatrix::SMPTE240M => Some(CVImageBufferYCbCrMatrix::SMPTE_240M_1995.into()),
         _ => {
             #[cfg(target_os = "macos")]
             {
@@ -109,17 +110,17 @@ fn into_cv_color_matrix(color_matrix: ColorMatrix) -> Option<CFString> {
                 }}
             }
 
-            return None;
+            None
         }
     }
 }
 
 fn from_cv_color_matrix(color_matrix: &CFString) -> ColorMatrix {
     match Cow::from(color_matrix).as_ref() {
-        ITU_R_709_2 => return ColorMatrix::BT709,
-        ITU_R_601_4 => return ColorMatrix::BT470BG,
-        SMPTE_240M_1995 => return ColorMatrix::SMPTE240M,
-        ITU_R_2020 => return ColorMatrix::BT2020NCL,
+        ITU_R_709_2 => ColorMatrix::BT709,
+        ITU_R_601_4 => ColorMatrix::BT470BG,
+        SMPTE_240M_1995 => ColorMatrix::SMPTE240M,
+        ITU_R_2020 => ColorMatrix::BT2020NCL,
         _ => {
             let mut code_point = 0;
 
@@ -148,9 +149,9 @@ fn from_cv_color_matrix(color_matrix: &CFString) -> ColorMatrix {
 
 fn into_cv_color_primaries(color_primaries: ColorPrimaries) -> Option<CFString> {
     match color_primaries {
-        ColorPrimaries::BT709 => return Some(CVImageBufferColorPrimaries::ITU_R_709_2.into()),
-        ColorPrimaries::BT470BG => return Some(CVImageBufferColorPrimaries::EBU_3213.into()),
-        ColorPrimaries::SMPTE170M => return Some(CVImageBufferColorPrimaries::SMPTE_C.into()),
+        ColorPrimaries::BT709 => Some(CVImageBufferColorPrimaries::ITU_R_709_2.into()),
+        ColorPrimaries::BT470BG => Some(CVImageBufferColorPrimaries::EBU_3213.into()),
+        ColorPrimaries::SMPTE170M => Some(CVImageBufferColorPrimaries::SMPTE_C.into()),
         ColorPrimaries::BT2020 => {
             #[cfg(target_os = "macos")]
             {
@@ -166,9 +167,9 @@ fn into_cv_color_primaries(color_primaries: ColorPrimaries) -> Option<CFString> 
                 }}
             }
 
-            return Some(CFString::from_static_string(ITU_R_2020));
+            Some(CFString::from_static_string(ITU_R_2020))
         }
-        ColorPrimaries::Unspecified => return None,
+        ColorPrimaries::Unspecified => None,
         _ => {
             #[cfg(target_os = "macos")]
             {
@@ -184,20 +185,20 @@ fn into_cv_color_primaries(color_primaries: ColorPrimaries) -> Option<CFString> 
                 }}
             }
 
-            return None;
+            None
         }
-    };
+    }
 }
 
 fn from_cv_color_primaries(color_primaries: &CFString) -> ColorPrimaries {
     match Cow::from(color_primaries).as_ref() {
-        ITU_R_709_2 => return ColorPrimaries::BT709,
-        EBU_3213 => return ColorPrimaries::BT470BG,
-        SMPTE_C => return ColorPrimaries::SMPTE170M,
-        P22 => return ColorPrimaries::JEDEC_P22,
-        DCI_P3 => return ColorPrimaries::SMPTE431,
-        P3_D65 => return ColorPrimaries::SMPTE432,
-        ITU_R_2020 => return ColorPrimaries::BT2020,
+        ITU_R_709_2 => ColorPrimaries::BT709,
+        EBU_3213 => ColorPrimaries::BT470BG,
+        SMPTE_C => ColorPrimaries::SMPTE170M,
+        P22 => ColorPrimaries::JEDEC_P22,
+        DCI_P3 => ColorPrimaries::SMPTE431,
+        P3_D65 => ColorPrimaries::SMPTE432,
+        ITU_R_2020 => ColorPrimaries::BT2020,
         _ => {
             let mut code_point = 0;
 
@@ -226,9 +227,9 @@ fn from_cv_color_primaries(color_primaries: &CFString) -> ColorPrimaries {
 
 fn into_cv_color_transfer_function(color_transfer_characteristics: ColorTransferCharacteristics) -> Option<CFString> {
     match color_transfer_characteristics {
-        ColorTransferCharacteristics::BT709 => return Some(CVImageBufferTransferFunction::ITU_R_709_2.into()),
-        ColorTransferCharacteristics::BT470M | ColorTransferCharacteristics::BT470BG => return Some(CVImageBufferTransferFunction::UseGamma.into()),
-        ColorTransferCharacteristics::SMPTE240M => return Some(CVImageBufferTransferFunction::SMPTE_240M_1995.into()),
+        ColorTransferCharacteristics::BT709 => Some(CVImageBufferTransferFunction::ITU_R_709_2.into()),
+        ColorTransferCharacteristics::BT470M | ColorTransferCharacteristics::BT470BG => Some(CVImageBufferTransferFunction::UseGamma.into()),
+        ColorTransferCharacteristics::SMPTE240M => Some(CVImageBufferTransferFunction::SMPTE_240M_1995.into()),
         ColorTransferCharacteristics::BT2020_10 | ColorTransferCharacteristics::BT2020_12 => {
             #[cfg(target_os = "macos")]
             {
@@ -244,7 +245,7 @@ fn into_cv_color_transfer_function(color_transfer_characteristics: ColorTransfer
                 }}
             }
 
-            return Some(CFString::from_static_string(ITU_R_2020));
+            Some(CFString::from_static_string(ITU_R_2020))
         }
         ColorTransferCharacteristics::SMPTE2084 => {
             #[cfg(target_os = "macos")]
@@ -261,7 +262,7 @@ fn into_cv_color_transfer_function(color_transfer_characteristics: ColorTransfer
                 }}
             }
 
-            return Some(CFString::from_static_string(SMPTE_ST_2084_PQ));
+            Some(CFString::from_static_string(SMPTE_ST_2084_PQ))
         }
         ColorTransferCharacteristics::SMPTE428 => {
             #[cfg(target_os = "macos")]
@@ -278,7 +279,7 @@ fn into_cv_color_transfer_function(color_transfer_characteristics: ColorTransfer
                 }}
             }
 
-            return Some(CFString::from_static_string(SMPTE_ST_428_1));
+            Some(CFString::from_static_string(SMPTE_ST_428_1))
         }
         ColorTransferCharacteristics::ARIB_STD_B67 => {
             #[cfg(target_os = "macos")]
@@ -295,9 +296,9 @@ fn into_cv_color_transfer_function(color_transfer_characteristics: ColorTransfer
                 }}
             }
 
-            return Some(CFString::from_static_string(ITU_R_2100_HLG));
+            Some(CFString::from_static_string(ITU_R_2100_HLG))
         }
-        ColorTransferCharacteristics::Unspecified => return None,
+        ColorTransferCharacteristics::Unspecified => None,
         _ => {
             #[cfg(target_os = "macos")]
             {
@@ -313,7 +314,7 @@ fn into_cv_color_transfer_function(color_transfer_characteristics: ColorTransfer
                 }}
             }
 
-            return None;
+            None
         }
     }
 }
@@ -323,8 +324,8 @@ const GAMMA_28: f32 = 2.8;
 
 fn from_cv_color_transfer_function(color_transfer_function: &CFString, gamma: Option<&CFNumber>, bits: u8) -> ColorTransferCharacteristics {
     match Cow::from(color_transfer_function).as_ref() {
-        ITU_R_709_2 => return ColorTransferCharacteristics::BT709,
-        SMPTE_240M_1995 => return ColorTransferCharacteristics::SMPTE240M,
+        ITU_R_709_2 => ColorTransferCharacteristics::BT709,
+        SMPTE_240M_1995 => ColorTransferCharacteristics::SMPTE240M,
         USE_GAMMA => {
             if let Some(gamma) = gamma {
                 if let Some(gamma) = gamma.to_f32() {
@@ -336,18 +337,18 @@ fn from_cv_color_transfer_function(color_transfer_function: &CFString, gamma: Op
                 }
             }
 
-            return ColorTransferCharacteristics::Unspecified;
+            ColorTransferCharacteristics::Unspecified
         }
-        IEC_SRGB => return ColorTransferCharacteristics::IEC61966_2_1,
+        IEC_SRGB => ColorTransferCharacteristics::IEC61966_2_1,
         ITU_R_2020 => match bits {
-            10 => return ColorTransferCharacteristics::BT2020_10,
-            12 => return ColorTransferCharacteristics::BT2020_12,
-            _ => return ColorTransferCharacteristics::Unspecified,
+            10 => ColorTransferCharacteristics::BT2020_10,
+            12 => ColorTransferCharacteristics::BT2020_12,
+            _ => ColorTransferCharacteristics::Unspecified,
         },
-        SMPTE_ST_428_1 => return ColorTransferCharacteristics::SMPTE428,
-        SMPTE_ST_2084_PQ => return ColorTransferCharacteristics::SMPTE2084,
-        ITU_R_2100_HLG => return ColorTransferCharacteristics::ARIB_STD_B67,
-        LINEAR => return ColorTransferCharacteristics::Linear,
+        SMPTE_ST_428_1 => ColorTransferCharacteristics::SMPTE428,
+        SMPTE_ST_2084_PQ => ColorTransferCharacteristics::SMPTE2084,
+        ITU_R_2100_HLG => ColorTransferCharacteristics::ARIB_STD_B67,
+        LINEAR => ColorTransferCharacteristics::Linear,
         _ => {
             let mut code_point = 0;
 
@@ -532,7 +533,7 @@ impl<'a> MediaFrame<'a> {
 impl<'a> DataMappable<'a> for CVPixelBuffer {
     fn map(&self) -> Result<MappedGuard, MediaError> {
         if self.lock_base_address(kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess {
-            return Err(MediaError::Failed("lock base address".to_string()).into());
+            return Err(MediaError::Failed("lock base address".to_string()));
         }
 
         Ok(MappedGuard {
@@ -542,7 +543,7 @@ impl<'a> DataMappable<'a> for CVPixelBuffer {
 
     fn map_mut(&mut self) -> Result<MappedGuard, MediaError> {
         if self.lock_base_address(0) != kCVReturnSuccess {
-            return Err(MediaError::Failed("lock base address".to_string()).into());
+            return Err(MediaError::Failed("lock base address".to_string()));
         }
 
         Ok(MappedGuard {
@@ -552,14 +553,14 @@ impl<'a> DataMappable<'a> for CVPixelBuffer {
 
     fn unmap(&self) -> Result<(), MediaError> {
         if self.unlock_base_address(kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess {
-            return Err(MediaError::Failed("unlock base address".to_string()).into());
+            return Err(MediaError::Failed("unlock base address".to_string()));
         }
         Ok(())
     }
 
     fn unmap_mut(&mut self) -> Result<(), MediaError> {
         if self.unlock_base_address(0) != kCVReturnSuccess {
-            return Err(MediaError::Failed("unlock base address".to_string()).into());
+            return Err(MediaError::Failed("unlock base address".to_string()));
         }
         Ok(())
     }

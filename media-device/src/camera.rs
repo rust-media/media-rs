@@ -77,7 +77,7 @@ impl<T: DeviceManager> Drop for CameraManager<T> {
 }
 
 impl CameraManager<DefaultCameraManager> {
-    pub fn default() -> Result<Self, MediaError> {
+    pub fn new_default() -> Result<Self, MediaError> {
         Self::new()
     }
 }

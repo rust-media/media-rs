@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use media_base::{error::MediaError, media_frame::MediaFrame};
 use variant::Variant;
 
@@ -12,6 +14,8 @@ pub enum DeviceEvent {
     Removed(String),          // Device removed, removed device ID
     Refreshed(usize),         // All devices refreshed, number of devices
 }
+
+pub(crate) type OutputHandler = Arc<dyn Fn(MediaFrame) -> Result<(), MediaError> + Send + Sync>;
 
 pub trait Device {
     fn name(&self) -> &str;
@@ -29,6 +33,8 @@ pub trait OutputDevice: Device {
     where
         F: Fn(MediaFrame) -> Result<(), MediaError> + Send + Sync + 'static;
 }
+
+pub(crate) type DeviceEventHandler = Box<dyn Fn(&DeviceEvent) + Send + Sync>;
 
 pub trait DeviceManager {
     type DeviceType: Device;

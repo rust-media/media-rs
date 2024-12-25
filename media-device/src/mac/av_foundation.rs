@@ -38,15 +38,15 @@ use objc2::{
     runtime::ProtocolObject,
     ClassType, DeclaredClass,
 };
-use objc2_foundation::{NSArray, NSMutableArray, NSMutableDictionary, NSNumber, NSObject, NSObjectProtocol, NSString, NSValue};
+use objc2_foundation::{NSArray, NSMutableArray, NSMutableDictionary, NSNumber, NSObject, NSObjectProtocol, NSString};
 use os_ver::if_greater_than;
 use variant::Variant;
 
-use crate::{camera::CameraFormat, Device, DeviceEvent, DeviceInformation, DeviceManager, OutputDevice};
+use crate::{camera::CameraFormat, Device, DeviceEvent, DeviceEventHandler, DeviceInformation, DeviceManager, OutputDevice, OutputHandler};
 
 pub struct AVFoundationCaptureDeviceManager {
     devices: Option<Vec<AVFoundationCaptureDevice>>,
-    handler: Option<Box<dyn Fn(&DeviceEvent) + Send + Sync>>,
+    handler: Option<DeviceEventHandler>,
 }
 
 impl DeviceManager for AVFoundationCaptureDeviceManager {
@@ -162,7 +162,7 @@ impl AVFoundationCaptureDeviceManager {
         let mut devices = Vec::with_capacity(av_capture_devices.count() as usize);
 
         for device in av_capture_devices.iter() {
-            let dev_info = DeviceInformation::from_av_capture_device(&device);
+            let dev_info = DeviceInformation::from_av_capture_device(device);
             devices.push(AVFoundationCaptureDevice::new(dev_info)?);
         }
 
@@ -181,7 +181,7 @@ impl DeviceInformation {
 
 pub struct OutputDelegateIvars {
     info: Option<DeviceInformation>,
-    handler: Option<Arc<dyn Fn(MediaFrame) -> Result<(), MediaError> + Send + Sync>>,
+    handler: Option<OutputHandler>,
 }
 
 impl OutputDelegateIvars {
@@ -196,7 +196,7 @@ impl OutputDelegateIvars {
         self.info = Some(info);
     }
 
-    fn set_handler(&mut self, handler: Arc<dyn Fn(MediaFrame) -> Result<(), MediaError> + Send + Sync>) {
+    fn set_handler(&mut self, handler: OutputHandler) {
         self.handler = Some(handler);
     }
 }
@@ -303,7 +303,7 @@ fn from_av_capture_device_format(format: &AVCaptureDeviceFormat) -> Option<Camer
 }
 
 fn get_formats(device: &AVCaptureDevice) -> Vec<CameraFormat> {
-    device.formats().iter().filter_map(|format| from_av_capture_device_format(format)).collect()
+    device.formats().iter().filter_map(from_av_capture_device_format).collect()
 }
 
 const SIMILAR_FORMAT_DIFF: f32 = 1.0;
@@ -322,7 +322,7 @@ fn select_supported_format(
     let mut matched_frame_rate = None;
 
     for format in formats.iter() {
-        if let Some(camera_format) = from_av_capture_device_format(&format) {
+        if let Some(camera_format) = from_av_capture_device_format(format) {
             let resolution_diff = match (width, height) {
                 (Some(width), Some(height)) => {
                     (camera_format.width as f32 - width as f32).abs() + (camera_format.height as f32 - height as f32).abs()
@@ -415,7 +415,7 @@ pub struct AVFoundationCaptureDevice {
     running: bool,
     formats: Option<Vec<CameraFormat>>,
     current_format: Option<CameraFormat>,
-    handler: Option<Arc<dyn Fn(MediaFrame) -> Result<(), MediaError> + Send + Sync>>,
+    handler: Option<OutputHandler>,
     session: Option<Id<AVCaptureSession>>,
     device: Option<Id<AVCaptureDevice>>,
     input: Option<Id<AVCaptureDeviceInput>>,
@@ -454,7 +454,7 @@ impl Device for AVFoundationCaptureDevice {
                 session.add_input(&input);
                 session.add_output(&output);
             } else {
-                return Err(MediaError::Invalid("cannot add input or output".to_string()).into());
+                return Err(MediaError::Invalid("cannot add input or output".to_string()));
             }
 
             session.begin_configuration();
@@ -539,7 +539,7 @@ impl Device for AVFoundationCaptureDevice {
             let device = self.device.as_ref().ok_or_else(|| none_param_error!(device))?;
 
             session.begin_configuration();
-            let camera_format = select_supported_format(&device, width, height, video_format, frame_rate);
+            let camera_format = select_supported_format(device, width, height, video_format, frame_rate);
             if let Some(camera_format) = &camera_format {
                 set_output_settings(self.output.as_ref().unwrap(), camera_format.width, camera_format.height, camera_format.format);
             }
@@ -582,7 +582,7 @@ impl Device for AVFoundationCaptureDevice {
             format["color-range"] = (video_format.color_range as u32).into();
             format["width"] = video_format.width.into();
             format["height"] = video_format.height.into();
-            format["frame-rates"] = video_format.frame_rates.iter().map(|frame_rate| Variant::from(frame_rate.clone())).collect();
+            format["frame-rates"] = video_format.frame_rates.iter().map(|frame_rate| Variant::from(*frame_rate)).collect();
             formats.array_add(format);
         }
 

@@ -6,7 +6,7 @@ use media::{
 
 fn main() {
     // Create a default instance of camera manager
-    let mut cam_mgr = match CameraManager::default() {
+    let mut cam_mgr = match CameraManager::new_default() {
         Ok(cam_mgr) => cam_mgr,
         Err(e) => {
             println!("{:?}", e.to_string());
