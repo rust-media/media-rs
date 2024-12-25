@@ -4,7 +4,7 @@ description = "Defines media types, such as Media Frame"
 homepage.workspace = true
 repository.workspace = true
 documentation = "https://docs.rs/media-base"
-version = "0.1.0"
+version = "0.1.1"
 authors.workspace = true
 license.workspace = true
 categories.workspace = true
@@ -25,3 +25,13 @@ core-audio-types = "0.1"
 core-foundation = "0.10"
 core-media = "0.5"
 core-video = { version = "0.4", default-features = false, features = ["link"] }
+
+[package.metadata.docs.rs]
+default-target = "x86_64-pc-windows-msvc"
+targets = [
+    "x86_64-pc-windows-msvc",
+    "x86_64-apple-darwin",
+    "x86_64-apple-ios",
+    "aarch64-apple-darwin",
+    "aarch64-apple-ios",
+]
