@@ -388,9 +388,9 @@ impl IMFSourceReaderCallback_Impl for SourceReaderCallback_Impl {
                 desc.origin = origin;
 
                 let video_frame = if stride != 0 {
-                    MediaFrame::from_data_buffer_with_stride(desc, NonZeroU32::new(stride).unwrap(), locked_buffer.data)
+                    MediaFrame::from_buffer_with_stride(desc, NonZeroU32::new(stride).unwrap(), locked_buffer.data)
                 } else {
-                    MediaFrame::from_data_buffer(desc, locked_buffer.data)
+                    MediaFrame::from_buffer(desc, locked_buffer.data)
                 };
 
                 if let Ok(mut video_frame) = video_frame {

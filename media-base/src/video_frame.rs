@@ -102,19 +102,19 @@ impl<'a> MediaFrame<'a> {
         }
     }
 
-    pub fn from_data_buffer(desc: VideoFrameDescription, buffer: &'a [u8]) -> Result<Self, MediaError> {
+    pub fn from_buffer(desc: VideoFrameDescription, buffer: &'a [u8]) -> Result<Self, MediaError> {
         let data = MemoryData::attach_video_data(desc.format, desc.width, desc.height, buffer)?;
 
         Ok(Self::from_data(desc, data))
     }
 
-    pub fn from_data_buffer_with_stride(desc: VideoFrameDescription, stride: NonZeroU32, buffer: &'a [u8]) -> Result<Self, MediaError> {
+    pub fn from_buffer_with_stride(desc: VideoFrameDescription, stride: NonZeroU32, buffer: &'a [u8]) -> Result<Self, MediaError> {
         let data = MemoryData::attach_video_data_with_stride(desc.format, desc.width, desc.height, stride, buffer)?;
 
         Ok(Self::from_data(desc, data))
     }
 
-    pub fn from_packed_data_buffer(desc: VideoFrameDescription, stride: NonZeroU32, buffer: &'a [u8]) -> Result<Self, MediaError> {
+    pub fn from_packed_buffer(desc: VideoFrameDescription, stride: NonZeroU32, buffer: &'a [u8]) -> Result<Self, MediaError> {
         let data = MemoryData::attach_packed_video_data(desc.format, desc.height, stride, buffer)?;
 
         Ok(Self::from_data(desc, data))
