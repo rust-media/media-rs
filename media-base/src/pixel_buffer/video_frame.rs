@@ -45,15 +45,18 @@ static PIXEL_FORMATS: OnceLock<[[u32; ColorRange::MAX as usize]; PixelFormat::MA
 fn pixel_formats() -> &'static [[u32; ColorRange::MAX as usize]; PixelFormat::MAX as usize] {
     PIXEL_FORMATS.get_or_init(|| {
         let mut formats = [[0; ColorRange::MAX as usize]; PixelFormat::MAX as usize];
-        formats[PixelFormat::ARGB32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32BGRA;
-        formats[PixelFormat::BGRA32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32ARGB;
-        formats[PixelFormat::BGR24 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_24RGB;
+        formats[PixelFormat::ARGB32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32ARGB;
+        formats[PixelFormat::BGRA32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32BGRA;
+        formats[PixelFormat::ABGR32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32ABGR;
+        formats[PixelFormat::RGBA32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32RGBA;
+        formats[PixelFormat::RGB24 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_24RGB;
+        formats[PixelFormat::BGR24 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_24BGR;
         formats[PixelFormat::I420 as usize][ColorRange::Video as usize] = kCVPixelFormatType_420YpCbCr8Planar;
         formats[PixelFormat::I420 as usize][ColorRange::Full as usize] = kCVPixelFormatType_420YpCbCr8PlanarFullRange;
         formats[PixelFormat::NV12 as usize][ColorRange::Video as usize] = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange;
         formats[PixelFormat::NV12 as usize][ColorRange::Full as usize] = kCVPixelFormatType_420YpCbCr8BiPlanarFullRange;
         formats[PixelFormat::YUYV as usize][ColorRange::Video as usize] = kCVPixelFormatType_422YpCbCr8_yuvs;
-        formats[PixelFormat::UYVY as usize][ColorRange::Full as usize] = kCVPixelFormatType_422YpCbCr8;
+        formats[PixelFormat::UYVY as usize][ColorRange::Video as usize] = kCVPixelFormatType_422YpCbCr8;
         formats
     })
 }
@@ -565,8 +568,8 @@ impl<'a> DataMappable<'a> for CVPixelBuffer {
         Ok(())
     }
 
-    fn planes(&'a self) -> Option<MappedPlanes<'a>> {
-        let mut planes = SmallVec::<[MappedPlane<'a>; MEDIA_FRAME_MAX_PLANES]>::new();
+    fn planes(&self) -> Option<MappedPlanes<'_>> {
+        let mut planes = SmallVec::new();
 
         if self.is_planar() {
             let plane_count = self.get_plane_count();
@@ -598,8 +601,8 @@ impl<'a> DataMappable<'a> for CVPixelBuffer {
         })
     }
 
-    fn planes_mut(&'a mut self) -> Option<MappedPlanes<'a>> {
-        let mut planes = SmallVec::<[MappedPlane<'a>; MEDIA_FRAME_MAX_PLANES]>::new();
+    fn planes_mut(&mut self) -> Option<MappedPlanes<'_>> {
+        let mut planes = SmallVec::new();
 
         if self.is_planar() {
             let plane_count = self.get_plane_count();

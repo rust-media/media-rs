@@ -10,6 +10,7 @@ pub mod media_frame;
 pub mod time;
 pub mod video;
 pub mod video_frame;
+pub mod video_frame_convert;
 
 mod utils;
 

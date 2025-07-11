@@ -169,12 +169,12 @@ pub enum ColorTransferCharacteristics {
 #[derive(Clone, Copy, Debug, Default, PartialEq, TryFromPrimitive)]
 pub enum PixelFormat {
     #[default]
-    ARGB32 = 0, // packed ARGB, 32 bits, little-endian, BGRA in memory
-    BGRA32, // packed BGRA, 32 bits, little-endian, ARGB in memory
-    ABGR32, // packed ABGR, 32 bits, little-endian, RGBA in memory
-    RGBA32, // packed RGBA, 32 bits, little-endian, ABGR in memory
-    RGB24,  // packed RGB, 24 bits, little-endian, BGR in memory
-    BGR24,  // packed BGR, 24 bits, little-endian, RGB in memory
+    ARGB32 = 0, // packed ARGB, 32 bits
+    BGRA32, // packed BGRA, 32 bits
+    ABGR32, // packed ABGR, 32 bits
+    RGBA32, // packed RGBA, 32 bits
+    RGB24,  // packed RGB, 24 bits
+    BGR24,  // packed BGR, 24 bits
     I420,   // planar YUV 4:2:0, 12 bits
     I422,   // planar YUV 4:2:2, 16 bits
     I444,   // planar YUV 4:4:4, 24 bits
@@ -194,10 +194,10 @@ pub enum PixelFormat {
     AYUV,   // packed AYUV 4:4:4, 32 bits
     Y8,     // greyscale, 8 bits Y
     YA8,    // greyscale, 8 bits Y, 8 bits alpha
-    RGB30,  // packed RGB, 30 bits, 10 bits per channel, little-endian
-    BGR30,  // packed BGR, 30 bits, 10 bits per channel, little-endian
-    ARGB64, // packed ARGB, 64 bits, 16 bits per channel, little-endian
-    ABGR64, // packed ABGR, 64 bits, 16 bits per channel, little-endian
+    RGB30,  // packed RGB, 30 bits, 10 bits per channel, 2 bits unused(LSB)
+    BGR30,  // packed BGR, 30 bits, 10 bits per channel, 2 bits unused(LSB)
+    ARGB64, // packed ARGB, 64 bits, 16 bits per channel, 16-bit big-endian
+    ABGR64, // packed ABGR, 64 bits, 16 bits per channel, 16-bit big-endian
     I010,   // planar YUV 4:2:0, 10 bits per channel
     I210,   // planar YUV 4:2:2, 10 bits per channel
     I410,   // planar YUV 4:4:4, 10 bits per channel
@@ -802,6 +802,26 @@ impl PixelFormat {
         PIXEL_DESC[*self as usize].color_info & ColorInfo::BiPlanar.bits() != 0
     }
 
+    pub(super) fn calc_plane_row_bytes(&self, plane_index: usize, width: u32) -> u32 {
+        let desc = &PIXEL_DESC[*self as usize];
+        let component_bytes = desc.component_bytes[plane_index];
+
+        if plane_index > 0 && (self.is_planar() || self.is_biplanar()) {
+            ceil_rshift(width, desc.chroma_shift_x as u32) * component_bytes as u32
+        } else {
+            width * component_bytes as u32
+        }
+    }
+
+    pub(super) fn calc_plane_height(&self, plane_index: usize, height: u32) -> u32 {
+        if plane_index > 0 && (self.is_planar() || self.is_biplanar()) {
+            let desc = &PIXEL_DESC[*self as usize];
+            ceil_rshift(height, desc.chroma_shift_y as u32)
+        } else {
+            height
+        }
+    }
+
     pub(super) fn calc_data(&self, width: u32, height: u32, alignment: u32) -> (u32, MemoryPlanes) {
         let desc = &PIXEL_DESC[*self as usize];
         let mut size;
@@ -857,6 +877,12 @@ impl PixelFormat {
     }
 }
 
+impl From<PixelFormat> for usize {
+    fn from(value: PixelFormat) -> Self {
+        value as usize
+    }
+}
+
 impl TryFrom<usize> for PixelFormat {
     type Error = ();
 
@@ -869,6 +895,12 @@ impl TryFrom<usize> for PixelFormat {
     }
 }
 
+impl From<ColorRange> for usize {
+    fn from(value: ColorRange) -> Self {
+        value as usize
+    }
+}
+
 impl From<usize> for ColorRange {
     fn from(value: usize) -> Self {
         match value {
@@ -877,6 +909,12 @@ impl From<usize> for ColorRange {
             2 => ColorRange::Full,
             _ => ColorRange::Unspecified,
         }
+    }
+}
+
+impl From<ColorMatrix> for usize {
+    fn from(value: ColorMatrix) -> Self {
+        value as usize
     }
 }
 
@@ -904,6 +942,12 @@ impl TryFrom<usize> for ColorMatrix {
     }
 }
 
+impl From<ColorPrimaries> for usize {
+    fn from(value: ColorPrimaries) -> Self {
+        value as usize
+    }
+}
+
 impl TryFrom<usize> for ColorPrimaries {
     type Error = ();
 
@@ -923,6 +967,12 @@ impl TryFrom<usize> for ColorPrimaries {
             12 => Ok(ColorPrimaries::SMPTE432),
             _ => Err(()),
         }
+    }
+}
+
+impl From<ColorTransferCharacteristics> for usize {
+    fn from(value: ColorTransferCharacteristics) -> Self {
+        value as usize
     }
 }
 
