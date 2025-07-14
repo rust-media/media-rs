@@ -1,9 +1,9 @@
-use std::{num::NonZeroU32, sync::OnceLock, fmt::Debug};
+use std::{fmt::Debug, num::NonZeroU32, sync::OnceLock};
 
 use bytemuck::{self, Pod};
 use yuv::{
-    self, BufferStoreMut, YuvBiPlanarImage, YuvBiPlanarImageMut, YuvConversionMode, YuvPackedImage, YuvPackedImageMut, YuvPlanarImage,
-    YuvPlanarImageMut, YuvRange, YuvStandardMatrix, Rgb30ByteOrder::Network, YuvConversionMode::Fast,
+    self, BufferStoreMut, Rgb30ByteOrder::Network, YuvBiPlanarImage, YuvBiPlanarImageMut, YuvConversionMode, YuvConversionMode::Fast, YuvPackedImage,
+    YuvPackedImageMut, YuvPlanarImage, YuvPlanarImageMut, YuvRange, YuvStandardMatrix,
 };
 
 use super::{
@@ -184,8 +184,7 @@ type VideoFormatConvertFunc = fn(&MappedPlanes, &mut MappedPlanes, ColorRange, C
 
 const PIXEL_FORMAT_MAX: usize = PixelFormat::MAX as usize;
 
-static VIDEO_FORMAT_CONVERT_FUNCS: OnceLock<[[Option<VideoFormatConvertFunc>; PIXEL_FORMAT_MAX]; PIXEL_FORMAT_MAX]> =
-    OnceLock::new();
+static VIDEO_FORMAT_CONVERT_FUNCS: OnceLock<[[Option<VideoFormatConvertFunc>; PIXEL_FORMAT_MAX]; PIXEL_FORMAT_MAX]> = OnceLock::new();
 
 macro_rules! impl_rgb_to_rgb {
     ($func_name:ident, $convert_func:ident) => {
@@ -254,14 +253,8 @@ macro_rules! impl_yuv_to_rgb {
             let yuv_image = $into_image_func(src, width, height)?;
             let dst_stride = dst.plane_stride(0).unwrap();
 
-            yuv::$convert_func(
-                &yuv_image,
-                dst.plane_data_mut(0).unwrap(),
-                dst_stride,
-                color_range.into(),
-                color_matrix.into(),
-            )
-            .map_err(|e| MediaError::Invalid(e.to_string()))?;
+            yuv::$convert_func(&yuv_image, dst.plane_data_mut(0).unwrap(), dst_stride, color_range.into(), color_matrix.into())
+                .map_err(|e| MediaError::Invalid(e.to_string()))?;
 
             Ok(())
         }
@@ -281,15 +274,8 @@ macro_rules! impl_yuv_to_rgb_with_conversion_mode {
             let yuv_image = $into_image_func(src, width, height)?;
             let dst_stride = dst.plane_stride(0).unwrap();
 
-            yuv::$convert_func(
-                &yuv_image,
-                dst.plane_data_mut(0).unwrap(),
-                dst_stride,
-                color_range.into(),
-                color_matrix.into(),
-                $conversion_mode,
-            )
-            .map_err(|e| MediaError::Invalid(e.to_string()))?;
+            yuv::$convert_func(&yuv_image, dst.plane_data_mut(0).unwrap(), dst_stride, color_range.into(), color_matrix.into(), $conversion_mode)
+                .map_err(|e| MediaError::Invalid(e.to_string()))?;
 
             Ok(())
         }
@@ -309,15 +295,8 @@ macro_rules! impl_yuv_to_rgb_with_byte_order {
             let yuv_image = $into_image_func(src, width, height)?;
             let dst_stride = dst.plane_stride(0).unwrap();
 
-            yuv::$convert_func(
-                &yuv_image,
-                dst.plane_data_mut(0).unwrap(),
-                dst_stride,
-                $byte_order,
-                color_range.into(),
-                color_matrix.into(),
-            )
-            .map_err(|e| MediaError::Invalid(e.to_string()))?;
+            yuv::$convert_func(&yuv_image, dst.plane_data_mut(0).unwrap(), dst_stride, $byte_order, color_range.into(), color_matrix.into())
+                .map_err(|e| MediaError::Invalid(e.to_string()))?;
 
             Ok(())
         }
@@ -337,11 +316,7 @@ macro_rules! impl_yuv_to_yuv {
             let src_image = $into_src_image_func(src, width, height)?;
             let mut dst_image = $into_dst_image_func(dst, width, height)?;
 
-            yuv::$convert_func(
-                &mut dst_image,
-                &src_image,
-            )
-            .map_err(|e| MediaError::Invalid(e.to_string()))?;
+            yuv::$convert_func(&mut dst_image, &src_image).map_err(|e| MediaError::Invalid(e.to_string()))?;
 
             Ok(())
         }

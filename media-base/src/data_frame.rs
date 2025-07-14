@@ -6,7 +6,7 @@ use super::{
     media_frame::{MediaFrame, MediaFrameData, MediaFrameDescription},
 };
 
-impl<'a> MediaFrame<'a> {
+impl MediaFrame<'_> {
     pub fn from_variant(variant: &Variant) -> Self {
         Self {
             media_type: MediaFrameType::Data,
