@@ -7,7 +7,7 @@ use super::{
     media_frame::{Data, MediaFrame, MediaFrameData, MediaFrameDescription, MemoryData},
 };
 
-impl<'a> MemoryData<'a> {
+impl MemoryData<'_> {
     pub fn new_audio_data(format: AudioFormat, channels: NonZeroU8, samples: NonZeroU32) -> Result<Self, MediaError> {
         let (size, planes) = format.data_calc(channels.get(), samples.get());
         let initial_value = if matches!(format, AudioFormat::U8 | AudioFormat::U8P) {
@@ -23,7 +23,7 @@ impl<'a> MemoryData<'a> {
     }
 }
 
-impl<'a> MediaFrame<'a> {
+impl MediaFrame<'_> {
     pub fn new_audio_frame(desc: AudioFrameDescription) -> Result<Self, MediaError> {
         let data = MemoryData::new_audio_data(desc.format, desc.channels, desc.samples)?;
 
