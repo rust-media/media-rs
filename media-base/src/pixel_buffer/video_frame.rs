@@ -378,7 +378,7 @@ fn from_cv_color_transfer_function(color_transfer_function: &CFString, gamma: Op
     }
 }
 
-impl<'a> MediaFrame<'a> {
+impl MediaFrame<'_> {
     pub fn new_video_frame_with_pixel_buffer(desc: VideoFrameDescription) -> Result<Self, MediaError> {
         let pixel_format = into_cv_format(desc.format, desc.color_range);
         #[cfg(target_os = "macos")]
@@ -443,7 +443,7 @@ impl<'a> MediaFrame<'a> {
             timestamp: 0,
             desc: MediaFrameDescription::Video(desc),
             metadata: None,
-            data: MediaFrameData::PixelBuffer(pixel_buffer),
+            data: MediaFrameData::PixelBuffer(PixelBuffer(pixel_buffer)),
         };
 
         Ok(video_frame)
@@ -528,14 +528,20 @@ impl<'a> MediaFrame<'a> {
             timestamp: 0,
             desc: MediaFrameDescription::Video(desc),
             metadata: None,
-            data: MediaFrameData::PixelBuffer(pixel_buffer.clone()),
+            data: MediaFrameData::PixelBuffer(PixelBuffer(pixel_buffer.clone())),
         })
     }
 }
 
-impl<'a> DataMappable<'a> for CVPixelBuffer {
+#[derive(Clone)]
+pub(crate) struct PixelBuffer(CVPixelBuffer);
+
+unsafe impl Send for PixelBuffer {}
+unsafe impl Sync for PixelBuffer {}
+
+impl DataMappable for PixelBuffer {
     fn map(&self) -> Result<MappedGuard, MediaError> {
-        if self.lock_base_address(kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess {
+        if self.0.lock_base_address(kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess {
             return Err(MediaError::Failed("lock base address".to_string()));
         }
 
@@ -545,7 +551,7 @@ impl<'a> DataMappable<'a> for CVPixelBuffer {
     }
 
     fn map_mut(&mut self) -> Result<MappedGuard, MediaError> {
-        if self.lock_base_address(0) != kCVReturnSuccess {
+        if self.0.lock_base_address(0) != kCVReturnSuccess {
             return Err(MediaError::Failed("lock base address".to_string()));
         }
 
@@ -555,14 +561,14 @@ impl<'a> DataMappable<'a> for CVPixelBuffer {
     }
 
     fn unmap(&self) -> Result<(), MediaError> {
-        if self.unlock_base_address(kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess {
+        if self.0.unlock_base_address(kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess {
             return Err(MediaError::Failed("unlock base address".to_string()));
         }
         Ok(())
     }
 
     fn unmap_mut(&mut self) -> Result<(), MediaError> {
-        if self.unlock_base_address(0) != kCVReturnSuccess {
+        if self.0.unlock_base_address(0) != kCVReturnSuccess {
             return Err(MediaError::Failed("unlock base address".to_string()));
         }
         Ok(())
@@ -571,12 +577,12 @@ impl<'a> DataMappable<'a> for CVPixelBuffer {
     fn planes(&self) -> Option<MappedPlanes<'_>> {
         let mut planes = SmallVec::new();
 
-        if self.is_planar() {
-            let plane_count = self.get_plane_count();
+        if self.0.is_planar() {
+            let plane_count = self.0.get_plane_count();
             for i in 0..plane_count {
-                let base_address = unsafe { self.get_base_address_of_plane(i) as *const u8 };
-                let bytes_per_row = self.get_bytes_per_row_of_plane(i);
-                let height = self.get_height_of_plane(i);
+                let base_address = unsafe { self.0.get_base_address_of_plane(i) as *const u8 };
+                let bytes_per_row = self.0.get_bytes_per_row_of_plane(i);
+                let height = self.0.get_height_of_plane(i);
                 let slice = unsafe { std::slice::from_raw_parts(base_address, bytes_per_row * height) };
                 planes.push(MappedPlane::Video {
                     data: MappedData::Ref(slice),
@@ -585,9 +591,9 @@ impl<'a> DataMappable<'a> for CVPixelBuffer {
                 });
             }
         } else {
-            let base_address = unsafe { self.get_base_address() as *const u8 };
-            let bytes_per_row = self.get_bytes_per_row();
-            let height = self.get_height();
+            let base_address = unsafe { self.0.get_base_address() as *const u8 };
+            let bytes_per_row = self.0.get_bytes_per_row();
+            let height = self.0.get_height();
             let slice = unsafe { std::slice::from_raw_parts(base_address, bytes_per_row * height) };
             planes.push(MappedPlane::Video {
                 data: MappedData::Ref(slice),
@@ -604,12 +610,12 @@ impl<'a> DataMappable<'a> for CVPixelBuffer {
     fn planes_mut(&mut self) -> Option<MappedPlanes<'_>> {
         let mut planes = SmallVec::new();
 
-        if self.is_planar() {
-            let plane_count = self.get_plane_count();
+        if self.0.is_planar() {
+            let plane_count = self.0.get_plane_count();
             for i in 0..plane_count {
-                let base_address = unsafe { self.get_base_address_of_plane(i) as *mut u8 };
-                let bytes_per_row = self.get_bytes_per_row_of_plane(i);
-                let height = self.get_height_of_plane(i);
+                let base_address = unsafe { self.0.get_base_address_of_plane(i) as *mut u8 };
+                let bytes_per_row = self.0.get_bytes_per_row_of_plane(i);
+                let height = self.0.get_height_of_plane(i);
                 let slice = unsafe { std::slice::from_raw_parts_mut(base_address, bytes_per_row * height) };
                 planes[i] = MappedPlane::Video {
                     data: MappedData::RefMut(slice),
@@ -618,9 +624,9 @@ impl<'a> DataMappable<'a> for CVPixelBuffer {
                 };
             }
         } else {
-            let base_address = unsafe { self.get_base_address() as *mut u8 };
-            let bytes_per_row = self.get_bytes_per_row();
-            let height = self.get_height();
+            let base_address = unsafe { self.0.get_base_address() as *mut u8 };
+            let bytes_per_row = self.0.get_bytes_per_row();
+            let height = self.0.get_height();
             let slice = unsafe { std::slice::from_raw_parts_mut(base_address, bytes_per_row * height) };
             planes[0] = MappedPlane::Video {
                 data: MappedData::RefMut(slice),

@@ -1,11 +1,11 @@
 use std::sync::{Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
-#[cfg(any(target_os = "macos", target_os = "ios"))]
-use core_video::pixel_buffer::CVPixelBuffer;
 use smallvec::SmallVec;
 use variant::Variant;
 
 use super::{audio::AudioFrameDescription, data::DataFrameDescription, error::MediaError, media::MediaFrameType, video::VideoFrameDescription};
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+use crate::pixel_buffer::video_frame::PixelBuffer;
 use crate::unsupported_error;
 
 pub const MEDIA_FRAME_MAX_PLANES: usize = 8;
@@ -193,7 +193,7 @@ impl Data<'_> {
     }
 }
 
-impl Data<'_>{
+impl Data<'_> {
     fn into_owned(self) -> Vec<u8> {
         match self {
             Data::Owned(data) => data,
@@ -221,7 +221,7 @@ impl MemoryData<'_> {
 pub(super) enum MediaFrameData<'a> {
     Memory(MemoryData<'a>),
     #[cfg(any(target_os = "macos", target_os = "ios"))]
-    PixelBuffer(CVPixelBuffer),
+    PixelBuffer(PixelBuffer),
     Variant(Variant),
 }
 
