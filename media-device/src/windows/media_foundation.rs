@@ -343,7 +343,7 @@ impl IMFSourceReaderCallback_Impl for SourceReaderCallback_Impl {
         _dwstreamindex: u32,
         _dwstreamflags: u32,
         lltimestamp: i64,
-        psample: Option<&IMFSample>,
+        psample: windows_core::Ref<'_, IMFSample>,
     ) -> windows_core::Result<()> {
         if hrstatus.is_err() || !self.running.load(SeqCst) {
             return Ok(());
@@ -367,7 +367,7 @@ impl IMFSourceReaderCallback_Impl for SourceReaderCallback_Impl {
             _ => return Ok(()),
         };
 
-        let buffer = psample.and_then(|sample| unsafe { sample.ConvertToContiguousBuffer().ok() });
+        let buffer = psample.as_ref().and_then(|sample| unsafe { sample.ConvertToContiguousBuffer().ok() });
 
         if let Some(buffer) = buffer {
             if let Ok(locked_buffer) = BufferLockGuard::new(&buffer, height) {
@@ -422,7 +422,7 @@ impl IMFSourceReaderCallback_Impl for SourceReaderCallback_Impl {
         Ok(())
     }
 
-    fn OnEvent(&self, _dwstreamindex: u32, _pevent: Option<&IMFMediaEvent>) -> windows_core::Result<()> {
+    fn OnEvent(&self, _dwstreamindex: u32, _pevent: windows_core::Ref<'_, IMFMediaEvent>) -> windows_core::Result<()> {
         Ok(())
     }
 }
