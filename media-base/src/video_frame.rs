@@ -39,15 +39,10 @@ impl VideoDataBuilder {
 
     fn attach_aligned_buffer<'a>(
         format: PixelFormat,
-        width: NonZeroU32,
         height: NonZeroU32,
         stride: NonZeroU32,
         buffer: &'a [u8],
     ) -> Result<MemoryData<'a>, MediaError> {
-        if stride.get() < width.get() {
-            return Err(invalid_param_error!(stride));
-        }
-
         let (size, planes) = format.calc_data_with_stride(height.get(), stride.get());
 
         if buffer.len() != size as usize {
@@ -85,7 +80,7 @@ impl VideoDataBuilder {
 pub struct VideoFrameBuilder;
 
 impl VideoFrameBuilder {
-    pub fn new(&self, format: PixelFormat, height: u32, width: u32) -> Result<MediaFrame<'static>, MediaError> {
+    pub fn new(&self, format: PixelFormat, width: u32, height: u32) -> Result<MediaFrame<'static>, MediaError> {
         let desc = VideoFrameDescriptor::try_new(format, width, height)?;
 
         self.new_with_descriptor(desc)
@@ -129,7 +124,7 @@ impl VideoFrameBuilder {
         stride: NonZeroU32,
         buffer: &'a [u8],
     ) -> Result<MediaFrame<'a>, MediaError> {
-        let data = VideoDataBuilder::attach_aligned_buffer(desc.format, desc.width, desc.height, stride, buffer)?;
+        let data = VideoDataBuilder::attach_aligned_buffer(desc.format, desc.height, stride, buffer)?;
 
         Ok(Self::from_data(desc, data))
     }
