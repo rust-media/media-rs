@@ -458,7 +458,7 @@ impl DataMappable for MediaFrameData<'_> {
     fn planes_mut(&mut self) -> Option<MappedPlanes<'_>> {
         match self {
             MediaFrameData::Memory(data) => data.planes_mut(),
-            MediaFrameData::SeparateMemory(data) => None,
+            MediaFrameData::SeparateMemory(_) => None,
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             MediaFrameData::PixelBuffer(data) => data.planes_mut(),
             MediaFrameData::Variant(_) => None,
