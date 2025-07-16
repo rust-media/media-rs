@@ -10,7 +10,7 @@ use crate::error::MediaError;
 pub struct DataFrameBuilder;
 
 impl DataFrameBuilder {
-    pub fn from_variant(&self, variant: &Variant) -> Result<MediaFrame<'_>, MediaError> {
+    pub fn from_variant(&self, variant: &Variant) -> Result<MediaFrame<'static>, MediaError> {
         Ok(MediaFrame {
             media_type: MediaFrameType::Data,
             source: None,
