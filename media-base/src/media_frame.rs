@@ -254,7 +254,7 @@ impl MediaFrameData<'_> {
     pub fn into_owned(self) -> MediaFrameData<'static> {
         match self {
             MediaFrameData::Memory(data) => MediaFrameData::Memory(data.into_owned()),
-            MediaFrameData::SeparateMemory(data_vec) => MediaFrameData::Memory(data_vec.into_owned()),
+            MediaFrameData::SeparateMemory(data) => MediaFrameData::Memory(data.into_owned()),
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             MediaFrameData::PixelBuffer(pixel_buffer) => MediaFrameData::PixelBuffer(pixel_buffer),
             MediaFrameData::Variant(variant) => MediaFrameData::Variant(variant),

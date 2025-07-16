@@ -85,13 +85,13 @@ impl VideoDataBuilder {
 pub struct VideoFrameBuilder;
 
 impl VideoFrameBuilder {
-    pub fn new(&self, format: PixelFormat, height: u32, width: u32) -> Result<MediaFrame<'_>, MediaError> {
+    pub fn new(&self, format: PixelFormat, height: u32, width: u32) -> Result<MediaFrame<'static>, MediaError> {
         let desc = VideoFrameDescriptor::try_new(format, width, height)?;
 
         self.new_with_descriptor(desc)
     }
 
-    pub fn new_with_descriptor(&self, desc: VideoFrameDescriptor) -> Result<MediaFrame<'_>, MediaError> {
+    pub fn new_with_descriptor(&self, desc: VideoFrameDescriptor) -> Result<MediaFrame<'static>, MediaError> {
         let data = VideoDataBuilder::new(desc.format, desc.width, desc.height)?;
 
         Ok(Self::from_data(desc, data))
@@ -166,7 +166,7 @@ impl VideoFrameBuilder {
     }
 
     pub fn from_buffers_with_descriptor<'a>(&self, desc: VideoFrameDescriptor, buffers: &[(&'a [u8], u32)]) -> Result<MediaFrame<'a>, MediaError> {
-        let data_vec = SeparateMemoryData::attach_buffers(desc.format, desc.height, buffers)?;
+        let data = SeparateMemoryData::attach_buffers(desc.format, desc.height, buffers)?;
 
         Ok(MediaFrame {
             media_type: MediaFrameType::Video,
@@ -174,7 +174,7 @@ impl VideoFrameBuilder {
             timestamp: 0,
             desc: MediaFrameDescriptor::Video(desc),
             metadata: None,
-            data: MediaFrameData::SeparateMemory(data_vec),
+            data: MediaFrameData::SeparateMemory(data),
         })
     }
 

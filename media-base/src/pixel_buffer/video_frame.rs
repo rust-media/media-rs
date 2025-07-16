@@ -380,13 +380,13 @@ fn from_cv_color_transfer_function(color_transfer_function: &CFString, gamma: Op
 }
 
 impl VideoFrameBuilder {
-    pub fn new_pixel_buffer(&self, format: PixelFormat, width: u32, height: u32) -> Result<MediaFrame<'_>, MediaError> {
+    pub fn new_pixel_buffer(&self, format: PixelFormat, width: u32, height: u32) -> Result<MediaFrame<'static>, MediaError> {
         let desc = VideoFrameDescriptor::try_new(format, width, height)?;
 
         self.new_pixel_buffer_with_descriptor(desc)
     }
 
-    pub fn new_pixel_buffer_with_descriptor(&self, desc: VideoFrameDescriptor) -> Result<MediaFrame<'_>, MediaError> {
+    pub fn new_pixel_buffer_with_descriptor(&self, desc: VideoFrameDescriptor) -> Result<MediaFrame<'static>, MediaError> {
         let pixel_format = into_cv_format(desc.format, desc.color_range);
         #[cfg(target_os = "macos")]
         let compatibility_key: CFString = {
@@ -454,7 +454,7 @@ impl VideoFrameBuilder {
         })
     }
 
-    pub fn from_pixel_buffer(&self, pixel_buffer: &CVPixelBuffer) -> Result<MediaFrame<'_>, MediaError> {
+    pub fn from_pixel_buffer(&self, pixel_buffer: &CVPixelBuffer) -> Result<MediaFrame<'static>, MediaError> {
         let width = pixel_buffer.get_width() as u32;
         let width = NonZeroU32::new(width).ok_or(invalid_param_error!(width))?;
         let height = pixel_buffer.get_height() as u32;
