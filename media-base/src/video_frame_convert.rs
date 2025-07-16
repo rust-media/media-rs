@@ -11,7 +11,7 @@ use super::{
     media_frame::{MappedPlanes, MediaFrame},
     video::{ColorMatrix, ColorRange, PixelFormat},
 };
-use crate::{media::MediaFrameType, media_frame::MediaFrameDescription};
+use crate::{media::MediaFrameType, media_frame::MediaFrameDescriptor};
 
 fn into_yuv_planar_image<'a, T>(src: &'a MappedPlanes, width: NonZeroU32, height: NonZeroU32) -> Result<YuvPlanarImage<'a, T>, MediaError>
 where
@@ -591,7 +591,7 @@ impl MediaFrame<'_> {
         let guard = self.map().map_err(|_| MediaError::Invalid("not readable".into()))?;
         let mut dst_guard = dst.map_mut().map_err(|_| MediaError::Invalid("not writable".into()))?;
 
-        if let (MediaFrameDescription::Video(src_desc), MediaFrameDescription::Video(dst_desc)) = (&self.desc, &dst_desc) {
+        if let (MediaFrameDescriptor::Video(src_desc), MediaFrameDescriptor::Video(dst_desc)) = (&self.desc, &dst_desc) {
             if src_desc.width == dst_desc.width && src_desc.height == dst_desc.height {
                 let src_planes = guard.planes().unwrap();
                 let mut dst_planes = dst_guard.planes_mut().unwrap();

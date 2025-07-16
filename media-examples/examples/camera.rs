@@ -33,7 +33,7 @@ fn main() {
     // Set the output handler for the camera
     if let Err(e) = device.set_output_handler(|frame| {
         println!("frame source: {:?}", frame.source);
-        println!("frame desc: {:?}", frame.description());
+        println!("frame desc: {:?}", frame.descriptor());
         println!("frame timestamp: {:?}", frame.timestamp);
 
         if let Ok(mapped_guard) = frame.map() {
