@@ -228,7 +228,7 @@ declare_class!(
             let video_frame = sample_buffer
                 .get_image_buffer()
                 .and_then(|image_buffer| image_buffer.downcast::<CVPixelBuffer>())
-                .and_then(|pixel_buffer| MediaFrame::from_pixel_buffer(&pixel_buffer).ok());
+                .and_then(|pixel_buffer| MediaFrame::video_builder().from_pixel_buffer(&pixel_buffer).ok());
 
             if let Some(mut video_frame) = video_frame {
                 if let Some(handler) = self.ivars().handler.as_ref() {

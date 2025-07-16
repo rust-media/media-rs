@@ -15,7 +15,7 @@ use media_base::{
     media_frame::MediaFrame,
     none_param_error, not_found_error,
     time::NSEC_PER_MSEC,
-    video::{ColorRange, CompressionFormat, Origin, PixelFormat, VideoFormat, VideoFrameDescription},
+    video::{ColorRange, CompressionFormat, Origin, PixelFormat, VideoFormat, VideoFrameDescriptor},
 };
 use variant::Variant;
 use windows::{
@@ -383,14 +383,14 @@ impl IMFSourceReaderCallback_Impl for SourceReaderCallback_Impl {
                     (-stride as u32, Origin::BottomUp)
                 };
 
-                let mut desc = VideoFrameDescription::new(pixel_format, width, height);
+                let mut desc = VideoFrameDescriptor::new(pixel_format, width, height);
                 desc.color_range = current_format.color_range;
                 desc.origin = origin;
 
                 let video_frame = if stride != 0 {
-                    MediaFrame::from_buffer_with_stride(desc, NonZeroU32::new(stride).unwrap(), locked_buffer.data)
+                    MediaFrame::video_builder().from_aligned_buffer_with_descriptor(desc, NonZeroU32::new(stride).unwrap(), locked_buffer.data)
                 } else {
-                    MediaFrame::from_buffer(desc, locked_buffer.data)
+                    MediaFrame::video_builder().from_buffer_with_descriptor(desc, locked_buffer.data)
                 };
 
                 if let Ok(mut video_frame) = video_frame {

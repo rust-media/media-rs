@@ -21,7 +21,8 @@ use crate::{
     media::MediaFrameType,
     media_frame::*,
     none_param_error,
-    video::{ColorMatrix, ColorPrimaries, ColorRange, ColorTransferCharacteristics, PixelFormat, VideoFrameDescription},
+    video::{ColorMatrix, ColorPrimaries, ColorRange, ColorTransferCharacteristics, PixelFormat, VideoFrameDescriptor},
+    video_frame::VideoFrameBuilder,
 };
 
 const ITU_R_601_4: &str = "ITU_R_601_4";
@@ -378,8 +379,14 @@ fn from_cv_color_transfer_function(color_transfer_function: &CFString, gamma: Op
     }
 }
 
-impl MediaFrame<'_> {
-    pub fn new_video_frame_with_pixel_buffer(desc: VideoFrameDescription) -> Result<Self, MediaError> {
+impl VideoFrameBuilder {
+    pub fn new_pixel_buffer(&self, format: PixelFormat, width: u32, height: u32) -> Result<MediaFrame<'_>, MediaError> {
+        let desc = VideoFrameDescriptor::try_new(format, width, height)?;
+
+        self.new_pixel_buffer_with_descriptor(desc)
+    }
+
+    pub fn new_pixel_buffer_with_descriptor(&self, desc: VideoFrameDescriptor) -> Result<MediaFrame<'_>, MediaError> {
         let pixel_format = into_cv_format(desc.format, desc.color_range);
         #[cfg(target_os = "macos")]
         let compatibility_key: CFString = {
@@ -437,19 +444,17 @@ impl MediaFrame<'_> {
             buffer.set_attachment(&CVImageBufferKeys::GammaLevel.into(), &gamma.as_CFType(), kCVAttachmentMode_ShouldPropagate);
         }
 
-        let video_frame = Self {
+        Ok(MediaFrame {
             media_type: MediaFrameType::Video,
             source: None,
             timestamp: 0,
-            desc: MediaFrameDescription::Video(desc),
+            desc: MediaFrameDescriptor::Video(desc),
             metadata: None,
             data: MediaFrameData::PixelBuffer(PixelBuffer(pixel_buffer)),
-        };
-
-        Ok(video_frame)
+        })
     }
 
-    pub fn from_pixel_buffer(pixel_buffer: &CVPixelBuffer) -> Result<Self, MediaError> {
+    pub fn from_pixel_buffer(&self, pixel_buffer: &CVPixelBuffer) -> Result<MediaFrame<'_>, MediaError> {
         let width = pixel_buffer.get_width() as u32;
         let width = NonZeroU32::new(width).ok_or(invalid_param_error!(width))?;
         let height = pixel_buffer.get_height() as u32;
@@ -457,7 +462,7 @@ impl MediaFrame<'_> {
         let format = pixel_buffer.get_pixel_format();
         let (format, color_range) = from_cv_format(format);
         let format = format.ok_or(none_param_error!(format))?;
-        let mut desc = VideoFrameDescription::new(format, width, height);
+        let mut desc = VideoFrameDescriptor::new(format, width, height);
         desc.color_range = color_range;
 
         let buffer = pixel_buffer.as_buffer();
@@ -522,11 +527,11 @@ impl MediaFrame<'_> {
             }
         }
 
-        Ok(Self {
+        Ok(MediaFrame {
             media_type: MediaFrameType::Video,
             source: None,
             timestamp: 0,
-            desc: MediaFrameDescription::Video(desc),
+            desc: MediaFrameDescriptor::Video(desc),
             metadata: None,
             data: MediaFrameData::PixelBuffer(PixelBuffer(pixel_buffer.clone())),
         })
