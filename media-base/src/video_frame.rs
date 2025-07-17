@@ -24,7 +24,7 @@ impl VideoDataBuilder {
         })
     }
 
-    fn attach_buffer<'a>(format: PixelFormat, width: NonZeroU32, height: NonZeroU32, buffer: &'a [u8]) -> Result<MemoryData<'a>, MediaError> {
+    fn from_buffer<'a>(format: PixelFormat, width: NonZeroU32, height: NonZeroU32, buffer: &'a [u8]) -> Result<MemoryData<'a>, MediaError> {
         let (size, planes) = format.calc_data(width.get(), height.get(), 1);
 
         if buffer.len() != size as usize {
@@ -37,7 +37,7 @@ impl VideoDataBuilder {
         })
     }
 
-    fn attach_aligned_buffer<'a>(
+    fn from_aligned_buffer<'a>(
         format: PixelFormat,
         height: NonZeroU32,
         stride: NonZeroU32,
@@ -57,7 +57,7 @@ impl VideoDataBuilder {
         Ok(data)
     }
 
-    fn attach_packed_buffer<'a>(format: PixelFormat, height: NonZeroU32, stride: NonZeroU32, buffer: &'a [u8]) -> Result<MemoryData<'a>, MediaError> {
+    fn from_packed_buffer<'a>(format: PixelFormat, height: NonZeroU32, stride: NonZeroU32, buffer: &'a [u8]) -> Result<MemoryData<'a>, MediaError> {
         if !format.is_packed() {
             return Err(MediaError::Unsupported("format".to_string()));
         }
@@ -99,7 +99,7 @@ impl VideoFrameBuilder {
     }
 
     pub fn from_buffer_with_descriptor<'a>(&self, desc: VideoFrameDescriptor, buffer: &'a [u8]) -> Result<MediaFrame<'a>, MediaError> {
-        let data = VideoDataBuilder::attach_buffer(desc.format, desc.width, desc.height, buffer)?;
+        let data = VideoDataBuilder::from_buffer(desc.format, desc.width, desc.height, buffer)?;
 
         Ok(Self::from_data(desc, data))
     }
@@ -124,7 +124,7 @@ impl VideoFrameBuilder {
         stride: NonZeroU32,
         buffer: &'a [u8],
     ) -> Result<MediaFrame<'a>, MediaError> {
-        let data = VideoDataBuilder::attach_aligned_buffer(desc.format, desc.height, stride, buffer)?;
+        let data = VideoDataBuilder::from_aligned_buffer(desc.format, desc.height, stride, buffer)?;
 
         Ok(Self::from_data(desc, data))
     }
@@ -149,7 +149,7 @@ impl VideoFrameBuilder {
         stride: NonZeroU32,
         buffer: &'a [u8],
     ) -> Result<MediaFrame<'a>, MediaError> {
-        let data = VideoDataBuilder::attach_packed_buffer(desc.format, desc.height, stride, buffer)?;
+        let data = VideoDataBuilder::from_packed_buffer(desc.format, desc.height, stride, buffer)?;
 
         Ok(Self::from_data(desc, data))
     }
@@ -161,7 +161,7 @@ impl VideoFrameBuilder {
     }
 
     pub fn from_buffers_with_descriptor<'a>(&self, desc: VideoFrameDescriptor, buffers: &[(&'a [u8], u32)]) -> Result<MediaFrame<'a>, MediaError> {
-        let data = SeparateMemoryData::attach_buffers(desc.format, desc.height, buffers)?;
+        let data = SeparateMemoryData::from_buffers(desc.format, desc.height, buffers)?;
 
         Ok(MediaFrame {
             media_type: MediaFrameType::Video,
@@ -186,7 +186,7 @@ impl VideoFrameBuilder {
 }
 
 impl<'a> SeparateMemoryData<'a> {
-    fn attach_buffers(format: PixelFormat, height: NonZeroU32, buffers: &[(&'a [u8], u32)]) -> Result<Self, MediaError> {
+    fn from_buffers(format: PixelFormat, height: NonZeroU32, buffers: &[(&'a [u8], u32)]) -> Result<Self, MediaError> {
         let mut data_vec = PlaneDataVec::with_capacity(buffers.len());
 
         for (i, (buffer, stride)) in buffers.iter().enumerate() {
