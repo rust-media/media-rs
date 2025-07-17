@@ -143,7 +143,7 @@ impl AudioFormat {
         }
     }
 
-    pub(super) fn data_calc(&self, channels: u8, samples: u32) -> (u32, PlaneInformationVec) {
+    pub(super) fn calc_data(&self, channels: u8, samples: u32) -> (u32, PlaneInformationVec) {
         let mut size = 0;
         let mut planes = PlaneInformationVec::new();
         let stride = self.stride(channels, samples);
