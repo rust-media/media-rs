@@ -1,10 +1,10 @@
 [package]
 name = "media"
-description = "Pure rust implementation of media framework"
+description = "A pure Rust media framework"
 homepage.workspace = true
 repository.workspace = true
 documentation = "https://docs.rs/media"
-version = "0.1.3"
+version = "0.2.0"
 authors.workspace = true
 license.workspace = true
 categories.workspace = true

@@ -4,7 +4,7 @@ description = "Defines media types, such as Media Frame"
 homepage.workspace = true
 repository.workspace = true
 documentation = "https://docs.rs/media-base"
-version = "0.1.1"
+version = "0.2.0"
 authors.workspace = true
 license.workspace = true
 categories.workspace = true
@@ -13,12 +13,14 @@ edition.workspace = true
 
 [dependencies]
 bitflags = "2.6"
+bytemuck = "1.23"
 cfg-if = "1.0"
 num_enum = "0.7"
 os-ver = "0.2"
 smallvec = "1.13"
 thiserror = "1.0"
 x-variant = "0.1"
+yuv = { version = "0.8", features = ["fast_mode"] }
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 core-audio-types = "0.1"

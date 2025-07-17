@@ -5,11 +5,11 @@ pub enum DataFormat {
 }
 
 #[derive(Clone, Debug)]
-pub struct DataFrameDescription {
+pub struct DataFrameDescriptor {
     pub format: DataFormat,
 }
 
-impl DataFrameDescription {
+impl DataFrameDescriptor {
     pub fn new(format: DataFormat) -> Self {
         Self {
             format,

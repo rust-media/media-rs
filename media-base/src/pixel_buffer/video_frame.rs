@@ -21,7 +21,8 @@ use crate::{
     media::MediaFrameType,
     media_frame::*,
     none_param_error,
-    video::{ColorMatrix, ColorPrimaries, ColorRange, ColorTransferCharacteristics, PixelFormat, VideoFrameDescription},
+    video::{ColorMatrix, ColorPrimaries, ColorRange, ColorTransferCharacteristics, PixelFormat, VideoFrameDescriptor},
+    video_frame::VideoFrameBuilder,
 };
 
 const ITU_R_601_4: &str = "ITU_R_601_4";
@@ -45,15 +46,18 @@ static PIXEL_FORMATS: OnceLock<[[u32; ColorRange::MAX as usize]; PixelFormat::MA
 fn pixel_formats() -> &'static [[u32; ColorRange::MAX as usize]; PixelFormat::MAX as usize] {
     PIXEL_FORMATS.get_or_init(|| {
         let mut formats = [[0; ColorRange::MAX as usize]; PixelFormat::MAX as usize];
-        formats[PixelFormat::ARGB32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32BGRA;
-        formats[PixelFormat::BGRA32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32ARGB;
-        formats[PixelFormat::BGR24 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_24RGB;
+        formats[PixelFormat::ARGB32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32ARGB;
+        formats[PixelFormat::BGRA32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32BGRA;
+        formats[PixelFormat::ABGR32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32ABGR;
+        formats[PixelFormat::RGBA32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32RGBA;
+        formats[PixelFormat::RGB24 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_24RGB;
+        formats[PixelFormat::BGR24 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_24BGR;
         formats[PixelFormat::I420 as usize][ColorRange::Video as usize] = kCVPixelFormatType_420YpCbCr8Planar;
         formats[PixelFormat::I420 as usize][ColorRange::Full as usize] = kCVPixelFormatType_420YpCbCr8PlanarFullRange;
         formats[PixelFormat::NV12 as usize][ColorRange::Video as usize] = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange;
         formats[PixelFormat::NV12 as usize][ColorRange::Full as usize] = kCVPixelFormatType_420YpCbCr8BiPlanarFullRange;
         formats[PixelFormat::YUYV as usize][ColorRange::Video as usize] = kCVPixelFormatType_422YpCbCr8_yuvs;
-        formats[PixelFormat::UYVY as usize][ColorRange::Full as usize] = kCVPixelFormatType_422YpCbCr8;
+        formats[PixelFormat::UYVY as usize][ColorRange::Video as usize] = kCVPixelFormatType_422YpCbCr8;
         formats
     })
 }
@@ -375,8 +379,14 @@ fn from_cv_color_transfer_function(color_transfer_function: &CFString, gamma: Op
     }
 }
 
-impl<'a> MediaFrame<'a> {
-    pub fn new_video_frame_with_pixel_buffer(desc: VideoFrameDescription) -> Result<Self, MediaError> {
+impl VideoFrameBuilder {
+    pub fn new_pixel_buffer(&self, format: PixelFormat, width: u32, height: u32) -> Result<MediaFrame<'static>, MediaError> {
+        let desc = VideoFrameDescriptor::try_new(format, width, height)?;
+
+        self.new_pixel_buffer_with_descriptor(desc)
+    }
+
+    pub fn new_pixel_buffer_with_descriptor(&self, desc: VideoFrameDescriptor) -> Result<MediaFrame<'static>, MediaError> {
         let pixel_format = into_cv_format(desc.format, desc.color_range);
         #[cfg(target_os = "macos")]
         let compatibility_key: CFString = {
@@ -434,19 +444,17 @@ impl<'a> MediaFrame<'a> {
             buffer.set_attachment(&CVImageBufferKeys::GammaLevel.into(), &gamma.as_CFType(), kCVAttachmentMode_ShouldPropagate);
         }
 
-        let video_frame = Self {
+        Ok(MediaFrame {
             media_type: MediaFrameType::Video,
             source: None,
             timestamp: 0,
-            desc: MediaFrameDescription::Video(desc),
+            desc: MediaFrameDescriptor::Video(desc),
             metadata: None,
-            data: MediaFrameData::PixelBuffer(pixel_buffer),
-        };
-
-        Ok(video_frame)
+            data: MediaFrameData::PixelBuffer(PixelBuffer(pixel_buffer)),
+        })
     }
 
-    pub fn from_pixel_buffer(pixel_buffer: &CVPixelBuffer) -> Result<Self, MediaError> {
+    pub fn from_pixel_buffer(&self, pixel_buffer: &CVPixelBuffer) -> Result<MediaFrame<'static>, MediaError> {
         let width = pixel_buffer.get_width() as u32;
         let width = NonZeroU32::new(width).ok_or(invalid_param_error!(width))?;
         let height = pixel_buffer.get_height() as u32;
@@ -454,7 +462,7 @@ impl<'a> MediaFrame<'a> {
         let format = pixel_buffer.get_pixel_format();
         let (format, color_range) = from_cv_format(format);
         let format = format.ok_or(none_param_error!(format))?;
-        let mut desc = VideoFrameDescription::new(format, width, height);
+        let mut desc = VideoFrameDescriptor::new(format, width, height);
         desc.color_range = color_range;
 
         let buffer = pixel_buffer.as_buffer();
@@ -519,20 +527,26 @@ impl<'a> MediaFrame<'a> {
             }
         }
 
-        Ok(Self {
+        Ok(MediaFrame {
             media_type: MediaFrameType::Video,
             source: None,
             timestamp: 0,
-            desc: MediaFrameDescription::Video(desc),
+            desc: MediaFrameDescriptor::Video(desc),
             metadata: None,
-            data: MediaFrameData::PixelBuffer(pixel_buffer.clone()),
+            data: MediaFrameData::PixelBuffer(PixelBuffer(pixel_buffer.clone())),
         })
     }
 }
 
-impl<'a> DataMappable<'a> for CVPixelBuffer {
+#[derive(Clone)]
+pub(crate) struct PixelBuffer(CVPixelBuffer);
+
+unsafe impl Send for PixelBuffer {}
+unsafe impl Sync for PixelBuffer {}
+
+impl DataMappable for PixelBuffer {
     fn map(&self) -> Result<MappedGuard, MediaError> {
-        if self.lock_base_address(kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess {
+        if self.0.lock_base_address(kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess {
             return Err(MediaError::Failed("lock base address".to_string()));
         }
 
@@ -542,7 +556,7 @@ impl<'a> DataMappable<'a> for CVPixelBuffer {
     }
 
     fn map_mut(&mut self) -> Result<MappedGuard, MediaError> {
-        if self.lock_base_address(0) != kCVReturnSuccess {
+        if self.0.lock_base_address(0) != kCVReturnSuccess {
             return Err(MediaError::Failed("lock base address".to_string()));
         }
 
@@ -552,28 +566,28 @@ impl<'a> DataMappable<'a> for CVPixelBuffer {
     }
 
     fn unmap(&self) -> Result<(), MediaError> {
-        if self.unlock_base_address(kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess {
+        if self.0.unlock_base_address(kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess {
             return Err(MediaError::Failed("unlock base address".to_string()));
         }
         Ok(())
     }
 
     fn unmap_mut(&mut self) -> Result<(), MediaError> {
-        if self.unlock_base_address(0) != kCVReturnSuccess {
+        if self.0.unlock_base_address(0) != kCVReturnSuccess {
             return Err(MediaError::Failed("unlock base address".to_string()));
         }
         Ok(())
     }
 
-    fn planes(&'a self) -> Option<MappedPlanes<'a>> {
-        let mut planes = SmallVec::<[MappedPlane<'a>; MEDIA_FRAME_MAX_PLANES]>::new();
+    fn planes(&self) -> Option<MappedPlanes<'_>> {
+        let mut planes = SmallVec::new();
 
-        if self.is_planar() {
-            let plane_count = self.get_plane_count();
+        if self.0.is_planar() {
+            let plane_count = self.0.get_plane_count();
             for i in 0..plane_count {
-                let base_address = unsafe { self.get_base_address_of_plane(i) as *const u8 };
-                let bytes_per_row = self.get_bytes_per_row_of_plane(i);
-                let height = self.get_height_of_plane(i);
+                let base_address = unsafe { self.0.get_base_address_of_plane(i) as *const u8 };
+                let bytes_per_row = self.0.get_bytes_per_row_of_plane(i);
+                let height = self.0.get_height_of_plane(i);
                 let slice = unsafe { std::slice::from_raw_parts(base_address, bytes_per_row * height) };
                 planes.push(MappedPlane::Video {
                     data: MappedData::Ref(slice),
@@ -582,9 +596,9 @@ impl<'a> DataMappable<'a> for CVPixelBuffer {
                 });
             }
         } else {
-            let base_address = unsafe { self.get_base_address() as *const u8 };
-            let bytes_per_row = self.get_bytes_per_row();
-            let height = self.get_height();
+            let base_address = unsafe { self.0.get_base_address() as *const u8 };
+            let bytes_per_row = self.0.get_bytes_per_row();
+            let height = self.0.get_height();
             let slice = unsafe { std::slice::from_raw_parts(base_address, bytes_per_row * height) };
             planes.push(MappedPlane::Video {
                 data: MappedData::Ref(slice),
@@ -598,15 +612,15 @@ impl<'a> DataMappable<'a> for CVPixelBuffer {
         })
     }
 
-    fn planes_mut(&'a mut self) -> Option<MappedPlanes<'a>> {
-        let mut planes = SmallVec::<[MappedPlane<'a>; MEDIA_FRAME_MAX_PLANES]>::new();
+    fn planes_mut(&mut self) -> Option<MappedPlanes<'_>> {
+        let mut planes = SmallVec::new();
 
-        if self.is_planar() {
-            let plane_count = self.get_plane_count();
+        if self.0.is_planar() {
+            let plane_count = self.0.get_plane_count();
             for i in 0..plane_count {
-                let base_address = unsafe { self.get_base_address_of_plane(i) as *mut u8 };
-                let bytes_per_row = self.get_bytes_per_row_of_plane(i);
-                let height = self.get_height_of_plane(i);
+                let base_address = unsafe { self.0.get_base_address_of_plane(i) as *mut u8 };
+                let bytes_per_row = self.0.get_bytes_per_row_of_plane(i);
+                let height = self.0.get_height_of_plane(i);
                 let slice = unsafe { std::slice::from_raw_parts_mut(base_address, bytes_per_row * height) };
                 planes[i] = MappedPlane::Video {
                     data: MappedData::RefMut(slice),
@@ -615,9 +629,9 @@ impl<'a> DataMappable<'a> for CVPixelBuffer {
                 };
             }
         } else {
-            let base_address = unsafe { self.get_base_address() as *mut u8 };
-            let bytes_per_row = self.get_bytes_per_row();
-            let height = self.get_height();
+            let base_address = unsafe { self.0.get_base_address() as *mut u8 };
+            let bytes_per_row = self.0.get_bytes_per_row();
+            let height = self.0.get_height();
             let slice = unsafe { std::slice::from_raw_parts_mut(base_address, bytes_per_row * height) };
             planes[0] = MappedPlane::Video {
                 data: MappedData::RefMut(slice),

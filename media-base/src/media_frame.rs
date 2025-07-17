@@ -1,20 +1,20 @@
 use std::sync::{Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
-#[cfg(any(target_os = "macos", target_os = "ios"))]
-use core_video::pixel_buffer::CVPixelBuffer;
 use smallvec::SmallVec;
 use variant::Variant;
 
-use super::{audio::AudioFrameDescription, data::DataFrameDescription, error::MediaError, media::MediaFrameType, video::VideoFrameDescription};
+use super::{audio::AudioFrameDescriptor, data::DataFrameDescriptor, error::MediaError, media::MediaFrameType, video::VideoFrameDescriptor};
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+use crate::pixel_buffer::video_frame::PixelBuffer;
 use crate::unsupported_error;
 
 pub const MEDIA_FRAME_MAX_PLANES: usize = 8;
 
 #[derive(Clone, Debug)]
-pub enum MediaFrameDescription {
-    Audio(AudioFrameDescription),
-    Video(VideoFrameDescription),
-    Data(DataFrameDescription),
+pub enum MediaFrameDescriptor {
+    Audio(AudioFrameDescriptor),
+    Video(VideoFrameDescriptor),
+    Data(DataFrameDescriptor),
 }
 
 pub enum MappedData<'a> {
@@ -36,7 +36,7 @@ pub enum MappedPlane<'a> {
     None,
 }
 
-impl<'a> MappedPlane<'a> {
+impl MappedPlane<'_> {
     pub fn data(&self) -> Option<&[u8]> {
         match self {
             MappedPlane::Video {
@@ -93,8 +93,8 @@ impl<'a> MappedPlane<'a> {
 }
 
 pub(super) enum DataRef<'a> {
-    Immutable(&'a dyn DataMappable<'a>),
-    Mutable(&'a mut dyn DataMappable<'a>),
+    Immutable(&'a dyn DataMappable),
+    Mutable(&'a mut dyn DataMappable),
 }
 
 pub struct MappedGuard<'a> {
@@ -114,15 +114,15 @@ impl Drop for MappedGuard<'_> {
     }
 }
 
-impl<'a> MappedGuard<'a> {
-    pub fn planes(&self) -> Option<MappedPlanes<'a>> {
+impl MappedGuard<'_> {
+    pub fn planes(&self) -> Option<MappedPlanes<'_>> {
         match &self.data_ref {
             DataRef::Immutable(data) => data.planes(),
             DataRef::Mutable(_) => None,
         }
     }
 
-    pub fn planes_mut(&'a mut self) -> Option<MappedPlanes<'a>> {
+    pub fn planes_mut(&mut self) -> Option<MappedPlanes<'_>> {
         match &mut self.data_ref {
             DataRef::Immutable(_) => None,
             DataRef::Mutable(data) => data.planes_mut(),
@@ -145,7 +145,7 @@ impl<'a> IntoIterator for MappedPlanes<'a> {
     }
 }
 
-impl<'a> MappedPlanes<'a> {
+impl MappedPlanes<'_> {
     pub fn plane_data(&self, index: usize) -> Option<&[u8]> {
         self.planes.get(index).and_then(|plane| plane.data())
     }
@@ -169,7 +169,7 @@ pub(super) enum PlaneInformation {
     Audio(u32),
 }
 
-pub(super) type MemoryPlanes = SmallVec<[PlaneInformation; MEDIA_FRAME_MAX_PLANES]>;
+pub(super) type PlaneInformationVec = SmallVec<[PlaneInformation; MEDIA_FRAME_MAX_PLANES]>;
 
 #[derive(Clone)]
 pub(super) enum Data<'a> {
@@ -177,7 +177,7 @@ pub(super) enum Data<'a> {
     Borrowed(&'a [u8]),
 }
 
-impl<'a> Data<'a> {
+impl Data<'_> {
     fn as_slice(&self) -> &[u8] {
         match self {
             Data::Owned(ref vec) => vec.as_slice(),
@@ -193,7 +193,7 @@ impl<'a> Data<'a> {
     }
 }
 
-impl<'a> Data<'a> {
+impl Data<'_> {
     fn into_owned(self) -> Vec<u8> {
         match self {
             Data::Owned(data) => data,
@@ -205,10 +205,10 @@ impl<'a> Data<'a> {
 #[derive(Clone)]
 pub(super) struct MemoryData<'a> {
     pub(super) data: Data<'a>,
-    pub(super) planes: MemoryPlanes,
+    pub(super) planes: PlaneInformationVec,
 }
 
-impl<'a> MemoryData<'a> {
+impl MemoryData<'_> {
     fn into_owned(self) -> MemoryData<'static> {
         MemoryData {
             data: Data::Owned(self.data.into_owned()),
@@ -217,18 +217,44 @@ impl<'a> MemoryData<'a> {
     }
 }
 
+pub(super) type PlaneDataVec<'a> = SmallVec<[(&'a [u8], u32, u32); MEDIA_FRAME_MAX_PLANES]>;
+
+#[derive(Clone)]
+pub(super) struct SeparateMemoryData<'a> {
+    pub(super) planes: PlaneDataVec<'a>,
+}
+
+impl SeparateMemoryData<'_> {
+    fn into_owned(self) -> MemoryData<'static> {
+        let mut data = Vec::new();
+        let mut planes = PlaneInformationVec::new();
+
+        for (slice, stride, height) in self.planes {
+            data.extend_from_slice(slice);
+            planes.push(PlaneInformation::Video(stride, height));
+        }
+
+        MemoryData {
+            data: Data::Owned(data),
+            planes,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub(super) enum MediaFrameData<'a> {
     Memory(MemoryData<'a>),
+    SeparateMemory(SeparateMemoryData<'a>),
     #[cfg(any(target_os = "macos", target_os = "ios"))]
-    PixelBuffer(CVPixelBuffer),
+    PixelBuffer(PixelBuffer),
     Variant(Variant),
 }
 
-impl<'a> MediaFrameData<'a> {
+impl MediaFrameData<'_> {
     pub fn into_owned(self) -> MediaFrameData<'static> {
         match self {
-            MediaFrameData::Memory(memory_data) => MediaFrameData::Memory(memory_data.into_owned()),
+            MediaFrameData::Memory(data) => MediaFrameData::Memory(data.into_owned()),
+            MediaFrameData::SeparateMemory(data) => MediaFrameData::Memory(data.into_owned()),
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             MediaFrameData::PixelBuffer(pixel_buffer) => MediaFrameData::PixelBuffer(pixel_buffer),
             MediaFrameData::Variant(variant) => MediaFrameData::Variant(variant),
@@ -236,23 +262,23 @@ impl<'a> MediaFrameData<'a> {
     }
 }
 
-pub trait DataMappable<'a> {
-    fn map(&'a self) -> Result<MappedGuard<'a>, MediaError>;
-    fn map_mut(&'a mut self) -> Result<MappedGuard<'a>, MediaError>;
+pub trait DataMappable: Send + Sync {
+    fn map(&self) -> Result<MappedGuard<'_>, MediaError>;
+    fn map_mut(&mut self) -> Result<MappedGuard<'_>, MediaError>;
     fn unmap(&self) -> Result<(), MediaError>;
     fn unmap_mut(&mut self) -> Result<(), MediaError>;
-    fn planes(&'a self) -> Option<MappedPlanes<'a>>;
-    fn planes_mut(&'a mut self) -> Option<MappedPlanes<'a>>;
+    fn planes(&self) -> Option<MappedPlanes<'_>>;
+    fn planes_mut(&mut self) -> Option<MappedPlanes<'_>>;
 }
 
-impl<'a> DataMappable<'a> for MemoryData<'a> {
-    fn map(&'a self) -> Result<MappedGuard<'a>, MediaError> {
+impl DataMappable for MemoryData<'_> {
+    fn map(&self) -> Result<MappedGuard<'_>, MediaError> {
         Ok(MappedGuard {
             data_ref: DataRef::Immutable(self),
         })
     }
 
-    fn map_mut(&'a mut self) -> Result<MappedGuard<'a>, MediaError> {
+    fn map_mut(&mut self) -> Result<MappedGuard<'_>, MediaError> {
         Ok(MappedGuard {
             data_ref: DataRef::Mutable(self),
         })
@@ -266,9 +292,9 @@ impl<'a> DataMappable<'a> for MemoryData<'a> {
         Ok(())
     }
 
-    fn planes(&'a self) -> Option<MappedPlanes<'a>> {
+    fn planes(&self) -> Option<MappedPlanes<'_>> {
         let mut data_slice = self.data.as_slice();
-        let mut planes = SmallVec::<PlaneArray<'a>>::new();
+        let mut planes = SmallVec::new();
 
         for plane in &self.planes {
             let plane_size = match plane {
@@ -301,9 +327,9 @@ impl<'a> DataMappable<'a> for MemoryData<'a> {
         })
     }
 
-    fn planes_mut(&'a mut self) -> Option<MappedPlanes<'a>> {
+    fn planes_mut(&mut self) -> Option<MappedPlanes<'_>> {
         let mut data_slice = self.data.as_mut_slice()?;
-        let mut planes = SmallVec::<PlaneArray<'a>>::new();
+        let mut planes = SmallVec::new();
 
         for plane in &self.planes {
             let plane_size = match plane {
@@ -337,19 +363,62 @@ impl<'a> DataMappable<'a> for MemoryData<'a> {
     }
 }
 
-impl<'a> DataMappable<'a> for MediaFrameData<'a> {
-    fn map(&'a self) -> Result<MappedGuard<'a>, MediaError> {
+impl DataMappable for SeparateMemoryData<'_> {
+    fn map(&self) -> Result<MappedGuard<'_>, MediaError> {
+        Ok(MappedGuard {
+            data_ref: DataRef::Immutable(self),
+        })
+    }
+
+    fn map_mut(&mut self) -> Result<MappedGuard<'_>, MediaError> {
+        Err(MediaError::Unsupported("map".to_string()))
+    }
+
+    fn unmap(&self) -> Result<(), MediaError> {
+        Ok(())
+    }
+
+    fn unmap_mut(&mut self) -> Result<(), MediaError> {
+        Err(MediaError::Unsupported("unmap".to_string()))
+    }
+
+    fn planes(&self) -> Option<MappedPlanes<'_>> {
+        let mut planes = SmallVec::new();
+
+        for (slice, stride, height) in &self.planes {
+            let mapped_plane = MappedPlane::Video {
+                data: MappedData::Ref(slice),
+                stride: *stride,
+                height: *height,
+            };
+            planes.push(mapped_plane);
+        }
+
+        Some(MappedPlanes {
+            planes,
+        })
+    }
+
+    fn planes_mut(&mut self) -> Option<MappedPlanes<'_>> {
+        None
+    }
+}
+
+impl DataMappable for MediaFrameData<'_> {
+    fn map(&self) -> Result<MappedGuard<'_>, MediaError> {
         match self {
             MediaFrameData::Memory(data) => data.map(),
+            MediaFrameData::SeparateMemory(data) => data.map(),
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             MediaFrameData::PixelBuffer(data) => data.map(),
             MediaFrameData::Variant(_) => Err(unsupported_error!(Variant)),
         }
     }
 
-    fn map_mut(&'a mut self) -> Result<MappedGuard<'a>, MediaError> {
+    fn map_mut(&mut self) -> Result<MappedGuard<'_>, MediaError> {
         match self {
             MediaFrameData::Memory(data) => data.map_mut(),
+            MediaFrameData::SeparateMemory(data) => data.map_mut(),
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             MediaFrameData::PixelBuffer(data) => data.map_mut(),
             MediaFrameData::Variant(_) => Err(unsupported_error!(Variant)),
@@ -359,6 +428,7 @@ impl<'a> DataMappable<'a> for MediaFrameData<'a> {
     fn unmap(&self) -> Result<(), MediaError> {
         match self {
             MediaFrameData::Memory(data) => data.unmap(),
+            MediaFrameData::SeparateMemory(data) => data.unmap(),
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             MediaFrameData::PixelBuffer(data) => data.unmap(),
             MediaFrameData::Variant(_) => Err(unsupported_error!(Variant)),
@@ -368,24 +438,27 @@ impl<'a> DataMappable<'a> for MediaFrameData<'a> {
     fn unmap_mut(&mut self) -> Result<(), MediaError> {
         match self {
             MediaFrameData::Memory(data) => data.unmap_mut(),
+            MediaFrameData::SeparateMemory(data) => data.unmap_mut(),
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             MediaFrameData::PixelBuffer(data) => data.unmap_mut(),
             MediaFrameData::Variant(_) => Err(unsupported_error!(Variant)),
         }
     }
 
-    fn planes(&'a self) -> Option<MappedPlanes<'a>> {
+    fn planes(&self) -> Option<MappedPlanes<'_>> {
         match self {
             MediaFrameData::Memory(data) => data.planes(),
+            MediaFrameData::SeparateMemory(data) => data.planes(),
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             MediaFrameData::PixelBuffer(data) => data.planes(),
             MediaFrameData::Variant(_) => None,
         }
     }
 
-    fn planes_mut(&'a mut self) -> Option<MappedPlanes<'a>> {
+    fn planes_mut(&mut self) -> Option<MappedPlanes<'_>> {
         match self {
             MediaFrameData::Memory(data) => data.planes_mut(),
+            MediaFrameData::SeparateMemory(_) => None,
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             MediaFrameData::PixelBuffer(data) => data.planes_mut(),
             MediaFrameData::Variant(_) => None,
@@ -398,12 +471,12 @@ pub struct MediaFrame<'a> {
     pub media_type: MediaFrameType,
     pub source: Option<String>,
     pub timestamp: u64,
-    pub(super) desc: MediaFrameDescription,
+    pub(super) desc: MediaFrameDescriptor,
     pub metadata: Option<Variant>,
     pub(super) data: MediaFrameData<'a>,
 }
 
-impl<'a> MediaFrame<'a> {
+impl MediaFrame<'_> {
     pub fn into_owned(self) -> MediaFrame<'static> {
         MediaFrame {
             media_type: self.media_type,
@@ -415,15 +488,15 @@ impl<'a> MediaFrame<'a> {
         }
     }
 
-    pub fn description(&self) -> &MediaFrameDescription {
+    pub fn descriptor(&self) -> &MediaFrameDescriptor {
         &self.desc
     }
 
-    pub fn map(&self) -> Result<MappedGuard, MediaError> {
+    pub fn map(&self) -> Result<MappedGuard<'_>, MediaError> {
         self.data.map()
     }
 
-    pub fn map_mut(&'a mut self) -> Result<MappedGuard<'a>, MediaError> {
+    pub fn map_mut(&mut self) -> Result<MappedGuard<'_>, MediaError> {
         self.data.map_mut()
     }
 }

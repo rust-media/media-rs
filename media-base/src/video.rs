@@ -10,8 +10,9 @@ use num_enum::TryFromPrimitive;
 
 use super::{
     align_to, ceil_rshift,
-    media_frame::{MemoryPlanes, PlaneInformation},
+    media_frame::{PlaneInformation, PlaneInformationVec},
 };
+use crate::{error::MediaError, invalid_param_error};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Resolution {
@@ -169,12 +170,12 @@ pub enum ColorTransferCharacteristics {
 #[derive(Clone, Copy, Debug, Default, PartialEq, TryFromPrimitive)]
 pub enum PixelFormat {
     #[default]
-    ARGB32 = 0, // packed ARGB, 32 bits, little-endian, BGRA in memory
-    BGRA32, // packed BGRA, 32 bits, little-endian, ARGB in memory
-    ABGR32, // packed ABGR, 32 bits, little-endian, RGBA in memory
-    RGBA32, // packed RGBA, 32 bits, little-endian, ABGR in memory
-    RGB24,  // packed RGB, 24 bits, little-endian, BGR in memory
-    BGR24,  // packed BGR, 24 bits, little-endian, RGB in memory
+    ARGB32 = 0, // packed ARGB, 32 bits
+    BGRA32, // packed BGRA, 32 bits
+    ABGR32, // packed ABGR, 32 bits
+    RGBA32, // packed RGBA, 32 bits
+    RGB24,  // packed RGB, 24 bits
+    BGR24,  // packed BGR, 24 bits
     I420,   // planar YUV 4:2:0, 12 bits
     I422,   // planar YUV 4:2:2, 16 bits
     I444,   // planar YUV 4:4:4, 24 bits
@@ -194,10 +195,10 @@ pub enum PixelFormat {
     AYUV,   // packed AYUV 4:4:4, 32 bits
     Y8,     // greyscale, 8 bits Y
     YA8,    // greyscale, 8 bits Y, 8 bits alpha
-    RGB30,  // packed RGB, 30 bits, 10 bits per channel, little-endian
-    BGR30,  // packed BGR, 30 bits, 10 bits per channel, little-endian
-    ARGB64, // packed ARGB, 64 bits, 16 bits per channel, little-endian
-    ABGR64, // packed ABGR, 64 bits, 16 bits per channel, little-endian
+    RGB30,  // packed RGB, 30 bits, 10 bits per channel, 2 bits unused(LSB)
+    BGR30,  // packed BGR, 30 bits, 10 bits per channel, 2 bits unused(LSB)
+    ARGB64, // packed ARGB, 64 bits, 16 bits per channel, 16-bit big-endian
+    ABGR64, // packed ABGR, 64 bits, 16 bits per channel, 16-bit big-endian
     I010,   // planar YUV 4:2:0, 10 bits per channel
     I210,   // planar YUV 4:2:2, 10 bits per channel
     I410,   // planar YUV 4:4:4, 10 bits per channel
@@ -268,7 +269,7 @@ pub enum Origin {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct VideoFrameDescription {
+pub struct VideoFrameDescriptor {
     pub format: PixelFormat,
     pub color_range: ColorRange,
     pub color_matrix: ColorMatrix,
@@ -286,7 +287,7 @@ pub struct VideoFrameDescription {
     pub crop_bottom: u32,
 }
 
-impl VideoFrameDescription {
+impl VideoFrameDescriptor {
     pub fn new(format: PixelFormat, width: NonZeroU32, height: NonZeroU32) -> Self {
         Self {
             format,
@@ -306,10 +307,17 @@ impl VideoFrameDescription {
             crop_bottom: 0,
         }
     }
+
+    pub fn try_new(format: PixelFormat, width: u32, height: u32) -> Result<Self, MediaError> {
+        let width = NonZeroU32::new(width).ok_or(invalid_param_error!(width))?;
+        let height = NonZeroU32::new(height).ok_or(invalid_param_error!(height))?;
+
+        Ok(Self::new(format, width, height))
+    }
 }
 
 bitflags! {
-    struct ColorInfo: u32 {
+    struct PixelFormatFlags: u32 {
         const Alpha    = 1 << 0;
         const RGB      = 1 << 1;
         const YUV      = 1 << 2;
@@ -319,448 +327,448 @@ bitflags! {
     }
 }
 
-struct PixelDescription {
+struct PixelFormatDescriptor {
     pub components: u8,
     pub chroma_shift_x: u8,
     pub chroma_shift_y: u8,
     pub depth: u8,
-    pub color_info: u32,
+    pub flags: u32,
     pub component_bytes: [u8; 4],
 }
 
-static PIXEL_DESC: [PixelDescription; PixelFormat::MAX as usize] = [
+static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
     // ARGB32
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 1,
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        color_info: ColorInfo::Alpha.bits() | ColorInfo::RGB.bits() | ColorInfo::Packed.bits(),
+        flags: PixelFormatFlags::Alpha.bits() | PixelFormatFlags::RGB.bits() | PixelFormatFlags::Packed.bits(),
         component_bytes: [4, 0, 0, 0],
     },
     // BGRA32
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 1,
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        color_info: ColorInfo::Alpha.bits() | ColorInfo::RGB.bits() | ColorInfo::Packed.bits(),
+        flags: PixelFormatFlags::Alpha.bits() | PixelFormatFlags::RGB.bits() | PixelFormatFlags::Packed.bits(),
         component_bytes: [4, 0, 0, 0],
     },
     // ABGR32
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 1,
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        color_info: ColorInfo::Alpha.bits() | ColorInfo::RGB.bits() | ColorInfo::Packed.bits(),
+        flags: PixelFormatFlags::Alpha.bits() | PixelFormatFlags::RGB.bits() | PixelFormatFlags::Packed.bits(),
         component_bytes: [4, 0, 0, 0],
     },
     // RGBA32
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 1,
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        color_info: ColorInfo::Alpha.bits() | ColorInfo::RGB.bits() | ColorInfo::Packed.bits(),
+        flags: PixelFormatFlags::Alpha.bits() | PixelFormatFlags::RGB.bits() | PixelFormatFlags::Packed.bits(),
         component_bytes: [4, 0, 0, 0],
     },
     // RGB24
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 1,
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        color_info: ColorInfo::RGB.bits() | ColorInfo::Packed.bits(),
+        flags: PixelFormatFlags::RGB.bits() | PixelFormatFlags::Packed.bits(),
         component_bytes: [3, 0, 0, 0],
     },
     // BGR24
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 1,
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        color_info: ColorInfo::RGB.bits() | ColorInfo::Packed.bits(),
+        flags: PixelFormatFlags::RGB.bits() | PixelFormatFlags::Packed.bits(),
         component_bytes: [3, 0, 0, 0],
     },
     // I420
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 3,
         chroma_shift_x: 1,
         chroma_shift_y: 1,
         depth: 8,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::Planar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
         component_bytes: [1, 1, 1, 0],
     },
     // I422
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 3,
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 8,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::Planar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
         component_bytes: [1, 1, 1, 0],
     },
     // I444
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 3,
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::Planar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
         component_bytes: [1, 1, 1, 0],
     },
     // NV12
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 2,
         chroma_shift_x: 1,
         chroma_shift_y: 1,
         depth: 8,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::BiPlanar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
         component_bytes: [1, 2, 0, 0],
     },
     // NV21
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 2,
         chroma_shift_x: 1,
         chroma_shift_y: 1,
         depth: 8,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::BiPlanar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
         component_bytes: [1, 2, 0, 0],
     },
     // NV16
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 2,
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 8,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::BiPlanar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
         component_bytes: [1, 2, 0, 0],
     },
     // NV61
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 2,
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 8,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::BiPlanar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
         component_bytes: [1, 2, 0, 0],
     },
     // NV24
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 2,
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::BiPlanar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
         component_bytes: [1, 2, 0, 0],
     },
     // NV42
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 2,
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::BiPlanar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
         component_bytes: [1, 2, 0, 0],
     },
     // YV12
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 3,
         chroma_shift_x: 1,
         chroma_shift_y: 1,
         depth: 8,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::Planar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
         component_bytes: [1, 1, 1, 0],
     },
     // YV16
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 3,
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 8,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::Planar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
         component_bytes: [1, 1, 1, 0],
     },
     // YV24
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 3,
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::Planar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
         component_bytes: [1, 1, 1, 0],
     },
     // YUYV
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 1,
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 8,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::Packed.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Packed.bits(),
         component_bytes: [4, 0, 0, 0],
     },
     // YVYU
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 1,
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 8,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::Packed.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Packed.bits(),
         component_bytes: [4, 0, 0, 0],
     },
     // UYVY
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 1,
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 8,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::Packed.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Packed.bits(),
         component_bytes: [4, 0, 0, 0],
     },
     // VYUY
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 1,
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 8,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::Packed.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Packed.bits(),
         component_bytes: [4, 0, 0, 0],
     },
     // AYUV
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 1,
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        color_info: ColorInfo::Alpha.bits() | ColorInfo::YUV.bits() | ColorInfo::Packed.bits(),
+        flags: PixelFormatFlags::Alpha.bits() | PixelFormatFlags::YUV.bits() | PixelFormatFlags::Packed.bits(),
         component_bytes: [4, 0, 0, 0],
     },
     // Y8
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 1,
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        color_info: ColorInfo::Planar.bits(),
+        flags: PixelFormatFlags::Planar.bits(),
         component_bytes: [1, 0, 0, 0],
     },
     // YA8
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 2,
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        color_info: ColorInfo::Alpha.bits() | ColorInfo::Planar.bits(),
+        flags: PixelFormatFlags::Alpha.bits() | PixelFormatFlags::Planar.bits(),
         component_bytes: [1, 1, 0, 0],
     },
     // RGB30
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 1,
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 10,
-        color_info: ColorInfo::RGB.bits() | ColorInfo::Packed.bits(),
+        flags: PixelFormatFlags::RGB.bits() | PixelFormatFlags::Packed.bits(),
         component_bytes: [4, 0, 0, 0],
     },
     // BGR30
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 1,
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 10,
-        color_info: ColorInfo::RGB.bits() | ColorInfo::Packed.bits(),
+        flags: PixelFormatFlags::RGB.bits() | PixelFormatFlags::Packed.bits(),
         component_bytes: [4, 0, 0, 0],
     },
     // ARGB64
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 1,
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 16,
-        color_info: ColorInfo::Alpha.bits() | ColorInfo::RGB.bits() | ColorInfo::Packed.bits(),
+        flags: PixelFormatFlags::Alpha.bits() | PixelFormatFlags::RGB.bits() | PixelFormatFlags::Packed.bits(),
         component_bytes: [8, 0, 0, 0],
     },
     // ABGR64
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 1,
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 16,
-        color_info: ColorInfo::Alpha.bits() | ColorInfo::RGB.bits() | ColorInfo::Packed.bits(),
+        flags: PixelFormatFlags::Alpha.bits() | PixelFormatFlags::RGB.bits() | PixelFormatFlags::Packed.bits(),
         component_bytes: [8, 0, 0, 0],
     },
     // I010
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 3,
         chroma_shift_x: 1,
         chroma_shift_y: 1,
         depth: 10,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::Planar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
         component_bytes: [2, 2, 2, 0],
     },
     // I210
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 3,
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 10,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::Planar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
         component_bytes: [2, 2, 2, 0],
     },
     // I410
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 3,
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 10,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::Planar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
         component_bytes: [2, 2, 2, 0],
     },
     // P010
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 2,
         chroma_shift_x: 1,
         chroma_shift_y: 1,
         depth: 10,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::BiPlanar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
         component_bytes: [2, 4, 0, 0],
     },
     // P210
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 2,
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 10,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::BiPlanar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
         component_bytes: [2, 4, 0, 0],
     },
     // P410
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 2,
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 10,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::BiPlanar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
         component_bytes: [2, 4, 0, 0],
     },
     // I012
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 3,
         chroma_shift_x: 1,
         chroma_shift_y: 1,
         depth: 12,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::Planar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
         component_bytes: [2, 2, 2, 0],
     },
     // I212
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 3,
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 12,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::Planar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
         component_bytes: [2, 2, 2, 0],
     },
     // I412
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 3,
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 12,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::Planar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
         component_bytes: [2, 2, 2, 0],
     },
     // P012
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 2,
         chroma_shift_x: 1,
         chroma_shift_y: 1,
         depth: 12,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::BiPlanar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
         component_bytes: [2, 4, 0, 0],
     },
     // P212
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 2,
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 12,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::BiPlanar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
         component_bytes: [2, 4, 0, 0],
     },
     // P412
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 2,
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 12,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::BiPlanar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
         component_bytes: [2, 4, 0, 0],
     },
     // I016
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 3,
         chroma_shift_x: 1,
         chroma_shift_y: 1,
         depth: 16,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::Planar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
         component_bytes: [2, 2, 2, 0],
     },
     // I216
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 3,
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 16,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::Planar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
         component_bytes: [2, 2, 2, 0],
     },
     // I416
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 3,
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 16,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::Planar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
         component_bytes: [2, 2, 2, 0],
     },
     // P016
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 2,
         chroma_shift_x: 1,
         chroma_shift_y: 1,
         depth: 16,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::BiPlanar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
         component_bytes: [2, 4, 0, 0],
     },
     // P216
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 2,
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 16,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::BiPlanar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
         component_bytes: [2, 4, 0, 0],
     },
     // P416
-    PixelDescription {
+    PixelFormatDescriptor {
         components: 2,
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 16,
-        color_info: ColorInfo::YUV.bits() | ColorInfo::BiPlanar.bits(),
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
         component_bytes: [2, 4, 0, 0],
     },
 ];
 
 impl PixelFormat {
     pub fn components(&self) -> u8 {
-        PIXEL_DESC[*self as usize].components
+        PIXEL_FORMAT_DESC[*self as usize].components
     }
 
     pub fn component_bytes(&self, component: u8) -> u8 {
-        PIXEL_DESC[*self as usize].component_bytes[component as usize]
+        PIXEL_FORMAT_DESC[*self as usize].component_bytes[component as usize]
     }
 
     pub fn chroma_subsampling(&self) -> Option<ChromaSubsampling> {
@@ -768,7 +776,7 @@ impl PixelFormat {
             return None;
         }
 
-        let desc = &PIXEL_DESC[*self as usize];
+        let desc = &PIXEL_FORMAT_DESC[*self as usize];
 
         match (desc.chroma_shift_x, desc.chroma_shift_y) {
             (1, 1) => Some(ChromaSubsampling::YUV420),
@@ -779,33 +787,53 @@ impl PixelFormat {
     }
 
     pub fn depth(&self) -> u8 {
-        PIXEL_DESC[*self as usize].depth
+        PIXEL_FORMAT_DESC[*self as usize].depth
     }
 
     pub fn is_rgb(&self) -> bool {
-        PIXEL_DESC[*self as usize].color_info & ColorInfo::RGB.bits() != 0
+        PIXEL_FORMAT_DESC[*self as usize].flags & PixelFormatFlags::RGB.bits() != 0
     }
 
     pub fn is_yuv(&self) -> bool {
-        PIXEL_DESC[*self as usize].color_info & ColorInfo::YUV.bits() != 0
+        PIXEL_FORMAT_DESC[*self as usize].flags & PixelFormatFlags::YUV.bits() != 0
     }
 
     pub fn is_planar(&self) -> bool {
-        PIXEL_DESC[*self as usize].color_info & ColorInfo::Planar.bits() != 0
+        PIXEL_FORMAT_DESC[*self as usize].flags & PixelFormatFlags::Planar.bits() != 0
     }
 
     pub fn is_packed(&self) -> bool {
-        PIXEL_DESC[*self as usize].color_info & ColorInfo::Packed.bits() != 0
+        PIXEL_FORMAT_DESC[*self as usize].flags & PixelFormatFlags::Packed.bits() != 0
     }
 
     pub fn is_biplanar(&self) -> bool {
-        PIXEL_DESC[*self as usize].color_info & ColorInfo::BiPlanar.bits() != 0
+        PIXEL_FORMAT_DESC[*self as usize].flags & PixelFormatFlags::BiPlanar.bits() != 0
     }
 
-    pub(super) fn calc_data(&self, width: u32, height: u32, alignment: u32) -> (u32, MemoryPlanes) {
-        let desc = &PIXEL_DESC[*self as usize];
+    pub(super) fn calc_plane_row_bytes(&self, plane_index: usize, width: u32) -> u32 {
+        let desc = &PIXEL_FORMAT_DESC[*self as usize];
+        let component_bytes = desc.component_bytes[plane_index];
+
+        if plane_index > 0 && (self.is_planar() || self.is_biplanar()) {
+            ceil_rshift(width, desc.chroma_shift_x as u32) * component_bytes as u32
+        } else {
+            width * component_bytes as u32
+        }
+    }
+
+    pub(super) fn calc_plane_height(&self, plane_index: usize, height: u32) -> u32 {
+        if plane_index > 0 && (self.is_planar() || self.is_biplanar()) {
+            let desc = &PIXEL_FORMAT_DESC[*self as usize];
+            ceil_rshift(height, desc.chroma_shift_y as u32)
+        } else {
+            height
+        }
+    }
+
+    pub(super) fn calc_data(&self, width: u32, height: u32, alignment: u32) -> (u32, PlaneInformationVec) {
+        let desc = &PIXEL_FORMAT_DESC[*self as usize];
         let mut size;
-        let mut planes = MemoryPlanes::with_capacity(desc.components as usize);
+        let mut planes = PlaneInformationVec::with_capacity(desc.components as usize);
 
         match self {
             PixelFormat::RGB24 | PixelFormat::BGR24 | PixelFormat::Y8 => {
@@ -839,10 +867,10 @@ impl PixelFormat {
         (size, planes)
     }
 
-    pub(super) fn calc_data_with_stride(&self, height: u32, stride: u32) -> (u32, MemoryPlanes) {
-        let desc = &PIXEL_DESC[*self as usize];
+    pub(super) fn calc_data_with_stride(&self, height: u32, stride: u32) -> (u32, PlaneInformationVec) {
+        let desc = &PIXEL_FORMAT_DESC[*self as usize];
         let mut size;
-        let mut planes = MemoryPlanes::with_capacity(desc.components as usize);
+        let mut planes = PlaneInformationVec::with_capacity(desc.components as usize);
 
         planes.push(PlaneInformation::Video(stride, height));
         size = stride * height;
@@ -854,6 +882,12 @@ impl PixelFormat {
         }
 
         (size, planes)
+    }
+}
+
+impl From<PixelFormat> for usize {
+    fn from(value: PixelFormat) -> Self {
+        value as usize
     }
 }
 
@@ -869,6 +903,12 @@ impl TryFrom<usize> for PixelFormat {
     }
 }
 
+impl From<ColorRange> for usize {
+    fn from(value: ColorRange) -> Self {
+        value as usize
+    }
+}
+
 impl From<usize> for ColorRange {
     fn from(value: usize) -> Self {
         match value {
@@ -877,6 +917,12 @@ impl From<usize> for ColorRange {
             2 => ColorRange::Full,
             _ => ColorRange::Unspecified,
         }
+    }
+}
+
+impl From<ColorMatrix> for usize {
+    fn from(value: ColorMatrix) -> Self {
+        value as usize
     }
 }
 
@@ -904,6 +950,12 @@ impl TryFrom<usize> for ColorMatrix {
     }
 }
 
+impl From<ColorPrimaries> for usize {
+    fn from(value: ColorPrimaries) -> Self {
+        value as usize
+    }
+}
+
 impl TryFrom<usize> for ColorPrimaries {
     type Error = ();
 
@@ -923,6 +975,12 @@ impl TryFrom<usize> for ColorPrimaries {
             12 => Ok(ColorPrimaries::SMPTE432),
             _ => Err(()),
         }
+    }
+}
+
+impl From<ColorTransferCharacteristics> for usize {
+    fn from(value: ColorTransferCharacteristics) -> Self {
+        value as usize
     }
 }
 
