@@ -5,16 +5,16 @@
 [![License](https://img.shields.io/badge/License-Apache%202-blue.svg)](LICENSE-APACHE)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE-MIT)
 
-A pure Rust media framework.
+A pure Rust media framework for handling multimedia tasks such as encoding, decoding, capture, playback, processing.
 
 ## Features
 
 ### Base
-- [x] **Media Types** - Media type definitions
+- [x] **Media Types** - Definitions for media types
 - [x] **Media Frame** - Abstraction for raw multimedia data
-- [x] **Video Pixel Format conversion** - Convert between RGB, YUV, and other pixel formats
-- [ ] **Video Scaling** - Video resolution scaling
-- [ ] **Audio Sample Format conversion** - Convert between different audio sample formats
+- [x] **Video Pixel Format Conversion** - Convert between RGB, YUV, and other pixel formats
+- [ ] **Video Scaling** - Change video resolution
+- [ ] **Audio Sample Format Conversion** - Convert between different audio sample formats
 - [ ] **Audio Resampling** - Change audio sample rates
 
 ### Device
