@@ -4,9 +4,10 @@ use std::{
 };
 
 use super::{
-    media_frame::{MemoryPlanes, PlaneInformation},
+    media_frame::{PlaneInformation, PlaneInformationVec},
     time,
 };
+use crate::{error::MediaError, invalid_param_error};
 
 pub const SAMPLE_RATE_TELEPHONE: u32 = 8000;
 pub const SAMPLE_RATE_VOIP: u32 = 16000;
@@ -31,14 +32,14 @@ pub enum AudioFormat {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct AudioFrameDescription {
+pub struct AudioFrameDescriptor {
     pub format: AudioFormat,
     pub channels: NonZeroU8,
     pub samples: NonZeroU32,
     pub sample_rate: NonZeroU32,
 }
 
-impl AudioFrameDescription {
+impl AudioFrameDescriptor {
     pub fn new(format: AudioFormat, channels: NonZeroU8, samples: NonZeroU32, sample_rate: NonZeroU32) -> Self {
         Self {
             format,
@@ -48,7 +49,15 @@ impl AudioFrameDescription {
         }
     }
 
-    pub fn duration_equal(&self, other: &AudioFrameDescription) -> bool {
+    pub fn try_new(format: AudioFormat, channels: u8, samples: u32, sample_rate: u32) -> Result<Self, MediaError> {
+        let channels = NonZeroU8::new(channels).ok_or(invalid_param_error!(channels))?;
+        let samples = NonZeroU32::new(samples).ok_or(invalid_param_error!(samples))?;
+        let sample_rate = NonZeroU32::new(sample_rate).ok_or(invalid_param_error!(sample_rate))?;
+
+        Ok(Self::new(format, channels, samples, sample_rate))
+    }
+
+    pub fn duration_equal(&self, other: &AudioFrameDescriptor) -> bool {
         let duration1 = self.samples.get() as u64 * time::MSEC_PER_SEC / self.sample_rate.get() as u64;
         let duration2 = other.samples.get() as u64 * time::MSEC_PER_SEC / other.sample_rate.get() as u64;
         duration1 == duration2
@@ -134,9 +143,9 @@ impl AudioFormat {
         }
     }
 
-    pub(super) fn data_calc(&self, channels: u8, samples: u32) -> (u32, MemoryPlanes) {
+    pub(super) fn calc_data(&self, channels: u8, samples: u32) -> (u32, PlaneInformationVec) {
         let mut size = 0;
-        let mut planes = MemoryPlanes::new();
+        let mut planes = PlaneInformationVec::new();
         let stride = self.stride(channels, samples);
 
         if self.is_planar() {
