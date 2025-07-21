@@ -3,8 +3,8 @@ use std::num::{NonZeroU32, NonZeroU8};
 use super::{
     audio::{AudioFormat, AudioFrameDescriptor},
     error::MediaError,
-    media::MediaFrameType,
-    media_frame::{Data, MediaFrame, MediaFrameData, MediaFrameDescriptor, MemoryData},
+    media::MediaFrameDescriptor,
+    media_frame::{Data, MediaFrame, MediaFrameData, MemoryData},
 };
 
 pub struct AudioDataBuilder;
@@ -51,33 +51,34 @@ impl AudioFrameBuilder {
         let data = AudioDataBuilder::new(desc.format, desc.channels, desc.samples)?;
 
         Ok(MediaFrame {
-            media_type: MediaFrameType::Audio,
+            desc: MediaFrameDescriptor::Audio(desc),
             source: None,
             timestamp: 0,
-            desc: MediaFrameDescriptor::Audio(desc),
             metadata: None,
             data: MediaFrameData::Memory(data),
         })
     }
 
-    pub fn from_buffer<'a>(&self, format: AudioFormat, channels: u8, samples: u32, sample_rate: u32, buffer: &'a [u8]) -> Result<MediaFrame<'a>, MediaError> {
+    pub fn from_buffer<'a>(
+        &self,
+        format: AudioFormat,
+        channels: u8,
+        samples: u32,
+        sample_rate: u32,
+        buffer: &'a [u8],
+    ) -> Result<MediaFrame<'a>, MediaError> {
         let desc = AudioFrameDescriptor::try_new(format, channels, samples, sample_rate)?;
 
         self.from_buffer_with_descriptor(desc, buffer)
     }
 
-    pub fn from_buffer_with_descriptor<'a>(
-        &self,
-        desc: AudioFrameDescriptor,
-        buffer: &'a [u8],
-    ) -> Result<MediaFrame<'a>, MediaError> {
+    pub fn from_buffer_with_descriptor<'a>(&self, desc: AudioFrameDescriptor, buffer: &'a [u8]) -> Result<MediaFrame<'a>, MediaError> {
         let data = AudioDataBuilder::from_buffer(desc.format, desc.channels, desc.samples, buffer)?;
 
         Ok(MediaFrame {
-            media_type: MediaFrameType::Audio,
+            desc: MediaFrameDescriptor::Audio(desc),
             source: None,
             timestamp: 0,
-            desc: MediaFrameDescriptor::Audio(desc),
             metadata: None,
             data: MediaFrameData::Memory(data),
         })
@@ -87,5 +88,17 @@ impl AudioFrameBuilder {
 impl MediaFrame<'_> {
     pub fn audio_builder() -> AudioFrameBuilder {
         AudioFrameBuilder
+    }
+
+    pub fn audio_descriptor(&self) -> Option<&AudioFrameDescriptor> {
+        if let MediaFrameDescriptor::Audio(desc) = &self.desc {
+            Some(desc)
+        } else {
+            None
+        }
+    }
+
+    pub fn is_audio(&self) -> bool {
+        self.desc.is_audio()
     }
 }

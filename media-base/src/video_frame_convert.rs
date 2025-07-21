@@ -11,7 +11,7 @@ use super::{
     media_frame::{MappedPlanes, MediaFrame},
     video::{ColorMatrix, ColorRange, PixelFormat},
 };
-use crate::{media::MediaFrameType, media_frame::MediaFrameDescriptor};
+use crate::media::MediaFrameDescriptor;
 
 fn into_yuv_planar_image<'a, T>(src: &'a MappedPlanes, width: NonZeroU32, height: NonZeroU32) -> Result<YuvPlanarImage<'a, T>, MediaError>
 where
@@ -582,7 +582,7 @@ fn data_copy(src: &MappedPlanes, dst: &mut MappedPlanes, format: PixelFormat, wi
 
 impl MediaFrame<'_> {
     pub fn convert_to(&self, dst: &mut MediaFrame) -> Result<(), MediaError> {
-        if self.media_type != dst.media_type || self.media_type != MediaFrameType::Video {
+        if self.media_type() != dst.media_type() || self.is_video() {
             return Err(MediaError::Unsupported("media type".to_string()));
         }
 

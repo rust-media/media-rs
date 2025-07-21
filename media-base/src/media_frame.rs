@@ -3,19 +3,12 @@ use std::sync::{Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use smallvec::SmallVec;
 use variant::Variant;
 
-use super::{audio::AudioFrameDescriptor, data::DataFrameDescriptor, error::MediaError, media::MediaFrameType, video::VideoFrameDescriptor};
+use super::{error::MediaError, media::MediaFrameType};
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 use crate::pixel_buffer::video_frame::PixelBuffer;
-use crate::unsupported_error;
+use crate::{media::MediaFrameDescriptor, unsupported_error};
 
 pub const MEDIA_FRAME_MAX_PLANES: usize = 8;
-
-#[derive(Clone, Debug)]
-pub enum MediaFrameDescriptor {
-    Audio(AudioFrameDescriptor),
-    Video(VideoFrameDescriptor),
-    Data(DataFrameDescriptor),
-}
 
 pub enum MappedData<'a> {
     RefMut(&'a mut [u8]),
@@ -468,21 +461,35 @@ impl DataMappable for MediaFrameData<'_> {
 
 #[derive(Clone)]
 pub struct MediaFrame<'a> {
-    pub media_type: MediaFrameType,
+    pub(super) desc: MediaFrameDescriptor,
     pub source: Option<String>,
     pub timestamp: u64,
-    pub(super) desc: MediaFrameDescriptor,
     pub metadata: Option<Variant>,
     pub(super) data: MediaFrameData<'a>,
 }
 
 impl MediaFrame<'_> {
+    pub fn new_with_descriptor<T>(desc: T) -> Result<MediaFrame<'static>, MediaError>
+    where
+        T: Into<MediaFrameDescriptor> + Clone,
+    {
+        let desc = desc.into();
+        match desc {
+            MediaFrameDescriptor::Audio(audio_desc) => Self::audio_builder().new_with_descriptor(audio_desc),
+            MediaFrameDescriptor::Video(video_desc) => Self::video_builder().new_with_descriptor(video_desc),
+            MediaFrameDescriptor::Data(data_desc) => Self::data_builder().new_with_descriptor(data_desc),
+        }
+    }
+
+    pub fn media_type(&self) -> MediaFrameType {
+        self.desc.media_type()
+    }
+
     pub fn into_owned(self) -> MediaFrame<'static> {
         MediaFrame {
-            media_type: self.media_type,
+            desc: self.desc,
             source: self.source,
             timestamp: self.timestamp,
-            desc: self.desc,
             metadata: self.metadata,
             data: self.data.into_owned(),
         }

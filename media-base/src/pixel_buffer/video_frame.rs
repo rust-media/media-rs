@@ -18,7 +18,7 @@ use smallvec::SmallVec;
 use crate::{
     error::MediaError,
     invalid_param_error,
-    media::MediaFrameType,
+    media::MediaFrameDescriptor,
     media_frame::*,
     none_param_error,
     video::{ColorMatrix, ColorPrimaries, ColorRange, ColorTransferCharacteristics, PixelFormat, VideoFrameDescriptor},
@@ -445,10 +445,9 @@ impl VideoFrameBuilder {
         }
 
         Ok(MediaFrame {
-            media_type: MediaFrameType::Video,
+            desc: MediaFrameDescriptor::Video(desc),
             source: None,
             timestamp: 0,
-            desc: MediaFrameDescriptor::Video(desc),
             metadata: None,
             data: MediaFrameData::PixelBuffer(PixelBuffer(pixel_buffer)),
         })
@@ -528,10 +527,9 @@ impl VideoFrameBuilder {
         }
 
         Ok(MediaFrame {
-            media_type: MediaFrameType::Video,
+            desc: MediaFrameDescriptor::Video(desc),
             source: None,
             timestamp: 0,
-            desc: MediaFrameDescriptor::Video(desc),
             metadata: None,
             data: MediaFrameData::PixelBuffer(PixelBuffer(pixel_buffer.clone())),
         })

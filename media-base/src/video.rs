@@ -12,7 +12,7 @@ use super::{
     align_to, ceil_rshift,
     media_frame::{PlaneInformation, PlaneInformationVec},
 };
-use crate::{error::MediaError, invalid_param_error};
+use crate::{error::MediaError, invalid_param_error, media::MediaFrameDescriptor};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Resolution {
@@ -313,6 +313,12 @@ impl VideoFrameDescriptor {
         let height = NonZeroU32::new(height).ok_or(invalid_param_error!(height))?;
 
         Ok(Self::new(format, width, height))
+    }
+}
+
+impl From<VideoFrameDescriptor> for MediaFrameDescriptor {
+    fn from(desc: VideoFrameDescriptor) -> Self {
+        MediaFrameDescriptor::Video(desc)
     }
 }
 

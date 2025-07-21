@@ -7,7 +7,7 @@ use super::{
     media_frame::{PlaneInformation, PlaneInformationVec},
     time,
 };
-use crate::{error::MediaError, invalid_param_error};
+use crate::{error::MediaError, invalid_param_error, media::MediaFrameDescriptor};
 
 pub const SAMPLE_RATE_TELEPHONE: u32 = 8000;
 pub const SAMPLE_RATE_VOIP: u32 = 16000;
@@ -61,6 +61,12 @@ impl AudioFrameDescriptor {
         let duration1 = self.samples.get() as u64 * time::MSEC_PER_SEC / self.sample_rate.get() as u64;
         let duration2 = other.samples.get() as u64 * time::MSEC_PER_SEC / other.sample_rate.get() as u64;
         duration1 == duration2
+    }
+}
+
+impl From<AudioFrameDescriptor> for MediaFrameDescriptor {
+    fn from(desc: AudioFrameDescriptor) -> Self {
+        MediaFrameDescriptor::Audio(desc)
     }
 }
 

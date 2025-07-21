@@ -2,8 +2,8 @@ use std::num::NonZeroU32;
 
 use super::{
     error::MediaError,
-    media::MediaFrameType,
-    media_frame::{Data, MediaFrame, MediaFrameData, MediaFrameDescriptor, MemoryData, PlaneInformation, PlaneInformationVec},
+    media::MediaFrameDescriptor,
+    media_frame::{Data, MediaFrame, MediaFrameData, MemoryData, PlaneInformation, PlaneInformationVec},
     video::{PixelFormat, VideoFrameDescriptor},
     DEFAULT_ALIGNMENT,
 };
@@ -37,12 +37,7 @@ impl VideoDataBuilder {
         })
     }
 
-    fn from_aligned_buffer<'a>(
-        format: PixelFormat,
-        height: NonZeroU32,
-        stride: NonZeroU32,
-        buffer: &'a [u8],
-    ) -> Result<MemoryData<'a>, MediaError> {
+    fn from_aligned_buffer<'a>(format: PixelFormat, height: NonZeroU32, stride: NonZeroU32, buffer: &'a [u8]) -> Result<MemoryData<'a>, MediaError> {
         let (size, planes) = format.calc_data_with_stride(height.get(), stride.get());
 
         if buffer.len() != size as usize {
@@ -164,10 +159,9 @@ impl VideoFrameBuilder {
         let data = SeparateMemoryData::from_buffers(desc.format, desc.height, buffers)?;
 
         Ok(MediaFrame {
-            media_type: MediaFrameType::Video,
+            desc: MediaFrameDescriptor::Video(desc),
             source: None,
             timestamp: 0,
-            desc: MediaFrameDescriptor::Video(desc),
             metadata: None,
             data: MediaFrameData::SeparateMemory(data),
         })
@@ -175,10 +169,9 @@ impl VideoFrameBuilder {
 
     fn from_data<'a>(desc: VideoFrameDescriptor, data: MemoryData<'a>) -> MediaFrame<'a> {
         MediaFrame {
-            media_type: MediaFrameType::Video,
+            desc: MediaFrameDescriptor::Video(desc),
             source: None,
             timestamp: 0,
-            desc: MediaFrameDescriptor::Video(desc),
             metadata: None,
             data: MediaFrameData::Memory(data),
         }
@@ -208,5 +201,9 @@ impl<'a> SeparateMemoryData<'a> {
 impl MediaFrame<'_> {
     pub fn video_builder() -> VideoFrameBuilder {
         VideoFrameBuilder
+    }
+
+    pub fn is_video(&self) -> bool {
+        self.desc.is_video()
     }
 }
