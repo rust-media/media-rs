@@ -8,7 +8,7 @@ use super::{error::MediaError, media::MediaFrameType};
 use crate::pixel_buffer::video_frame::PixelBuffer;
 use crate::{media::MediaFrameDescriptor, unsupported_error};
 
-pub const MEDIA_FRAME_MAX_PLANES: usize = 8;
+const DEFAULT_MAX_PLANES: usize = 8;
 
 pub enum MappedData<'a> {
     RefMut(&'a mut [u8]),
@@ -123,7 +123,7 @@ impl MappedGuard<'_> {
     }
 }
 
-type PlaneArray<'a> = [MappedPlane<'a>; MEDIA_FRAME_MAX_PLANES];
+type PlaneArray<'a> = [MappedPlane<'a>; DEFAULT_MAX_PLANES];
 
 pub struct MappedPlanes<'a> {
     pub(super) planes: SmallVec<PlaneArray<'a>>,
@@ -162,7 +162,7 @@ pub(super) enum PlaneInformation {
     Audio(u32),
 }
 
-pub(super) type PlaneInformationVec = SmallVec<[PlaneInformation; MEDIA_FRAME_MAX_PLANES]>;
+pub(super) type PlaneInformationVec = SmallVec<[PlaneInformation; DEFAULT_MAX_PLANES]>;
 
 #[derive(Clone)]
 pub(super) enum Data<'a> {
@@ -210,7 +210,7 @@ impl MemoryData<'_> {
     }
 }
 
-pub(super) type PlaneDataVec<'a> = SmallVec<[(&'a [u8], u32, u32); MEDIA_FRAME_MAX_PLANES]>;
+pub(super) type PlaneDataVec<'a> = SmallVec<[(&'a [u8], u32, u32); DEFAULT_MAX_PLANES]>;
 
 #[derive(Clone)]
 pub(super) struct SeparateMemoryData<'a> {
