@@ -18,6 +18,7 @@ license = "MIT OR Apache-2.0"
 categories = ["multimedia", "multimedia::audio", "multimedia::video"]
 keywords = ["audio", "media", "video"]
 edition = "2021"
+rust-version = "1.82.0"
 
 [workspace.dependencies.media-base]
 path = "media-base"
