@@ -1,4 +1,4 @@
-use std::{borrow::Cow, num::NonZeroU32, sync::OnceLock};
+use std::{borrow::Cow, num::NonZeroU32, sync::LazyLock};
 
 use core_foundation::{base::*, boolean::*, dictionary::*, number::CFNumber, string::*};
 use core_video::{
@@ -41,33 +41,29 @@ const EBU_3213: &str = "EBU_3213";
 const P22: &str = "P22";
 const LINEAR: &str = "Linear";
 
-static PIXEL_FORMATS: OnceLock<[[u32; ColorRange::MAX as usize]; PixelFormat::MAX as usize]> = OnceLock::new();
-
-fn pixel_formats() -> &'static [[u32; ColorRange::MAX as usize]; PixelFormat::MAX as usize] {
-    PIXEL_FORMATS.get_or_init(|| {
-        let mut formats = [[0; ColorRange::MAX as usize]; PixelFormat::MAX as usize];
-        formats[PixelFormat::ARGB32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32ARGB;
-        formats[PixelFormat::BGRA32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32BGRA;
-        formats[PixelFormat::ABGR32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32ABGR;
-        formats[PixelFormat::RGBA32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32RGBA;
-        formats[PixelFormat::RGB24 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_24RGB;
-        formats[PixelFormat::BGR24 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_24BGR;
-        formats[PixelFormat::I420 as usize][ColorRange::Video as usize] = kCVPixelFormatType_420YpCbCr8Planar;
-        formats[PixelFormat::I420 as usize][ColorRange::Full as usize] = kCVPixelFormatType_420YpCbCr8PlanarFullRange;
-        formats[PixelFormat::NV12 as usize][ColorRange::Video as usize] = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange;
-        formats[PixelFormat::NV12 as usize][ColorRange::Full as usize] = kCVPixelFormatType_420YpCbCr8BiPlanarFullRange;
-        formats[PixelFormat::YUYV as usize][ColorRange::Video as usize] = kCVPixelFormatType_422YpCbCr8_yuvs;
-        formats[PixelFormat::UYVY as usize][ColorRange::Video as usize] = kCVPixelFormatType_422YpCbCr8;
-        formats
-    })
-}
+static PIXEL_FORMATS: LazyLock<[[u32; ColorRange::MAX as usize]; PixelFormat::MAX as usize]> = LazyLock::new(|| {
+    let mut formats = [[0; ColorRange::MAX as usize]; PixelFormat::MAX as usize];
+    formats[PixelFormat::ARGB32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32ARGB;
+    formats[PixelFormat::BGRA32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32BGRA;
+    formats[PixelFormat::ABGR32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32ABGR;
+    formats[PixelFormat::RGBA32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32RGBA;
+    formats[PixelFormat::RGB24 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_24RGB;
+    formats[PixelFormat::BGR24 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_24BGR;
+    formats[PixelFormat::I420 as usize][ColorRange::Video as usize] = kCVPixelFormatType_420YpCbCr8Planar;
+    formats[PixelFormat::I420 as usize][ColorRange::Full as usize] = kCVPixelFormatType_420YpCbCr8PlanarFullRange;
+    formats[PixelFormat::NV12 as usize][ColorRange::Video as usize] = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange;
+    formats[PixelFormat::NV12 as usize][ColorRange::Full as usize] = kCVPixelFormatType_420YpCbCr8BiPlanarFullRange;
+    formats[PixelFormat::YUYV as usize][ColorRange::Video as usize] = kCVPixelFormatType_422YpCbCr8_yuvs;
+    formats[PixelFormat::UYVY as usize][ColorRange::Video as usize] = kCVPixelFormatType_422YpCbCr8;
+    formats
+});
 
 fn into_cv_format(format: PixelFormat, color_range: ColorRange) -> u32 {
-    pixel_formats()[format as usize][color_range as usize]
+    PIXEL_FORMATS[format as usize][color_range as usize]
 }
 
 fn from_cv_format(format: u32) -> (Option<PixelFormat>, ColorRange) {
-    for (i, formats) in pixel_formats().iter().enumerate() {
+    for (i, formats) in PIXEL_FORMATS.iter().enumerate() {
         for (j, &f) in formats.iter().enumerate() {
             if f == format {
                 return (PixelFormat::try_from(i).ok(), ColorRange::from(j));

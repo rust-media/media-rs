@@ -20,75 +20,32 @@ pub struct Resolution {
     pub height: u32,
 }
 
-pub const RESOLUTION_SQCIF: Resolution = Resolution {
-    width: 128,
-    height: 96,
-};
-pub const RESOLUTION_QCIF: Resolution = Resolution {
-    width: 176,
-    height: 144,
-};
+impl Resolution {
+    pub const fn new(width: u32, height: u32) -> Self {
+        Self {
+            width,
+            height,
+        }
+    }
 
-pub const RESOLUTION_CIF: Resolution = Resolution {
-    width: 352,
-    height: 288,
-};
-pub const RESOLUTION_QQVGA: Resolution = Resolution {
-    width: 160,
-    height: 120,
-};
-pub const RESOLUTION_QVGA: Resolution = Resolution {
-    width: 320,
-    height: 240,
-};
-pub const RESOLUTION_VGA: Resolution = Resolution {
-    width: 640,
-    height: 480,
-};
-pub const RESOLUTION_SVGA: Resolution = Resolution {
-    width: 800,
-    height: 600,
-};
-pub const RESOLUTION_XGA: Resolution = Resolution {
-    width: 1024,
-    height: 768,
-};
-pub const RESOLUTION_SXGA: Resolution = Resolution {
-    width: 1280,
-    height: 1024,
-};
-pub const RESOLUTION_UXGA: Resolution = Resolution {
-    width: 1600,
-    height: 1200,
-};
-pub const RESOLUTION_QXGA: Resolution = Resolution {
-    width: 2048,
-    height: 1536,
-};
-pub const RESOLUTION_SD: Resolution = Resolution {
-    width: 720,
-    height: 480,
-};
-pub const RESOLUTION_HD: Resolution = Resolution {
-    width: 1280,
-    height: 720,
-};
-pub const RESOLUTION_FHD: Resolution = Resolution {
-    width: 1920,
-    height: 1080,
-};
-pub const RESOLUTION_QHD: Resolution = Resolution {
-    width: 2560,
-    height: 1440,
-};
-pub const RESOLUTION_UHD_4K: Resolution = Resolution {
-    width: 3840,
-    height: 2160,
-};
-pub const RESOLUTION_UHD_8K: Resolution = Resolution {
-    width: 7680,
-    height: 4320,
-};
+    pub const SQCIF: Self = Self::new(128, 96);
+    pub const QCIF: Self = Self::new(176, 144);
+    pub const CIF: Self = Self::new(352, 288);
+    pub const QQVGA: Self = Self::new(160, 120);
+    pub const QVGA: Self = Self::new(320, 240);
+    pub const VGA: Self = Self::new(640, 480);
+    pub const SVGA: Self = Self::new(800, 600);
+    pub const XGA: Self = Self::new(1024, 768);
+    pub const SXGA: Self = Self::new(1280, 1024);
+    pub const UXGA: Self = Self::new(1600, 1200);
+    pub const QXGA: Self = Self::new(2048, 1536);
+    pub const SD: Self = Self::new(720, 480);
+    pub const HD: Self = Self::new(1280, 720);
+    pub const FHD: Self = Self::new(1920, 1080);
+    pub const QHD: Self = Self::new(2560, 1440);
+    pub const UHD_4K: Self = Self::new(3840, 2160);
+    pub const UHD_8K: Self = Self::new(7680, 4320);
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[repr(u8)]
