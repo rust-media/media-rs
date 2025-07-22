@@ -1,7 +1,7 @@
 use std::num::{NonZeroU32, NonZeroU8};
 
 use super::{
-    audio::{AudioFormat, AudioFrameDescriptor},
+    audio::{AudioFrameDescriptor, SampleFormat},
     error::MediaError,
     media::MediaFrameDescriptor,
     media_frame::{Data, MediaFrame, MediaFrameData, MemoryData},
@@ -10,9 +10,9 @@ use super::{
 pub struct AudioDataBuilder;
 
 impl AudioDataBuilder {
-    fn new(format: AudioFormat, channels: NonZeroU8, samples: NonZeroU32) -> Result<MemoryData<'static>, MediaError> {
+    fn new(format: SampleFormat, channels: NonZeroU8, samples: NonZeroU32) -> Result<MemoryData<'static>, MediaError> {
         let (size, planes) = format.calc_data(channels.get(), samples.get());
-        let initial_value = if matches!(format, AudioFormat::U8 | AudioFormat::U8P) {
+        let initial_value = if matches!(format, SampleFormat::U8 | SampleFormat::U8P) {
             0x80
         } else {
             0
@@ -24,7 +24,7 @@ impl AudioDataBuilder {
         })
     }
 
-    fn from_buffer<'a>(format: AudioFormat, channels: NonZeroU8, samples: NonZeroU32, buffer: &'a [u8]) -> Result<MemoryData<'a>, MediaError> {
+    fn from_buffer<'a>(format: SampleFormat, channels: NonZeroU8, samples: NonZeroU32, buffer: &'a [u8]) -> Result<MemoryData<'a>, MediaError> {
         let (size, planes) = format.calc_data(channels.get(), samples.get());
 
         if buffer.len() != size as usize {
@@ -41,7 +41,7 @@ impl AudioDataBuilder {
 pub struct AudioFrameBuilder;
 
 impl AudioFrameBuilder {
-    pub fn new(&self, format: AudioFormat, channels: u8, samples: u32, sample_rate: u32) -> Result<MediaFrame<'static>, MediaError> {
+    pub fn new(&self, format: SampleFormat, channels: u8, samples: u32, sample_rate: u32) -> Result<MediaFrame<'static>, MediaError> {
         let desc = AudioFrameDescriptor::try_new(format, channels, samples, sample_rate)?;
 
         self.new_with_descriptor(desc)
@@ -61,7 +61,7 @@ impl AudioFrameBuilder {
 
     pub fn from_buffer<'a>(
         &self,
-        format: AudioFormat,
+        format: SampleFormat,
         channels: u8,
         samples: u32,
         sample_rate: u32,
