@@ -144,10 +144,9 @@ pub struct ChannelLayout {
 #[derive(Clone, Debug, PartialEq)]
 pub struct AudioFrameDescriptor {
     pub format: SampleFormat,
-    pub channels: NonZeroU8,
     pub samples: NonZeroU32,
     pub sample_rate: NonZeroU32,
-    pub channel_layout: Option<ChannelLayout>,
+    pub channel_layout: ChannelLayout,
 }
 
 struct ChannelLayoutMap {
@@ -297,6 +296,16 @@ impl From<ChannelFormat> for ChannelFormatMasks {
     }
 }
 
+impl Default for ChannelLayout {
+    fn default() -> Self {
+        Self {
+            order: ChannelOrder::Unspecified,
+            channels: NonZeroU8::new(1).unwrap(),
+            spec: ChannelLayoutSpec::Mask(ChannelFormatMasks::from_bits_truncate(0)),
+        }
+    }
+}
+
 impl ChannelLayout {
     pub fn from_mask(mask: ChannelFormatMasks) -> Result<Self, MediaError> {
         let channels = mask.bits().count_ones() as u8;
@@ -332,10 +341,9 @@ impl AudioFrameDescriptor {
     pub fn new(format: SampleFormat, channels: NonZeroU8, samples: NonZeroU32, sample_rate: NonZeroU32) -> Self {
         Self {
             format,
-            channels,
             samples,
             sample_rate,
-            channel_layout: None,
+            channel_layout: ChannelLayout::default(channels.get()).unwrap_or_default(),
         }
     }
 
@@ -345,6 +353,10 @@ impl AudioFrameDescriptor {
         let sample_rate = NonZeroU32::new(sample_rate).ok_or(invalid_param_error!(sample_rate))?;
 
         Ok(Self::new(format, channels, samples, sample_rate))
+    }
+
+    pub fn channels(&self) -> NonZeroU8 {
+        self.channel_layout.channels
     }
 
     pub fn duration_equal(&self, other: &AudioFrameDescriptor) -> bool {

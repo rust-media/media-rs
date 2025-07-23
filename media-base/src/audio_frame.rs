@@ -48,7 +48,7 @@ impl AudioFrameBuilder {
     }
 
     pub fn new_with_descriptor(&self, desc: AudioFrameDescriptor) -> Result<MediaFrame<'static>, MediaError> {
-        let data = AudioDataBuilder::new(desc.format, desc.channels, desc.samples)?;
+        let data = AudioDataBuilder::new(desc.format, desc.channels(), desc.samples)?;
 
         Ok(MediaFrame {
             desc: MediaFrameDescriptor::Audio(desc),
@@ -73,7 +73,7 @@ impl AudioFrameBuilder {
     }
 
     pub fn from_buffer_with_descriptor<'a>(&self, desc: AudioFrameDescriptor, buffer: &'a [u8]) -> Result<MediaFrame<'a>, MediaError> {
-        let data = AudioDataBuilder::from_buffer(desc.format, desc.channels, desc.samples, buffer)?;
+        let data = AudioDataBuilder::from_buffer(desc.format, desc.channels(), desc.samples, buffer)?;
 
         Ok(MediaFrame {
             desc: MediaFrameDescriptor::Audio(desc),
