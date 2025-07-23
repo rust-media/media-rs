@@ -7,11 +7,13 @@ use std::{
 use bitflags::bitflags;
 use smallvec::SmallVec;
 
-use super::{
+use crate::{
+    error::MediaError,
+    invalid_param_error,
+    media::MediaFrameDescriptor,
     media_frame::{PlaneInformation, PlaneInformationVec},
-    time,
+    time, Result,
 };
-use crate::{error::MediaError, invalid_param_error, media::MediaFrameDescriptor};
 
 pub const SAMPLE_RATE_TELEPHONE: u32 = 8000;
 pub const SAMPLE_RATE_VOIP: u32 = 16000;
@@ -267,7 +269,7 @@ impl SampleFormat {
         }
     }
 
-    pub(super) fn calc_data(&self, channels: u8, samples: u32) -> (u32, PlaneInformationVec) {
+    pub(crate) fn calc_data(&self, channels: u8, samples: u32) -> (u32, PlaneInformationVec) {
         let mut size = 0;
         let mut planes = PlaneInformationVec::new();
         let stride = self.stride(channels, samples);
@@ -307,7 +309,7 @@ impl Default for ChannelLayout {
 }
 
 impl ChannelLayout {
-    pub fn from_mask(mask: ChannelFormatMasks) -> Result<Self, MediaError> {
+    pub fn from_mask(mask: ChannelFormatMasks) -> Result<Self> {
         let channels = mask.bits().count_ones() as u8;
         let spec = ChannelLayoutSpec::Mask(mask);
 
@@ -320,7 +322,7 @@ impl ChannelLayout {
             .ok_or_else(|| invalid_param_error!("channel mask is empty"))
     }
 
-    pub fn default(channels: u8) -> Result<Self, MediaError> {
+    pub fn default(channels: u8) -> Result<Self> {
         let channels = NonZeroU8::new(channels).ok_or(invalid_param_error!(channels))?;
 
         Ok(CHANNEL_LAYOUT_MAP
@@ -347,7 +349,7 @@ impl AudioFrameDescriptor {
         }
     }
 
-    pub fn try_new(format: SampleFormat, channels: u8, samples: u32, sample_rate: u32) -> Result<Self, MediaError> {
+    pub fn try_new(format: SampleFormat, channels: u8, samples: u32, sample_rate: u32) -> Result<Self> {
         let channels = NonZeroU8::new(channels).ok_or(invalid_param_error!(channels))?;
         let samples = NonZeroU32::new(samples).ok_or(invalid_param_error!(samples))?;
         let sample_rate = NonZeroU32::new(sample_rate).ok_or(invalid_param_error!(sample_rate))?;

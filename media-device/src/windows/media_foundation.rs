@@ -16,6 +16,7 @@ use media_base::{
     none_param_error, not_found_error,
     time::NSEC_PER_MSEC,
     video::{ColorRange, CompressionFormat, Origin, PixelFormat, VideoFormat, VideoFrameDescriptor},
+    Result,
 };
 use variant::Variant;
 use windows::{
@@ -46,7 +47,7 @@ pub struct MediaFoundationDeviceManager {
 impl DeviceManager for MediaFoundationDeviceManager {
     type DeviceType = MediaFoundationDevice;
 
-    fn init() -> Result<Self, MediaError>
+    fn init() -> Result<Self>
     where
         Self: Sized,
     {
@@ -89,7 +90,7 @@ impl DeviceManager for MediaFoundationDeviceManager {
         self.devices.as_mut().and_then(|devices| devices.iter_mut().find(|device| device.info.id == id))
     }
 
-    fn refresh(&mut self) -> Result<(), MediaError> {
+    fn refresh(&mut self) -> Result<()> {
         let device_sources = Self::get_device_sources()?;
         let mut devices = Vec::with_capacity(device_sources.len());
 
@@ -106,7 +107,7 @@ impl DeviceManager for MediaFoundationDeviceManager {
         Ok(())
     }
 
-    fn set_change_handler<F>(&mut self, handler: F) -> Result<(), MediaError>
+    fn set_change_handler<F>(&mut self, handler: F) -> Result<()>
     where
         F: Fn(&DeviceEvent) + Send + Sync + 'static,
     {
@@ -129,7 +130,7 @@ impl MediaFoundationDeviceManager {
         }
     }
 
-    fn get_device_sources() -> Result<Vec<IMFActivate>, MediaError> {
+    fn get_device_sources() -> Result<Vec<IMFActivate>> {
         let attributes: IMFAttributes = unsafe {
             let mut attributes: Option<IMFAttributes> = None;
             MFCreateAttributes(&mut attributes, 1).map_err(|err| MediaError::CreationFailed(err.message()))?;
@@ -164,7 +165,7 @@ impl MediaFoundationDeviceManager {
 }
 
 impl DeviceInformation {
-    fn from_source_activate(activate: &IMFActivate) -> Result<Self, MediaError> {
+    fn from_source_activate(activate: &IMFActivate) -> Result<Self> {
         let mut symbolic_link_ptr = PWSTR(null_mut());
         let mut symbolic_link_len = 0;
         unsafe {
@@ -395,7 +396,7 @@ impl IMFSourceReaderCallback_Impl for SourceReaderCallback_Impl {
 
                 if let Ok(mut video_frame) = video_frame {
                     video_frame.source = Some(self.info.id.clone());
-                    video_frame.timestamp = lltimestamp as u64 * 100 / NSEC_PER_MSEC; // lltimestamp is in 100ns units
+                    video_frame.pts = Some(lltimestamp * 100 / NSEC_PER_MSEC as i64); // lltimestamp is in 100ns units
                     let handler = self.handler.as_ref();
                     handler(video_frame).ok();
                 }
@@ -443,7 +444,7 @@ fn from_mf_video_format(subtype: GUID) -> Option<VideoFormat> {
     }
 }
 
-fn get_radio(media_type: &IMFMediaType, key: &GUID) -> Result<f32, MediaError> {
+fn get_radio(media_type: &IMFMediaType, key: &GUID) -> Result<f32> {
     let (numerator, denominator) = match unsafe { media_type.GetUINT64(key) } {
         Ok(value) => {
             let numerator = (value >> 32) as u32;
@@ -508,7 +509,7 @@ fn from_mf_media_type(media_type: &IMFMediaType) -> Option<CameraFormat> {
     })
 }
 
-fn get_formats(source_reader: &IMFSourceReader) -> Result<Vec<CameraFormat>, MediaError> {
+fn get_formats(source_reader: &IMFSourceReader) -> Result<Vec<CameraFormat>> {
     let mut video_formats = vec![];
     let mut index = 0;
 
@@ -522,7 +523,7 @@ fn get_formats(source_reader: &IMFSourceReader) -> Result<Vec<CameraFormat>, Med
     Ok(video_formats)
 }
 
-fn get_current_format(source_reader: &IMFSourceReader) -> Result<CameraFormat, MediaError> {
+fn get_current_format(source_reader: &IMFSourceReader) -> Result<CameraFormat> {
     let media_type = unsafe { source_reader.GetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32) };
     let media_type = media_type.map_err(|err| MediaError::GetFailed(err.message()))?;
     let camera_format = from_mf_media_type(&media_type).ok_or(MediaError::Unsupported(stringify!(media_type).to_string()))?;
@@ -563,7 +564,7 @@ fn start_internal(source_reader: &IMFSourceReader, callback: &mut SourceReaderCa
 
 const TIMEOUT_SECONDS: u64 = 1;
 
-fn stop_internal(source_reader: &IMFSourceReader, callback: &mut SourceReaderCallback) -> Result<(), MediaError> {
+fn stop_internal(source_reader: &IMFSourceReader, callback: &mut SourceReaderCallback) -> Result<()> {
     callback.set_running(false);
     let signal = Arc::new((Mutex::new(false), Condvar::new()));
     callback.set_signal(Some(signal.clone()));
@@ -659,7 +660,7 @@ impl Device for MediaFoundationDevice {
         &self.info.id
     }
 
-    fn start(&mut self) -> Result<(), MediaError> {
+    fn start(&mut self) -> Result<()> {
         let (running, current_format, formats) = {
             let camera_format = self.current_format.clone();
             let (source_reader, callback) = self.get_source_reader()?;
@@ -693,7 +694,7 @@ impl Device for MediaFoundationDevice {
         Ok(())
     }
 
-    fn stop(&mut self) -> Result<(), MediaError> {
+    fn stop(&mut self) -> Result<()> {
         self.running = false;
 
         {
@@ -708,7 +709,7 @@ impl Device for MediaFoundationDevice {
         Ok(())
     }
 
-    fn configure(&mut self, options: Variant) -> Result<(), MediaError> {
+    fn configure(&mut self, options: Variant) -> Result<()> {
         let width = options["width"].get_uint32();
         let height = options["height"].get_uint32();
         let video_format = options["format"].get_uint32();
@@ -753,7 +754,7 @@ impl Device for MediaFoundationDevice {
         Ok(())
     }
 
-    fn control(&mut self, action: Variant) -> Result<(), MediaError> {
+    fn control(&mut self, action: Variant) -> Result<()> {
         Ok(())
     }
 
@@ -761,7 +762,7 @@ impl Device for MediaFoundationDevice {
         self.running
     }
 
-    fn formats(&self) -> Result<Variant, MediaError> {
+    fn formats(&self) -> Result<Variant> {
         if !self.running {
             return Err(MediaError::NotRunning(self.info.name.clone()));
         }
@@ -782,9 +783,9 @@ impl Device for MediaFoundationDevice {
 }
 
 impl OutputDevice for MediaFoundationDevice {
-    fn set_output_handler<F>(&mut self, handler: F) -> Result<(), MediaError>
+    fn set_output_handler<F>(&mut self, handler: F) -> Result<()>
     where
-        F: Fn(MediaFrame) -> Result<(), MediaError> + Send + Sync + 'static,
+        F: Fn(MediaFrame) -> Result<()> + Send + Sync + 'static,
     {
         self.handler = Some(Arc::new(handler));
         Ok(())
@@ -792,7 +793,7 @@ impl OutputDevice for MediaFoundationDevice {
 }
 
 impl MediaFoundationDevice {
-    fn new(dev_info: DeviceInformation, index: usize) -> Result<Self, MediaError> {
+    fn new(dev_info: DeviceInformation, index: usize) -> Result<Self> {
         Ok(Self {
             info: dev_info,
             index,
@@ -804,7 +805,7 @@ impl MediaFoundationDevice {
         })
     }
 
-    fn get_source_reader(&mut self) -> Result<(&Mutex<IMFSourceReader>, &mut SourceReaderCallback), MediaError> {
+    fn get_source_reader(&mut self) -> Result<(&Mutex<IMFSourceReader>, &mut SourceReaderCallback)> {
         if self.source_reader.is_none() {
             let device_sources = MediaFoundationDeviceManager::get_device_sources()?;
             let activate = device_sources.get(self.index).ok_or(not_found_error!(self.index))?;

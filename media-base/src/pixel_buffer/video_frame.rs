@@ -23,6 +23,7 @@ use crate::{
     none_param_error,
     video::{ColorMatrix, ColorPrimaries, ColorRange, ColorTransferCharacteristics, PixelFormat, VideoFrameDescriptor},
     video_frame::VideoFrameBuilder,
+    Result,
 };
 
 const ITU_R_601_4: &str = "ITU_R_601_4";
@@ -376,13 +377,13 @@ fn from_cv_color_transfer_function(color_transfer_function: &CFString, gamma: Op
 }
 
 impl VideoFrameBuilder {
-    pub fn new_pixel_buffer(&self, format: PixelFormat, width: u32, height: u32) -> Result<MediaFrame<'static>, MediaError> {
+    pub fn new_pixel_buffer(&self, format: PixelFormat, width: u32, height: u32) -> Result<MediaFrame<'static>> {
         let desc = VideoFrameDescriptor::try_new(format, width, height)?;
 
         self.new_pixel_buffer_with_descriptor(desc)
     }
 
-    pub fn new_pixel_buffer_with_descriptor(&self, desc: VideoFrameDescriptor) -> Result<MediaFrame<'static>, MediaError> {
+    pub fn new_pixel_buffer_with_descriptor(&self, desc: VideoFrameDescriptor) -> Result<MediaFrame<'static>> {
         let pixel_format = into_cv_format(desc.format, desc.color_range);
         #[cfg(target_os = "macos")]
         let compatibility_key: CFString = {
@@ -440,16 +441,10 @@ impl VideoFrameBuilder {
             buffer.set_attachment(&CVImageBufferKeys::GammaLevel.into(), &gamma.as_CFType(), kCVAttachmentMode_ShouldPropagate);
         }
 
-        Ok(MediaFrame {
-            desc: MediaFrameDescriptor::Video(desc),
-            source: None,
-            timestamp: 0,
-            metadata: None,
-            data: MediaFrameData::PixelBuffer(PixelBuffer(pixel_buffer)),
-        })
+        Ok(MediaFrame::default(MediaFrameDescriptor::Video(desc), MediaFrameData::PixelBuffer(PixelBuffer(pixel_buffer))))
     }
 
-    pub fn from_pixel_buffer(&self, pixel_buffer: &CVPixelBuffer) -> Result<MediaFrame<'static>, MediaError> {
+    pub fn from_pixel_buffer(&self, pixel_buffer: &CVPixelBuffer) -> Result<MediaFrame<'static>> {
         let width = pixel_buffer.get_width() as u32;
         let width = NonZeroU32::new(width).ok_or(invalid_param_error!(width))?;
         let height = pixel_buffer.get_height() as u32;
@@ -522,13 +517,7 @@ impl VideoFrameBuilder {
             }
         }
 
-        Ok(MediaFrame {
-            desc: MediaFrameDescriptor::Video(desc),
-            source: None,
-            timestamp: 0,
-            metadata: None,
-            data: MediaFrameData::PixelBuffer(PixelBuffer(pixel_buffer.clone())),
-        })
+        Ok(MediaFrame::default(MediaFrameDescriptor::Video(desc), MediaFrameData::PixelBuffer(PixelBuffer(pixel_buffer.clone()))))
     }
 }
 
@@ -539,7 +528,7 @@ unsafe impl Send for PixelBuffer {}
 unsafe impl Sync for PixelBuffer {}
 
 impl DataMappable for PixelBuffer {
-    fn map(&self) -> Result<MappedGuard, MediaError> {
+    fn map(&self) -> Result<MappedGuard> {
         if self.0.lock_base_address(kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess {
             return Err(MediaError::Failed("lock base address".to_string()));
         }
@@ -549,7 +538,7 @@ impl DataMappable for PixelBuffer {
         })
     }
 
-    fn map_mut(&mut self) -> Result<MappedGuard, MediaError> {
+    fn map_mut(&mut self) -> Result<MappedGuard> {
         if self.0.lock_base_address(0) != kCVReturnSuccess {
             return Err(MediaError::Failed("lock base address".to_string()));
         }
@@ -559,14 +548,14 @@ impl DataMappable for PixelBuffer {
         })
     }
 
-    fn unmap(&self) -> Result<(), MediaError> {
+    fn unmap(&self) -> Result<()> {
         if self.0.unlock_base_address(kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess {
             return Err(MediaError::Failed("unlock base address".to_string()));
         }
         Ok(())
     }
 
-    fn unmap_mut(&mut self) -> Result<(), MediaError> {
+    fn unmap_mut(&mut self) -> Result<()> {
         if self.0.unlock_base_address(0) != kCVReturnSuccess {
             return Err(MediaError::Failed("unlock base address".to_string()));
         }

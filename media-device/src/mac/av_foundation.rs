@@ -31,6 +31,7 @@ use media_base::{
     none_param_error, not_found_error,
     time::MSEC_PER_SEC,
     video::{ColorRange, PixelFormat, VideoFormat},
+    Result,
 };
 use objc2::{
     declare_class, extern_methods, msg_send_id, mutability,
@@ -52,7 +53,7 @@ pub struct AVFoundationCaptureDeviceManager {
 impl DeviceManager for AVFoundationCaptureDeviceManager {
     type DeviceType = AVFoundationCaptureDevice;
 
-    fn init() -> Result<Self, MediaError>
+    fn init() -> Result<Self>
     where
         Self: Sized,
     {
@@ -84,7 +85,7 @@ impl DeviceManager for AVFoundationCaptureDeviceManager {
         self.devices.as_mut().and_then(|devices| devices.iter_mut().find(|device| device.info.id == id))
     }
 
-    fn refresh(&mut self) -> Result<(), MediaError> {
+    fn refresh(&mut self) -> Result<()> {
         let devices = Self::list_devices()?;
 
         let count = devices.len();
@@ -96,7 +97,7 @@ impl DeviceManager for AVFoundationCaptureDeviceManager {
         Ok(())
     }
 
-    fn set_change_handler<F>(&mut self, handler: F) -> Result<(), MediaError>
+    fn set_change_handler<F>(&mut self, handler: F) -> Result<()>
     where
         F: Fn(&DeviceEvent) + Send + Sync + 'static,
     {
@@ -156,7 +157,7 @@ impl AVFoundationCaptureDeviceManager {
         }
     }
 
-    fn list_devices() -> Result<Vec<AVFoundationCaptureDevice>, MediaError> {
+    fn list_devices() -> Result<Vec<AVFoundationCaptureDevice>> {
         let av_capture_devices = Self::get_av_devices();
 
         let mut devices = Vec::with_capacity(av_capture_devices.count() as usize);
@@ -235,7 +236,7 @@ declare_class!(
                     if let Some(info) = self.ivars().info.as_ref() {
                         video_frame.source = Some(info.id.clone());
                     }
-                    video_frame.timestamp = (sample_buffer.get_presentation_time_stamp().get_seconds() * MSEC_PER_SEC as f64) as u64;
+                    video_frame.pts = Some((sample_buffer.get_presentation_time_stamp().get_seconds() * MSEC_PER_SEC as f64) as i64);
                     handler(video_frame).ok();
                 }
             }
@@ -432,7 +433,7 @@ impl Device for AVFoundationCaptureDevice {
         &self.info.id
     }
 
-    fn start(&mut self) -> Result<(), MediaError> {
+    fn start(&mut self) -> Result<()> {
         let (running, formats) = {
             let session = AVCaptureSession::new();
             let id = NSString::from_str(self.info.id.as_str());
@@ -495,7 +496,7 @@ impl Device for AVFoundationCaptureDevice {
         Ok(())
     }
 
-    fn stop(&mut self) -> Result<(), MediaError> {
+    fn stop(&mut self) -> Result<()> {
         if !self.running {
             return Err(MediaError::NotRunning(self.info.name.clone()));
         }
@@ -523,7 +524,7 @@ impl Device for AVFoundationCaptureDevice {
         Ok(())
     }
 
-    fn configure(&mut self, options: Variant) -> Result<(), MediaError> {
+    fn configure(&mut self, options: Variant) -> Result<()> {
         let width = options["width"].get_uint32();
         let height = options["height"].get_uint32();
         let video_format = options["format"].get_uint32();
@@ -561,7 +562,7 @@ impl Device for AVFoundationCaptureDevice {
         Ok(())
     }
 
-    fn control(&mut self, action: Variant) -> Result<(), MediaError> {
+    fn control(&mut self, action: Variant) -> Result<()> {
         Ok(())
     }
 
@@ -569,7 +570,7 @@ impl Device for AVFoundationCaptureDevice {
         self.running
     }
 
-    fn formats(&self) -> Result<Variant, MediaError> {
+    fn formats(&self) -> Result<Variant> {
         if !self.running {
             return Err(MediaError::NotRunning(self.info.name.clone()));
         }
@@ -591,9 +592,9 @@ impl Device for AVFoundationCaptureDevice {
 }
 
 impl OutputDevice for AVFoundationCaptureDevice {
-    fn set_output_handler<F>(&mut self, handler: F) -> Result<(), MediaError>
+    fn set_output_handler<F>(&mut self, handler: F) -> Result<()>
     where
-        F: Fn(MediaFrame) -> Result<(), MediaError> + Send + Sync + 'static,
+        F: Fn(MediaFrame) -> Result<()> + Send + Sync + 'static,
     {
         self.handler = Some(Arc::new(handler));
         Ok(())
@@ -601,7 +602,7 @@ impl OutputDevice for AVFoundationCaptureDevice {
 }
 
 impl AVFoundationCaptureDevice {
-    fn new(dev_info: DeviceInformation) -> Result<Self, MediaError> {
+    fn new(dev_info: DeviceInformation) -> Result<Self> {
         Ok(Self {
             info: dev_info,
             running: false,

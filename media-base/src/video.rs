@@ -8,11 +8,14 @@ use std::{
 use bitflags::bitflags;
 use num_enum::TryFromPrimitive;
 
-use super::{
+use crate::{
     align_to, ceil_rshift,
+    error::MediaError,
+    invalid_param_error,
+    media::MediaFrameDescriptor,
     media_frame::{PlaneInformation, PlaneInformationVec},
+    Result,
 };
-use crate::{error::MediaError, invalid_param_error, media::MediaFrameDescriptor};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Resolution {
@@ -228,12 +231,13 @@ pub enum Origin {
 #[derive(Clone, Debug, PartialEq)]
 pub struct VideoFrameDescriptor {
     pub format: PixelFormat,
+    pub width: NonZeroU32,
+    pub height: NonZeroU32,
     pub color_range: ColorRange,
     pub color_matrix: ColorMatrix,
     pub color_primaries: ColorPrimaries,
     pub color_transfer_characteristics: ColorTransferCharacteristics,
-    pub width: NonZeroU32,
-    pub height: NonZeroU32,
+    pub chroma_location: ChromaLocation,
     pub rotation: Rotation,
     pub origin: Origin,
     pub transparent: bool,
@@ -248,12 +252,13 @@ impl VideoFrameDescriptor {
     pub fn new(format: PixelFormat, width: NonZeroU32, height: NonZeroU32) -> Self {
         Self {
             format,
+            width,
+            height,
             color_range: ColorRange::default(),
             color_matrix: ColorMatrix::default(),
             color_primaries: ColorPrimaries::default(),
             color_transfer_characteristics: ColorTransferCharacteristics::default(),
-            width,
-            height,
+            chroma_location: ChromaLocation::default(),
             rotation: Rotation::default(),
             origin: Origin::default(),
             transparent: false,
@@ -265,7 +270,7 @@ impl VideoFrameDescriptor {
         }
     }
 
-    pub fn try_new(format: PixelFormat, width: u32, height: u32) -> Result<Self, MediaError> {
+    pub fn try_new(format: PixelFormat, width: u32, height: u32) -> Result<Self> {
         let width = NonZeroU32::new(width).ok_or(invalid_param_error!(width))?;
         let height = NonZeroU32::new(height).ok_or(invalid_param_error!(height))?;
 
@@ -773,7 +778,7 @@ impl PixelFormat {
         PIXEL_FORMAT_DESC[*self as usize].flags & PixelFormatFlags::BiPlanar.bits() != 0
     }
 
-    pub(super) fn calc_plane_row_bytes(&self, plane_index: usize, width: u32) -> u32 {
+    pub(crate) fn calc_plane_row_bytes(&self, plane_index: usize, width: u32) -> u32 {
         let desc = &PIXEL_FORMAT_DESC[*self as usize];
         let component_bytes = desc.component_bytes[plane_index];
 
@@ -784,7 +789,7 @@ impl PixelFormat {
         }
     }
 
-    pub(super) fn calc_plane_height(&self, plane_index: usize, height: u32) -> u32 {
+    pub(crate) fn calc_plane_height(&self, plane_index: usize, height: u32) -> u32 {
         if plane_index > 0 && (self.is_planar() || self.is_biplanar()) {
             let desc = &PIXEL_FORMAT_DESC[*self as usize];
             ceil_rshift(height, desc.chroma_shift_y as u32)
@@ -793,7 +798,7 @@ impl PixelFormat {
         }
     }
 
-    pub(super) fn calc_data(&self, width: u32, height: u32, alignment: u32) -> (u32, PlaneInformationVec) {
+    pub(crate) fn calc_data(&self, width: u32, height: u32, alignment: u32) -> (u32, PlaneInformationVec) {
         let desc = &PIXEL_FORMAT_DESC[*self as usize];
         let mut size;
         let mut planes = PlaneInformationVec::with_capacity(desc.components as usize);
@@ -830,7 +835,7 @@ impl PixelFormat {
         (size, planes)
     }
 
-    pub(super) fn calc_data_with_stride(&self, height: u32, stride: u32) -> (u32, PlaneInformationVec) {
+    pub(crate) fn calc_data_with_stride(&self, height: u32, stride: u32) -> (u32, PlaneInformationVec) {
         let desc = &PIXEL_FORMAT_DESC[*self as usize];
         let mut size;
         let mut planes = PlaneInformationVec::with_capacity(desc.components as usize);
@@ -855,13 +860,13 @@ impl From<PixelFormat> for usize {
 }
 
 impl TryFrom<usize> for PixelFormat {
-    type Error = ();
+    type Error = MediaError;
 
-    fn try_from(value: usize) -> Result<Self, Self::Error> {
+    fn try_from(value: usize) -> Result<Self> {
         if value <= PixelFormat::MAX as usize {
             Ok(unsafe { mem::transmute::<u8, PixelFormat>(value as u8) })
         } else {
-            Err(())
+            Err(invalid_param_error!(value))
         }
     }
 }
@@ -890,9 +895,9 @@ impl From<ColorMatrix> for usize {
 }
 
 impl TryFrom<usize> for ColorMatrix {
-    type Error = ();
+    type Error = MediaError;
 
-    fn try_from(value: usize) -> Result<Self, Self::Error> {
+    fn try_from(value: usize) -> Result<Self> {
         match value {
             0 => Ok(ColorMatrix::Identity),
             1 => Ok(ColorMatrix::BT709),
@@ -908,7 +913,7 @@ impl TryFrom<usize> for ColorMatrix {
             12 => Ok(ColorMatrix::ChromaDerivedNCL),
             13 => Ok(ColorMatrix::ChromaDerivedCL),
             14 => Ok(ColorMatrix::ICtCp),
-            _ => Err(()),
+            _ => Err(invalid_param_error!(value)),
         }
     }
 }
@@ -920,9 +925,9 @@ impl From<ColorPrimaries> for usize {
 }
 
 impl TryFrom<usize> for ColorPrimaries {
-    type Error = ();
+    type Error = MediaError;
 
-    fn try_from(value: usize) -> Result<Self, Self::Error> {
+    fn try_from(value: usize) -> Result<Self> {
         match value {
             0 => Ok(ColorPrimaries::Reserved),
             1 => Ok(ColorPrimaries::BT709),
@@ -936,7 +941,7 @@ impl TryFrom<usize> for ColorPrimaries {
             10 => Ok(ColorPrimaries::SMPTE428),
             11 => Ok(ColorPrimaries::SMPTE431),
             12 => Ok(ColorPrimaries::SMPTE432),
-            _ => Err(()),
+            _ => Err(invalid_param_error!(value)),
         }
     }
 }
@@ -948,9 +953,9 @@ impl From<ColorTransferCharacteristics> for usize {
 }
 
 impl TryFrom<usize> for ColorTransferCharacteristics {
-    type Error = ();
+    type Error = MediaError;
 
-    fn try_from(value: usize) -> Result<Self, Self::Error> {
+    fn try_from(value: usize) -> Result<Self> {
         match value {
             0 => Ok(ColorTransferCharacteristics::Reserved),
             1 => Ok(ColorTransferCharacteristics::BT709),
@@ -970,7 +975,7 @@ impl TryFrom<usize> for ColorTransferCharacteristics {
             16 => Ok(ColorTransferCharacteristics::SMPTE2084),
             17 => Ok(ColorTransferCharacteristics::SMPTE428),
             18 => Ok(ColorTransferCharacteristics::ARIB_STD_B67),
-            _ => Err(()),
+            _ => Err(invalid_param_error!(value)),
         }
     }
 }
@@ -1009,14 +1014,14 @@ impl From<VideoFormat> for u32 {
 }
 
 impl TryFrom<u32> for VideoFormat {
-    type Error = ();
+    type Error = MediaError;
 
-    fn try_from(value: u32) -> Result<Self, Self::Error> {
+    fn try_from(value: u32) -> Result<Self> {
         if value & COMPRESSION_MASK != 0 {
             let format_value = value & !COMPRESSION_MASK;
-            CompressionFormat::try_from(format_value as u8).map(VideoFormat::Compression).map_err(|_| ())
+            CompressionFormat::try_from(format_value as u8).map(VideoFormat::Compression).map_err(|e| MediaError::Invalid(e.to_string()))
         } else {
-            PixelFormat::try_from(value as u8).map(VideoFormat::Pixel).map_err(|_| ())
+            PixelFormat::try_from(value as u8).map(VideoFormat::Pixel).map_err(|e| MediaError::Invalid(e.to_string()))
         }
     }
 }

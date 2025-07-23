@@ -34,7 +34,7 @@ fn main() {
     if let Err(e) = device.set_output_handler(|frame| {
         println!("frame source: {:?}", frame.source);
         println!("frame desc: {:?}", frame.descriptor());
-        println!("frame timestamp: {:?}", frame.timestamp);
+        println!("frame timestamp: {:?}", frame.pts);
 
         if let Ok(mapped_guard) = frame.map() {
             if let Some(planes) = mapped_guard.planes() {

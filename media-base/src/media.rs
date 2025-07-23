@@ -1,4 +1,4 @@
-use super::{audio::AudioFrameDescriptor, data::DataFrameDescriptor, video::VideoFrameDescriptor};
+use crate::{audio::AudioFrameDescriptor, data::DataFrameDescriptor, video::VideoFrameDescriptor};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum MediaFrameType {

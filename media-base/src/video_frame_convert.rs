@@ -6,14 +6,15 @@ use yuv::{
     YuvPackedImageMut, YuvPlanarImage, YuvPlanarImageMut, YuvRange, YuvStandardMatrix,
 };
 
-use super::{
+use crate::{
     error::MediaError,
+    media::MediaFrameDescriptor,
     media_frame::{MappedPlanes, MediaFrame},
     video::{ColorMatrix, ColorRange, PixelFormat},
+    Result,
 };
-use crate::media::MediaFrameDescriptor;
 
-fn into_yuv_planar_image<'a, T>(src: &'a MappedPlanes, width: NonZeroU32, height: NonZeroU32) -> Result<YuvPlanarImage<'a, T>, MediaError>
+fn into_yuv_planar_image<'a, T>(src: &'a MappedPlanes, width: NonZeroU32, height: NonZeroU32) -> Result<YuvPlanarImage<'a, T>>
 where
     T: Copy + Debug + Pod,
 {
@@ -36,7 +37,7 @@ where
     })
 }
 
-fn into_yuv_planar_image_mut<'a, T>(dst: &'a mut MappedPlanes, width: NonZeroU32, height: NonZeroU32) -> Result<YuvPlanarImageMut<'a, T>, MediaError>
+fn into_yuv_planar_image_mut<'a, T>(dst: &'a mut MappedPlanes, width: NonZeroU32, height: NonZeroU32) -> Result<YuvPlanarImageMut<'a, T>>
 where
     T: Copy + Debug + Pod,
 {
@@ -66,7 +67,7 @@ where
     })
 }
 
-fn into_yuv_bi_planar_image<'a, T>(src: &'a MappedPlanes, width: NonZeroU32, height: NonZeroU32) -> Result<YuvBiPlanarImage<'a, T>, MediaError>
+fn into_yuv_bi_planar_image<'a, T>(src: &'a MappedPlanes, width: NonZeroU32, height: NonZeroU32) -> Result<YuvBiPlanarImage<'a, T>>
 where
     T: Copy + Debug + Pod,
 {
@@ -87,11 +88,7 @@ where
     })
 }
 
-fn into_yuv_bi_planar_image_mut<'a, T>(
-    dst: &'a mut MappedPlanes,
-    width: NonZeroU32,
-    height: NonZeroU32,
-) -> Result<YuvBiPlanarImageMut<'a, T>, MediaError>
+fn into_yuv_bi_planar_image_mut<'a, T>(dst: &'a mut MappedPlanes, width: NonZeroU32, height: NonZeroU32) -> Result<YuvBiPlanarImageMut<'a, T>>
 where
     T: Copy + Debug + Pod,
 {
@@ -117,7 +114,7 @@ where
     })
 }
 
-fn into_yuv_packed_image<'a, T>(src: &'a MappedPlanes, width: NonZeroU32, height: NonZeroU32) -> Result<YuvPackedImage<'a, T>, MediaError>
+fn into_yuv_packed_image<'a, T>(src: &'a MappedPlanes, width: NonZeroU32, height: NonZeroU32) -> Result<YuvPackedImage<'a, T>>
 where
     T: Copy + Debug + Pod,
 {
@@ -136,7 +133,7 @@ where
     })
 }
 
-fn into_yuv_packed_image_mut<'a, T>(dst: &'a mut MappedPlanes, width: NonZeroU32, height: NonZeroU32) -> Result<YuvPackedImageMut<'a, T>, MediaError>
+fn into_yuv_packed_image_mut<'a, T>(dst: &'a mut MappedPlanes, width: NonZeroU32, height: NonZeroU32) -> Result<YuvPackedImageMut<'a, T>>
 where
     T: Copy + Debug + Pod,
 {
@@ -189,7 +186,7 @@ macro_rules! impl_rgb_to_rgb {
             _color_matrix: ColorMatrix,
             width: NonZeroU32,
             height: NonZeroU32,
-        ) -> Result<(), MediaError> {
+        ) -> Result<()> {
             let dst_stride = dst.plane_stride(0).unwrap();
 
             yuv::$convert_func(
@@ -216,7 +213,7 @@ macro_rules! impl_rgb_to_yuv {
             color_matrix: ColorMatrix,
             width: NonZeroU32,
             height: NonZeroU32,
-        ) -> Result<(), MediaError> {
+        ) -> Result<()> {
             let mut yuv_image = $into_image_func(dst, width, height)?;
 
             yuv::$convert_func(
@@ -243,7 +240,7 @@ macro_rules! impl_yuv_to_rgb {
             color_matrix: ColorMatrix,
             width: NonZeroU32,
             height: NonZeroU32,
-        ) -> Result<(), MediaError> {
+        ) -> Result<()> {
             let yuv_image = $into_image_func(src, width, height)?;
             let dst_stride = dst.plane_stride(0).unwrap();
 
@@ -264,7 +261,7 @@ macro_rules! impl_yuv_to_rgb_with_conversion_mode {
             color_matrix: ColorMatrix,
             width: NonZeroU32,
             height: NonZeroU32,
-        ) -> Result<(), MediaError> {
+        ) -> Result<()> {
             let yuv_image = $into_image_func(src, width, height)?;
             let dst_stride = dst.plane_stride(0).unwrap();
 
@@ -285,7 +282,7 @@ macro_rules! impl_yuv_to_rgb_with_byte_order {
             color_matrix: ColorMatrix,
             width: NonZeroU32,
             height: NonZeroU32,
-        ) -> Result<(), MediaError> {
+        ) -> Result<()> {
             let yuv_image = $into_image_func(src, width, height)?;
             let dst_stride = dst.plane_stride(0).unwrap();
 
@@ -306,7 +303,7 @@ macro_rules! impl_yuv_to_yuv {
             _color_matrix: ColorMatrix,
             width: NonZeroU32,
             height: NonZeroU32,
-        ) -> Result<(), MediaError> {
+        ) -> Result<()> {
             let src_image = $into_src_image_func(src, width, height)?;
             let mut dst_image = $into_dst_image_func(dst, width, height)?;
 
@@ -444,7 +441,7 @@ impl_yuv_to_rgb_with_byte_order!(i410_to_rgb30, i410_to_ra30, into_yuv_planar_im
 impl_yuv_to_rgb_with_byte_order!(p010_to_rgb30, p010_to_ra30, into_yuv_bi_planar_image, Network);
 impl_yuv_to_rgb_with_byte_order!(p210_to_rgb30, p210_to_ra30, into_yuv_bi_planar_image, Network);
 
-type VideoFormatConvertFunc = fn(&MappedPlanes, &mut MappedPlanes, ColorRange, ColorMatrix, NonZeroU32, NonZeroU32) -> Result<(), MediaError>;
+type VideoFormatConvertFunc = fn(&MappedPlanes, &mut MappedPlanes, ColorRange, ColorMatrix, NonZeroU32, NonZeroU32) -> Result<()>;
 
 const PIXEL_FORMAT_MAX: usize = PixelFormat::MAX as usize;
 
@@ -554,7 +551,7 @@ static VIDEO_FORMAT_CONVERT_FUNCS: LazyLock<[[Option<VideoFormatConvertFunc>; PI
     funcs
 });
 
-fn data_copy(src: &MappedPlanes, dst: &mut MappedPlanes, format: PixelFormat, width: NonZeroU32, height: NonZeroU32) -> Result<(), MediaError> {
+fn data_copy(src: &MappedPlanes, dst: &mut MappedPlanes, format: PixelFormat, width: NonZeroU32, height: NonZeroU32) -> Result<()> {
     if src.planes.len() != dst.planes.len() {
         return Err(MediaError::Invalid("planes size mismatch".to_string()));
     }
@@ -577,7 +574,7 @@ fn data_copy(src: &MappedPlanes, dst: &mut MappedPlanes, format: PixelFormat, wi
 }
 
 impl MediaFrame<'_> {
-    pub fn convert_to(&self, dst: &mut MediaFrame) -> Result<(), MediaError> {
+    pub fn convert_to(&self, dst: &mut MediaFrame) -> Result<()> {
         if self.media_type() != dst.media_type() || self.is_video() {
             return Err(MediaError::Unsupported("media type".to_string()));
         }

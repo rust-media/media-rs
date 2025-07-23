@@ -1,12 +1,16 @@
 use std::sync::{Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
+use num_rational::Rational64;
 use smallvec::SmallVec;
 use variant::Variant;
 
-use super::{error::MediaError, media::MediaFrameType};
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 use crate::pixel_buffer::video_frame::PixelBuffer;
-use crate::{media::MediaFrameDescriptor, unsupported_error};
+use crate::{
+    error::MediaError,
+    media::{MediaFrameDescriptor, MediaFrameType},
+    unsupported_error, Result,
+};
 
 const DEFAULT_MAX_PLANES: usize = 8;
 
@@ -85,13 +89,13 @@ impl MappedPlane<'_> {
     }
 }
 
-pub(super) enum DataRef<'a> {
+pub(crate) enum DataRef<'a> {
     Immutable(&'a dyn DataMappable),
     Mutable(&'a mut dyn DataMappable),
 }
 
 pub struct MappedGuard<'a> {
-    pub(super) data_ref: DataRef<'a>,
+    pub(crate) data_ref: DataRef<'a>,
 }
 
 impl Drop for MappedGuard<'_> {
@@ -126,7 +130,7 @@ impl MappedGuard<'_> {
 type PlaneArray<'a> = [MappedPlane<'a>; DEFAULT_MAX_PLANES];
 
 pub struct MappedPlanes<'a> {
-    pub(super) planes: SmallVec<PlaneArray<'a>>,
+    pub(crate) planes: SmallVec<PlaneArray<'a>>,
 }
 
 impl<'a> IntoIterator for MappedPlanes<'a> {
@@ -157,15 +161,15 @@ impl MappedPlanes<'_> {
 }
 
 #[derive(Copy, Clone)]
-pub(super) enum PlaneInformation {
+pub(crate) enum PlaneInformation {
     Video(u32, u32),
     Audio(u32),
 }
 
-pub(super) type PlaneInformationVec = SmallVec<[PlaneInformation; DEFAULT_MAX_PLANES]>;
+pub(crate) type PlaneInformationVec = SmallVec<[PlaneInformation; DEFAULT_MAX_PLANES]>;
 
 #[derive(Clone)]
-pub(super) enum Data<'a> {
+pub(crate) enum Data<'a> {
     Owned(Vec<u8>),
     Borrowed(&'a [u8]),
 }
@@ -196,9 +200,9 @@ impl Data<'_> {
 }
 
 #[derive(Clone)]
-pub(super) struct MemoryData<'a> {
-    pub(super) data: Data<'a>,
-    pub(super) planes: PlaneInformationVec,
+pub(crate) struct MemoryData<'a> {
+    pub(crate) data: Data<'a>,
+    pub(crate) planes: PlaneInformationVec,
 }
 
 impl MemoryData<'_> {
@@ -210,11 +214,11 @@ impl MemoryData<'_> {
     }
 }
 
-pub(super) type PlaneDataVec<'a> = SmallVec<[(&'a [u8], u32, u32); DEFAULT_MAX_PLANES]>;
+pub(crate) type PlaneDataVec<'a> = SmallVec<[(&'a [u8], u32, u32); DEFAULT_MAX_PLANES]>;
 
 #[derive(Clone)]
-pub(super) struct SeparateMemoryData<'a> {
-    pub(super) planes: PlaneDataVec<'a>,
+pub(crate) struct SeparateMemoryData<'a> {
+    pub(crate) planes: PlaneDataVec<'a>,
 }
 
 impl SeparateMemoryData<'_> {
@@ -235,7 +239,7 @@ impl SeparateMemoryData<'_> {
 }
 
 #[derive(Clone)]
-pub(super) enum MediaFrameData<'a> {
+pub(crate) enum MediaFrameData<'a> {
     Memory(MemoryData<'a>),
     SeparateMemory(SeparateMemoryData<'a>),
     #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -256,32 +260,32 @@ impl MediaFrameData<'_> {
 }
 
 pub trait DataMappable: Send + Sync {
-    fn map(&self) -> Result<MappedGuard<'_>, MediaError>;
-    fn map_mut(&mut self) -> Result<MappedGuard<'_>, MediaError>;
-    fn unmap(&self) -> Result<(), MediaError>;
-    fn unmap_mut(&mut self) -> Result<(), MediaError>;
+    fn map(&self) -> Result<MappedGuard<'_>>;
+    fn map_mut(&mut self) -> Result<MappedGuard<'_>>;
+    fn unmap(&self) -> Result<()>;
+    fn unmap_mut(&mut self) -> Result<()>;
     fn planes(&self) -> Option<MappedPlanes<'_>>;
     fn planes_mut(&mut self) -> Option<MappedPlanes<'_>>;
 }
 
 impl DataMappable for MemoryData<'_> {
-    fn map(&self) -> Result<MappedGuard<'_>, MediaError> {
+    fn map(&self) -> Result<MappedGuard<'_>> {
         Ok(MappedGuard {
             data_ref: DataRef::Immutable(self),
         })
     }
 
-    fn map_mut(&mut self) -> Result<MappedGuard<'_>, MediaError> {
+    fn map_mut(&mut self) -> Result<MappedGuard<'_>> {
         Ok(MappedGuard {
             data_ref: DataRef::Mutable(self),
         })
     }
 
-    fn unmap(&self) -> Result<(), MediaError> {
+    fn unmap(&self) -> Result<()> {
         Ok(())
     }
 
-    fn unmap_mut(&mut self) -> Result<(), MediaError> {
+    fn unmap_mut(&mut self) -> Result<()> {
         Ok(())
     }
 
@@ -357,21 +361,21 @@ impl DataMappable for MemoryData<'_> {
 }
 
 impl DataMappable for SeparateMemoryData<'_> {
-    fn map(&self) -> Result<MappedGuard<'_>, MediaError> {
+    fn map(&self) -> Result<MappedGuard<'_>> {
         Ok(MappedGuard {
             data_ref: DataRef::Immutable(self),
         })
     }
 
-    fn map_mut(&mut self) -> Result<MappedGuard<'_>, MediaError> {
+    fn map_mut(&mut self) -> Result<MappedGuard<'_>> {
         Err(MediaError::Unsupported("map".to_string()))
     }
 
-    fn unmap(&self) -> Result<(), MediaError> {
+    fn unmap(&self) -> Result<()> {
         Ok(())
     }
 
-    fn unmap_mut(&mut self) -> Result<(), MediaError> {
+    fn unmap_mut(&mut self) -> Result<()> {
         Err(MediaError::Unsupported("unmap".to_string()))
     }
 
@@ -398,7 +402,7 @@ impl DataMappable for SeparateMemoryData<'_> {
 }
 
 impl DataMappable for MediaFrameData<'_> {
-    fn map(&self) -> Result<MappedGuard<'_>, MediaError> {
+    fn map(&self) -> Result<MappedGuard<'_>> {
         match self {
             MediaFrameData::Memory(data) => data.map(),
             MediaFrameData::SeparateMemory(data) => data.map(),
@@ -408,7 +412,7 @@ impl DataMappable for MediaFrameData<'_> {
         }
     }
 
-    fn map_mut(&mut self) -> Result<MappedGuard<'_>, MediaError> {
+    fn map_mut(&mut self) -> Result<MappedGuard<'_>> {
         match self {
             MediaFrameData::Memory(data) => data.map_mut(),
             MediaFrameData::SeparateMemory(data) => data.map_mut(),
@@ -418,7 +422,7 @@ impl DataMappable for MediaFrameData<'_> {
         }
     }
 
-    fn unmap(&self) -> Result<(), MediaError> {
+    fn unmap(&self) -> Result<()> {
         match self {
             MediaFrameData::Memory(data) => data.unmap(),
             MediaFrameData::SeparateMemory(data) => data.unmap(),
@@ -428,7 +432,7 @@ impl DataMappable for MediaFrameData<'_> {
         }
     }
 
-    fn unmap_mut(&mut self) -> Result<(), MediaError> {
+    fn unmap_mut(&mut self) -> Result<()> {
         match self {
             MediaFrameData::Memory(data) => data.unmap_mut(),
             MediaFrameData::SeparateMemory(data) => data.unmap_mut(),
@@ -461,15 +465,18 @@ impl DataMappable for MediaFrameData<'_> {
 
 #[derive(Clone)]
 pub struct MediaFrame<'a> {
-    pub(super) desc: MediaFrameDescriptor,
+    pub(crate) desc: MediaFrameDescriptor,
     pub source: Option<String>,
-    pub timestamp: u64,
+    pub pts: Option<i64>,
+    pub dts: Option<i64>,
+    pub duration: Option<i64>,
+    pub time_base: Option<Rational64>,
     pub metadata: Option<Variant>,
-    pub(super) data: MediaFrameData<'a>,
+    pub(crate) data: MediaFrameData<'a>,
 }
 
 impl MediaFrame<'_> {
-    pub fn new_with_descriptor<T>(desc: T) -> Result<MediaFrame<'static>, MediaError>
+    pub fn new_with_descriptor<T>(desc: T) -> Result<MediaFrame<'static>>
     where
         T: Into<MediaFrameDescriptor> + Clone,
     {
@@ -481,6 +488,19 @@ impl MediaFrame<'_> {
         }
     }
 
+    pub(crate) fn default<'a>(desc: MediaFrameDescriptor, data: MediaFrameData<'a>) -> MediaFrame<'a> {
+        MediaFrame {
+            desc,
+            source: None,
+            pts: None,
+            dts: None,
+            duration: None,
+            time_base: None,
+            metadata: None,
+            data,
+        }
+    }
+
     pub fn media_type(&self) -> MediaFrameType {
         self.desc.media_type()
     }
@@ -489,7 +509,10 @@ impl MediaFrame<'_> {
         MediaFrame {
             desc: self.desc,
             source: self.source,
-            timestamp: self.timestamp,
+            pts: self.pts,
+            dts: self.dts,
+            duration: self.duration,
+            time_base: self.time_base,
             metadata: self.metadata,
             data: self.data.into_owned(),
         }
@@ -499,11 +522,11 @@ impl MediaFrame<'_> {
         &self.desc
     }
 
-    pub fn map(&self) -> Result<MappedGuard<'_>, MediaError> {
+    pub fn map(&self) -> Result<MappedGuard<'_>> {
         self.data.map()
     }
 
-    pub fn map_mut(&mut self) -> Result<MappedGuard<'_>, MediaError> {
+    pub fn map_mut(&mut self) -> Result<MappedGuard<'_>> {
         self.data.map_mut()
     }
 }

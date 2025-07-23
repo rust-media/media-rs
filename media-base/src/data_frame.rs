@@ -1,39 +1,27 @@
 use variant::Variant;
 
-use super::{
+use crate::{
     data::{DataFormat, DataFrameDescriptor},
     media::MediaFrameDescriptor,
     media_frame::{MediaFrame, MediaFrameData},
+    Result,
 };
-use crate::error::MediaError;
 
 pub struct DataFrameBuilder;
 
 impl DataFrameBuilder {
-    pub fn new(&self, format: DataFormat) -> Result<MediaFrame<'static>, MediaError> {
+    pub fn new(&self, format: DataFormat) -> Result<MediaFrame<'static>> {
         let desc = DataFrameDescriptor::new(format);
 
         self.new_with_descriptor(desc)
     }
 
-    pub fn new_with_descriptor(&self, desc: DataFrameDescriptor) -> Result<MediaFrame<'static>, MediaError> {
-        Ok(MediaFrame {
-            desc: MediaFrameDescriptor::Data(desc),
-            source: None,
-            timestamp: 0,
-            metadata: None,
-            data: MediaFrameData::Variant(Variant::new()),
-        })
+    pub fn new_with_descriptor(&self, desc: DataFrameDescriptor) -> Result<MediaFrame<'static>> {
+        Ok(MediaFrame::default(MediaFrameDescriptor::Data(desc), MediaFrameData::Variant(Variant::new())))
     }
 
-    pub fn from_variant(&self, variant: &Variant) -> Result<MediaFrame<'static>, MediaError> {
-        Ok(MediaFrame {
-            desc: MediaFrameDescriptor::Data(DataFrameDescriptor::new(DataFormat::Variant)),
-            source: None,
-            timestamp: 0,
-            metadata: None,
-            data: MediaFrameData::Variant(variant.clone()),
-        })
+    pub fn from_variant(&self, variant: &Variant) -> Result<MediaFrame<'static>> {
+        Ok(MediaFrame::default(MediaFrameDescriptor::Data(DataFrameDescriptor::new(DataFormat::Variant)), MediaFrameData::Variant(variant.clone())))
     }
 }
 

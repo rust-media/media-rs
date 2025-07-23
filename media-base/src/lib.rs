@@ -17,4 +17,10 @@ mod utils;
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 pub mod pixel_buffer;
 
+use std::result;
+
 pub(crate) use utils::*;
+
+use crate::error::MediaError;
+
+pub type Result<T> = result::Result<T, MediaError>;
