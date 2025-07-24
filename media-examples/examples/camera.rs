@@ -1,6 +1,6 @@
 use media::{
     device::{camera::CameraManager, Device, OutputDevice},
-    media_frame::SharedMediaFrame,
+    frame::SharedFrame,
     variant::Variant,
 };
 
@@ -50,7 +50,7 @@ fn main() {
         }
 
         // Create a video frame that can be sent across threads
-        let _shared_frame = SharedMediaFrame::new(frame.into_owned());
+        let _shared_frame = SharedFrame::new(frame.into_owned());
 
         Ok(())
     }) {

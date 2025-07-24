@@ -12,7 +12,7 @@ bitflags! {
 }
 
 #[derive(Clone)]
-pub struct MediaPacket {
+pub struct Packet {
     pub pts: Option<i64>,
     pub dts: Option<i64>,
     pub duration: Option<i64>,
@@ -23,7 +23,7 @@ pub struct MediaPacket {
     pub data: Vec<u8>,
 }
 
-impl MediaPacket {
+impl Packet {
     fn from_data(data: Vec<u8>) -> Self {
         Self {
             pts: None,
@@ -47,8 +47,8 @@ impl MediaPacket {
 }
 
 pub trait ReadMediaPacket: Read {
-    fn read_packet(&mut self, size: usize) -> io::Result<MediaPacket> {
-        let mut packet = MediaPacket::new(size);
+    fn read_packet(&mut self, size: usize) -> io::Result<Packet> {
+        let mut packet = Packet::new(size);
 
         self.read_exact(packet.data.as_mut_slice())?;
 
@@ -57,7 +57,7 @@ pub trait ReadMediaPacket: Read {
 }
 
 pub trait WriteMediaPacket: Write {
-    fn write_packet(&mut self, packet: &MediaPacket) -> io::Result<()> {
+    fn write_packet(&mut self, packet: &Packet) -> io::Result<()> {
         self.write_all(&packet.data)
     }
 }

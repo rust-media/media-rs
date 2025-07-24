@@ -8,30 +8,33 @@ pub enum MediaType {
 }
 
 #[derive(Clone, Debug)]
-pub enum MediaFrameDescriptor {
+pub enum FrameDescriptor {
     Audio(AudioFrameDescriptor),
     Video(VideoFrameDescriptor),
     Data(DataFrameDescriptor),
 }
 
-impl MediaFrameDescriptor {
+impl FrameDescriptor {
     pub fn media_type(&self) -> MediaType {
         match self {
-            MediaFrameDescriptor::Audio(_) => MediaType::Audio,
-            MediaFrameDescriptor::Video(_) => MediaType::Video,
-            MediaFrameDescriptor::Data(_) => MediaType::Data,
+            FrameDescriptor::Audio(_) => MediaType::Audio,
+            FrameDescriptor::Video(_) => MediaType::Video,
+            FrameDescriptor::Data(_) => MediaType::Data,
         }
     }
 
     pub fn is_audio(&self) -> bool {
-        matches!(self, MediaFrameDescriptor::Audio(_))
+        matches!(self, FrameDescriptor::Audio(_))
     }
 
     pub fn is_video(&self) -> bool {
-        matches!(self, MediaFrameDescriptor::Video(_))
+        matches!(self, FrameDescriptor::Video(_))
     }
 
     pub fn is_data(&self) -> bool {
-        matches!(self, MediaFrameDescriptor::Data(_))
+        matches!(self, FrameDescriptor::Data(_))
     }
 }
+
+#[deprecated = "Use 'FrameDescriptor' directly"]
+pub type MediaFrameDescriptor = FrameDescriptor;

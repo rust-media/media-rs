@@ -1,6 +1,6 @@
 use cfg_if::cfg_if;
 use media_base::{
-    error::MediaError,
+    error::Error,
     video::{ColorRange, VideoFormat},
     Result,
 };

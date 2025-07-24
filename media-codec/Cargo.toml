@@ -11,6 +11,9 @@ categories.workspace = true
 keywords.workspace = true
 edition.workspace = true
 
+[dependencies.media-base]
+workspace = true
+
 [dependencies]
 bitflags = "2.6"
 num-rational = "0.4"

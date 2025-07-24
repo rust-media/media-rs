@@ -8,10 +8,10 @@ use bitflags::bitflags;
 use smallvec::SmallVec;
 
 use crate::{
-    error::MediaError,
+    error::Error,
+    frame::{PlaneInformation, PlaneInformationVec},
     invalid_param_error,
-    media::MediaFrameDescriptor,
-    media_frame::{PlaneInformation, PlaneInformationVec},
+    media::FrameDescriptor,
     time, Result,
 };
 
@@ -368,8 +368,8 @@ impl AudioFrameDescriptor {
     }
 }
 
-impl From<AudioFrameDescriptor> for MediaFrameDescriptor {
+impl From<AudioFrameDescriptor> for FrameDescriptor {
     fn from(desc: AudioFrameDescriptor) -> Self {
-        MediaFrameDescriptor::Audio(desc)
+        FrameDescriptor::Audio(desc)
     }
 }

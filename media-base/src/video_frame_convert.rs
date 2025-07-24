@@ -7,9 +7,9 @@ use yuv::{
 };
 
 use crate::{
-    error::MediaError,
-    media::MediaFrameDescriptor,
-    media_frame::{MappedPlanes, MediaFrame},
+    error::Error,
+    frame::{Frame, MappedPlanes},
+    media::FrameDescriptor,
     video::{ColorMatrix, ColorRange, PixelFormat},
     Result,
 };
@@ -19,7 +19,7 @@ where
     T: Copy + Debug + Pod,
 {
     if src.planes.len() != 3 {
-        return Err(MediaError::Invalid("invalid plane count".to_string()));
+        return Err(Error::Invalid("invalid plane count".to_string()));
     }
 
     let planes = &src.planes;
@@ -42,7 +42,7 @@ where
     T: Copy + Debug + Pod,
 {
     if dst.planes.len() != 3 {
-        return Err(MediaError::Invalid("invalid plane count".to_string()));
+        return Err(Error::Invalid("invalid plane count".to_string()));
     }
 
     let planes = dst.planes.as_mut_slice();
@@ -72,7 +72,7 @@ where
     T: Copy + Debug + Pod,
 {
     if src.planes.len() != 2 {
-        return Err(MediaError::Invalid("invalid plane count".to_string()));
+        return Err(Error::Invalid("invalid plane count".to_string()));
     }
 
     let planes = &src.planes;
@@ -93,7 +93,7 @@ where
     T: Copy + Debug + Pod,
 {
     if dst.planes.len() != 2 {
-        return Err(MediaError::Invalid("invalid plane count".to_string()));
+        return Err(Error::Invalid("invalid plane count".to_string()));
     }
 
     let planes = dst.planes.as_mut_slice();
@@ -119,7 +119,7 @@ where
     T: Copy + Debug + Pod,
 {
     if src.planes.len() != 1 {
-        return Err(MediaError::Invalid("invalid plane count".to_string()));
+        return Err(Error::Invalid("invalid plane count".to_string()));
     }
 
     let planes = &src.planes;
@@ -138,7 +138,7 @@ where
     T: Copy + Debug + Pod,
 {
     if dst.planes.len() != 1 {
-        return Err(MediaError::Invalid("invalid plane count".to_string()));
+        return Err(Error::Invalid("invalid plane count".to_string()));
     }
 
     let planes = dst.planes.as_mut();
@@ -197,7 +197,7 @@ macro_rules! impl_rgb_to_rgb {
                 width.get(),
                 height.get(),
             )
-            .map_err(|e| MediaError::Invalid(e.to_string()))?;
+            .map_err(|e| Error::Invalid(e.to_string()))?;
 
             Ok(())
         }
@@ -224,7 +224,7 @@ macro_rules! impl_rgb_to_yuv {
                 color_matrix.into(),
                 YuvConversionMode::Fast,
             )
-            .map_err(|e| MediaError::Invalid(e.to_string()))?;
+            .map_err(|e| Error::Invalid(e.to_string()))?;
 
             Ok(())
         }
@@ -245,7 +245,7 @@ macro_rules! impl_yuv_to_rgb {
             let dst_stride = dst.plane_stride(0).unwrap();
 
             yuv::$convert_func(&yuv_image, dst.plane_data_mut(0).unwrap(), dst_stride, color_range.into(), color_matrix.into())
-                .map_err(|e| MediaError::Invalid(e.to_string()))?;
+                .map_err(|e| Error::Invalid(e.to_string()))?;
 
             Ok(())
         }
@@ -266,7 +266,7 @@ macro_rules! impl_yuv_to_rgb_with_conversion_mode {
             let dst_stride = dst.plane_stride(0).unwrap();
 
             yuv::$convert_func(&yuv_image, dst.plane_data_mut(0).unwrap(), dst_stride, color_range.into(), color_matrix.into(), $conversion_mode)
-                .map_err(|e| MediaError::Invalid(e.to_string()))?;
+                .map_err(|e| Error::Invalid(e.to_string()))?;
 
             Ok(())
         }
@@ -287,7 +287,7 @@ macro_rules! impl_yuv_to_rgb_with_byte_order {
             let dst_stride = dst.plane_stride(0).unwrap();
 
             yuv::$convert_func(&yuv_image, dst.plane_data_mut(0).unwrap(), dst_stride, $byte_order, color_range.into(), color_matrix.into())
-                .map_err(|e| MediaError::Invalid(e.to_string()))?;
+                .map_err(|e| Error::Invalid(e.to_string()))?;
 
             Ok(())
         }
@@ -307,7 +307,7 @@ macro_rules! impl_yuv_to_yuv {
             let src_image = $into_src_image_func(src, width, height)?;
             let mut dst_image = $into_dst_image_func(dst, width, height)?;
 
-            yuv::$convert_func(&mut dst_image, &src_image).map_err(|e| MediaError::Invalid(e.to_string()))?;
+            yuv::$convert_func(&mut dst_image, &src_image).map_err(|e| Error::Invalid(e.to_string()))?;
 
             Ok(())
         }
@@ -553,7 +553,7 @@ static VIDEO_FORMAT_CONVERT_FUNCS: LazyLock<[[Option<VideoFormatConvertFunc>; PI
 
 fn data_copy(src: &MappedPlanes, dst: &mut MappedPlanes, format: PixelFormat, width: NonZeroU32, height: NonZeroU32) -> Result<()> {
     if src.planes.len() != dst.planes.len() {
-        return Err(MediaError::Invalid("planes size mismatch".to_string()));
+        return Err(Error::Invalid("planes size mismatch".to_string()));
     }
 
     for (plane_index, (src_plane, dst_plane)) in src.planes.iter().zip(&mut dst.planes).enumerate() {
@@ -573,18 +573,18 @@ fn data_copy(src: &MappedPlanes, dst: &mut MappedPlanes, format: PixelFormat, wi
     Ok(())
 }
 
-impl MediaFrame<'_> {
-    pub fn convert_to(&self, dst: &mut MediaFrame) -> Result<()> {
+impl Frame<'_> {
+    pub fn convert_to(&self, dst: &mut Frame) -> Result<()> {
         if self.media_type() != dst.media_type() || self.is_video() {
-            return Err(MediaError::Unsupported("media type".to_string()));
+            return Err(Error::Unsupported("media type".to_string()));
         }
 
         let dst_desc = dst.desc.clone();
 
-        let guard = self.map().map_err(|_| MediaError::Invalid("not readable".into()))?;
-        let mut dst_guard = dst.map_mut().map_err(|_| MediaError::Invalid("not writable".into()))?;
+        let guard = self.map().map_err(|_| Error::Invalid("not readable".into()))?;
+        let mut dst_guard = dst.map_mut().map_err(|_| Error::Invalid("not writable".into()))?;
 
-        if let (MediaFrameDescriptor::Video(src_desc), MediaFrameDescriptor::Video(dst_desc)) = (&self.desc, &dst_desc) {
+        if let (FrameDescriptor::Video(src_desc), FrameDescriptor::Video(dst_desc)) = (&self.desc, &dst_desc) {
             if src_desc.width == dst_desc.width && src_desc.height == dst_desc.height {
                 let src_planes = guard.planes().unwrap();
                 let mut dst_planes = dst_guard.planes_mut().unwrap();
@@ -596,11 +596,11 @@ impl MediaFrame<'_> {
                     if let Some(convert) = convert_func {
                         return convert(&src_planes, &mut dst_planes, src_desc.color_range, src_desc.color_matrix, src_desc.width, src_desc.height);
                     } else {
-                        return Err(MediaError::Unsupported("video format conversion".to_string()));
+                        return Err(Error::Unsupported("video format conversion".to_string()));
                     }
                 }
             } else {
-                return Err(MediaError::Invalid("video frame size mismatch".to_string()));
+                return Err(Error::Invalid("video frame size mismatch".to_string()));
             }
         }
 

@@ -10,10 +10,10 @@ use num_enum::TryFromPrimitive;
 
 use crate::{
     align_to, ceil_rshift,
-    error::MediaError,
+    error::Error,
+    frame::{PlaneInformation, PlaneInformationVec},
     invalid_param_error,
-    media::MediaFrameDescriptor,
-    media_frame::{PlaneInformation, PlaneInformationVec},
+    media::FrameDescriptor,
     Result,
 };
 
@@ -278,9 +278,9 @@ impl VideoFrameDescriptor {
     }
 }
 
-impl From<VideoFrameDescriptor> for MediaFrameDescriptor {
+impl From<VideoFrameDescriptor> for FrameDescriptor {
     fn from(desc: VideoFrameDescriptor) -> Self {
-        MediaFrameDescriptor::Video(desc)
+        FrameDescriptor::Video(desc)
     }
 }
 
@@ -860,7 +860,7 @@ impl From<PixelFormat> for usize {
 }
 
 impl TryFrom<usize> for PixelFormat {
-    type Error = MediaError;
+    type Error = Error;
 
     fn try_from(value: usize) -> Result<Self> {
         if value <= PixelFormat::MAX as usize {
@@ -895,7 +895,7 @@ impl From<ColorMatrix> for usize {
 }
 
 impl TryFrom<usize> for ColorMatrix {
-    type Error = MediaError;
+    type Error = Error;
 
     fn try_from(value: usize) -> Result<Self> {
         match value {
@@ -925,7 +925,7 @@ impl From<ColorPrimaries> for usize {
 }
 
 impl TryFrom<usize> for ColorPrimaries {
-    type Error = MediaError;
+    type Error = Error;
 
     fn try_from(value: usize) -> Result<Self> {
         match value {
@@ -953,7 +953,7 @@ impl From<ColorTransferCharacteristics> for usize {
 }
 
 impl TryFrom<usize> for ColorTransferCharacteristics {
-    type Error = MediaError;
+    type Error = Error;
 
     fn try_from(value: usize) -> Result<Self> {
         match value {
@@ -1014,14 +1014,14 @@ impl From<VideoFormat> for u32 {
 }
 
 impl TryFrom<u32> for VideoFormat {
-    type Error = MediaError;
+    type Error = Error;
 
     fn try_from(value: u32) -> Result<Self> {
         if value & COMPRESSION_MASK != 0 {
             let format_value = value & !COMPRESSION_MASK;
-            CompressionFormat::try_from(format_value as u8).map(VideoFormat::Compression).map_err(|e| MediaError::Invalid(e.to_string()))
+            CompressionFormat::try_from(format_value as u8).map(VideoFormat::Compression).map_err(|e| Error::Invalid(e.to_string()))
         } else {
-            PixelFormat::try_from(value as u8).map(VideoFormat::Pixel).map_err(|e| MediaError::Invalid(e.to_string()))
+            PixelFormat::try_from(value as u8).map(VideoFormat::Pixel).map_err(|e| Error::Invalid(e.to_string()))
         }
     }
 }

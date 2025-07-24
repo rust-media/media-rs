@@ -1,4 +1,4 @@
-use crate::media::MediaFrameDescriptor;
+use crate::media::FrameDescriptor;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum DataFormat {
@@ -19,8 +19,8 @@ impl DataFrameDescriptor {
     }
 }
 
-impl From<DataFrameDescriptor> for MediaFrameDescriptor {
+impl From<DataFrameDescriptor> for FrameDescriptor {
     fn from(desc: DataFrameDescriptor) -> Self {
-        MediaFrameDescriptor::Data(desc)
+        FrameDescriptor::Data(desc)
     }
 }

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use media_base::{error::MediaError, media_frame::MediaFrame, Result};
+use media_base::{error::Error, frame::Frame, Result};
 use variant::Variant;
 
 #[derive(Clone, Debug)]
@@ -15,7 +15,7 @@ pub enum DeviceEvent {
     Refreshed(usize),         // All devices refreshed, number of devices
 }
 
-pub(crate) type OutputHandler = Arc<dyn Fn(MediaFrame) -> Result<()> + Send + Sync>;
+pub(crate) type OutputHandler = Arc<dyn Fn(Frame) -> Result<()> + Send + Sync>;
 
 pub trait Device {
     fn name(&self) -> &str;
@@ -31,7 +31,7 @@ pub trait Device {
 pub trait OutputDevice: Device {
     fn set_output_handler<F>(&mut self, handler: F) -> Result<()>
     where
-        F: Fn(MediaFrame) -> Result<()> + Send + Sync + 'static;
+        F: Fn(Frame) -> Result<()> + Send + Sync + 'static;
 }
 
 pub(crate) type DeviceEventHandler = Box<dyn Fn(&DeviceEvent) + Send + Sync>;
