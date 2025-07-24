@@ -8,7 +8,7 @@ use variant::Variant;
 use crate::pixel_buffer::video_frame::PixelBuffer;
 use crate::{
     error::MediaError,
-    media::{MediaFrameDescriptor, MediaFrameType},
+    media::{MediaFrameDescriptor, MediaType},
     unsupported_error, Result,
 };
 
@@ -501,7 +501,7 @@ impl MediaFrame<'_> {
         }
     }
 
-    pub fn media_type(&self) -> MediaFrameType {
+    pub fn media_type(&self) -> MediaType {
         self.desc.media_type()
     }
 

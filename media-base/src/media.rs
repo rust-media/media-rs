@@ -1,7 +1,7 @@
 use crate::{audio::AudioFrameDescriptor, data::DataFrameDescriptor, video::VideoFrameDescriptor};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum MediaFrameType {
+pub enum MediaType {
     Audio = 0,
     Video,
     Data,
@@ -15,11 +15,11 @@ pub enum MediaFrameDescriptor {
 }
 
 impl MediaFrameDescriptor {
-    pub fn media_type(&self) -> MediaFrameType {
+    pub fn media_type(&self) -> MediaType {
         match self {
-            MediaFrameDescriptor::Audio(_) => MediaFrameType::Audio,
-            MediaFrameDescriptor::Video(_) => MediaFrameType::Video,
-            MediaFrameDescriptor::Data(_) => MediaFrameType::Data,
+            MediaFrameDescriptor::Audio(_) => MediaType::Audio,
+            MediaFrameDescriptor::Video(_) => MediaType::Video,
+            MediaFrameDescriptor::Data(_) => MediaType::Data,
         }
     }
 
