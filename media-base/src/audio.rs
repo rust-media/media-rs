@@ -22,7 +22,7 @@ pub const SAMPLE_RATE_DVD: u32 = 48000;
 pub const SAMPLE_RATE_HIGH: u32 = 96000;
 pub const SAMPLE_RATE_ULTRA_HIGH: u32 = 192000;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SampleFormat {
     U8 = 0, // unsigned 8 bits
     S16,    // signed 16 bits
@@ -37,7 +37,7 @@ pub enum SampleFormat {
     MAX,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ChannelFormat {
     FrontLeft,
     FrontRight,
@@ -70,7 +70,7 @@ macro_rules! chn_fmt_masks {
 
 bitflags! {
     #[repr(transparent)]
-    #[derive(Clone, Copy, Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct ChannelFormatMasks: u32 {
         const FrontLeft             = 1u32 << ChannelFormat::FrontLeft as u32;
         const FrontRight            = 1u32 << ChannelFormat::FrontRight as u32;
@@ -130,7 +130,7 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ChannelOrder {
     Unspecified,
     Native,
@@ -140,20 +140,20 @@ pub enum ChannelOrder {
 
 const DEFAULT_MAX_CHANNELS: usize = 16;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ChannelLayoutSpec {
     Mask(ChannelFormatMasks),
     Map(Option<SmallVec<[ChannelFormat; DEFAULT_MAX_CHANNELS]>>),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ChannelLayout {
     pub order: ChannelOrder,
     pub channels: NonZeroU8,
     pub spec: ChannelLayoutSpec,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AudioFrameDescriptor {
     pub format: SampleFormat,
     pub samples: NonZeroU32,

@@ -17,7 +17,7 @@ use crate::{
     Result,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Resolution {
     pub width: u32,
     pub height: u32,
@@ -50,7 +50,7 @@ impl Resolution {
     pub const UHD_8K: Self = Self::new(7680, 4320);
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[repr(u8)]
 pub enum ColorRange {
     #[default]
@@ -60,7 +60,7 @@ pub enum ColorRange {
     MAX,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[repr(u8)]
 pub enum ColorMatrix {
     #[default]
@@ -82,7 +82,7 @@ pub enum ColorMatrix {
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[repr(u8)]
 pub enum ColorPrimaries {
     #[default]
@@ -103,7 +103,7 @@ pub enum ColorPrimaries {
 
 #[allow(non_camel_case_types)]
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum ColorTransferCharacteristics {
     #[default]
     Reserved = 0, // Reserved
@@ -127,7 +127,7 @@ pub enum ColorTransferCharacteristics {
 }
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, TryFromPrimitive)]
 pub enum PixelFormat {
     #[default]
     ARGB32 = 0, // packed ARGB, 32 bits
@@ -181,19 +181,19 @@ pub enum PixelFormat {
 }
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, TryFromPrimitive)]
 pub enum CompressionFormat {
     #[default]
     MJPEG,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum VideoFormat {
     Pixel(PixelFormat),
     Compression(CompressionFormat),
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum ChromaLocation {
     #[default]
     Unspecified,
@@ -205,14 +205,14 @@ pub enum ChromaLocation {
     Bottom,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ChromaSubsampling {
     YUV420,
     YUV422,
     YUV444,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum Rotation {
     #[default]
     None,
@@ -221,14 +221,14 @@ pub enum Rotation {
     Rotation270,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum Origin {
     #[default]
     TopDown,
     BottomUp,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VideoFrameDescriptor {
     pub format: PixelFormat,
     pub width: NonZeroU32,
