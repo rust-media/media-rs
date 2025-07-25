@@ -59,7 +59,17 @@ pub enum ChannelFormat {
     TopBackRight,
 }
 
+macro_rules! chn_fmt_masks {
+    ($($mask:ident)|+) => {
+        0 $(| ChannelFormatMasks::$mask.bits())+
+    };
+    ($mask:ident) => {
+        ChannelFormatMasks::$mask.bits()
+    };
+}
+
 bitflags! {
+    #[repr(transparent)]
     #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct ChannelFormatMasks: u32 {
         const FrontLeft             = 1u32 << ChannelFormat::FrontLeft as u32;
@@ -81,42 +91,42 @@ bitflags! {
         const TopBackCenter         = 1u32 << ChannelFormat::TopBackCenter as u32;
         const TopBackRight          = 1u32 << ChannelFormat::TopBackRight as u32;
 
-        const Mono                      = Self::FrontCenter.bits();
-        const Stereo                    = Self::FrontLeft.bits() | Self::FrontRight.bits();
-        const Surround_2_1              = Self::Stereo.bits() | Self::LowFrequency.bits();
-        const Surround                  = Self::Stereo.bits() | Self::FrontCenter.bits();
-        const Surround_3_0              = Self::Surround.bits();
-        const Surround_3_0_FRONT        = Self::Surround.bits();
-        const Surround_3_0_BACK         = Self::Stereo.bits() | Self::BackCenter.bits();
-        const Surround_3_1              = Self::Surround_3_0.bits() | Self::LowFrequency.bits();
-        const Surround_3_1_2            = Self::Surround_3_1.bits() | Self::TopFrontLeft.bits() | Self::TopFrontRight.bits();
-        const Surround_4_0              = Self::Surround_3_0.bits() | Self::BackCenter.bits();
-        const Surround_4_1              = Self::Surround_4_0.bits() | Self::LowFrequency.bits();
-        const Surround_2_2              = Self::Stereo.bits() | Self::SideLeft.bits() | Self::SideRight.bits();
-        const Quad                      = Self::Stereo.bits() | Self::BackLeft.bits() | Self::BackRight.bits();
-        const Surround_5_0              = Self::Surround_3_0.bits() | Self::SideLeft.bits() | Self::SideRight.bits();
-        const Surround_5_1              = Self::Surround_5_0.bits() | Self::LowFrequency.bits();
-        const Surround_5_0_BACK         = Self::Surround_3_0.bits() | Self::BackLeft.bits() | Self::BackRight.bits();
-        const Surround_5_1_BACK         = Self::Surround_5_0_BACK.bits() | Self::LowFrequency.bits();
-        const Surround_6_0              = Self::Surround_5_0.bits() | Self::BackCenter.bits();
-        const Hexagonal                 = Self::Surround_5_0_BACK.bits() | Self::BackCenter.bits();
-        const Surround_6_1              = Self::Surround_6_0.bits() | Self::LowFrequency.bits();
-        const Surround_6_0_FRONT        = Self::Surround_2_2.bits() | Self::FrontLeftOfCenter.bits() | Self::FrontRightOfCenter.bits();
-        const Surround_6_1_FRONT        = Self::Surround_6_0_FRONT.bits() | Self::LowFrequency.bits();
-        const Surround_6_1_BACK         = Self::Surround_5_1_BACK.bits() | Self::BackCenter.bits();
-        const Surround_7_0              = Self::Surround_5_0.bits() | Self::BackLeft.bits() | Self::BackRight.bits();
-        const Surround_7_1              = Self::Surround_7_0.bits() | Self::LowFrequency.bits();
-        const Surround_7_0_FRONT        = Self::Surround_5_0.bits() | Self::FrontLeftOfCenter.bits() | Self::FrontRightOfCenter.bits();
-        const Surround_7_1_WIDE         = Self::Surround_5_1.bits() | Self::FrontLeftOfCenter.bits() | Self::FrontRightOfCenter.bits();
-        const Surround_7_1_WIDE_BACK    = Self::Surround_5_1_BACK.bits() | Self::FrontLeftOfCenter.bits() | Self::FrontRightOfCenter.bits();
-        const Surround_5_1_2            = Self::Surround_5_1.bits() | Self::TopFrontLeft.bits() | Self::TopFrontRight.bits();
-        const Surround_5_1_2_BACK       = Self::Surround_5_1_BACK.bits() | Self::TopFrontLeft.bits() | Self::TopFrontRight.bits();
-        const Octagonal                 = Self::Surround_5_0.bits() | Self::BackLeft.bits() | Self::BackCenter.bits() | Self::BackRight.bits();
-        const Cube                      = Self::Quad.bits() | Self::TopFrontLeft.bits() | Self::TopFrontRight.bits() | Self::TopBackLeft.bits() | Self::TopBackRight.bits();
-        const Surround_5_1_4_BACK       = Self::Surround_5_1_2.bits() | Self::TopBackLeft.bits() | Self::TopBackRight.bits();
-        const Surround_7_1_2            = Self::Surround_7_1.bits() | Self::TopFrontLeft.bits() | Self::TopFrontRight.bits();
-        const Surround_7_1_4_BACK       = Self::Surround_7_1_2.bits() | Self::TopBackLeft.bits() | Self::TopBackRight.bits();
-        const Surround_9_1_4_BACK       = Self::Surround_7_1_4_BACK.bits() | Self::FrontLeftOfCenter.bits() | Self::FrontRightOfCenter.bits();
+        const Mono                      = chn_fmt_masks!(FrontCenter);
+        const Stereo                    = chn_fmt_masks!(FrontLeft | FrontRight);
+        const Surround_2_1              = chn_fmt_masks!(Stereo | LowFrequency);
+        const Surround                  = chn_fmt_masks!(Stereo | FrontCenter);
+        const Surround_3_0              = chn_fmt_masks!(Surround);
+        const Surround_3_0_FRONT        = chn_fmt_masks!(Surround);
+        const Surround_3_0_BACK         = chn_fmt_masks!(Stereo | BackCenter);
+        const Surround_3_1              = chn_fmt_masks!(Surround_3_0 | LowFrequency);
+        const Surround_3_1_2            = chn_fmt_masks!(Surround_3_1 | TopFrontLeft | TopFrontRight);
+        const Surround_4_0              = chn_fmt_masks!(Surround_3_0 | BackCenter);
+        const Surround_4_1              = chn_fmt_masks!(Surround_4_0 | LowFrequency);
+        const Surround_2_2              = chn_fmt_masks!(Stereo | SideLeft | SideRight);
+        const Quad                      = chn_fmt_masks!(Stereo | BackLeft | BackRight);
+        const Surround_5_0              = chn_fmt_masks!(Surround_3_0 | SideLeft | SideRight);
+        const Surround_5_1              = chn_fmt_masks!(Surround_5_0 | LowFrequency);
+        const Surround_5_0_BACK         = chn_fmt_masks!(Surround_3_0 | BackLeft | BackRight);
+        const Surround_5_1_BACK         = chn_fmt_masks!(Surround_5_0_BACK | LowFrequency);
+        const Surround_6_0              = chn_fmt_masks!(Surround_5_0 | BackCenter);
+        const Hexagonal                 = chn_fmt_masks!(Surround_5_0_BACK | BackCenter);
+        const Surround_6_1              = chn_fmt_masks!(Surround_6_0 | LowFrequency);
+        const Surround_6_0_FRONT        = chn_fmt_masks!(Surround_2_2 | FrontLeftOfCenter | FrontRightOfCenter);
+        const Surround_6_1_FRONT        = chn_fmt_masks!(Surround_6_0_FRONT | LowFrequency);
+        const Surround_6_1_BACK         = chn_fmt_masks!(Surround_5_1_BACK | BackCenter);
+        const Surround_7_0              = chn_fmt_masks!(Surround_5_0 | BackLeft | BackRight);
+        const Surround_7_1              = chn_fmt_masks!(Surround_7_0 | LowFrequency);
+        const Surround_7_0_FRONT        = chn_fmt_masks!(Surround_5_0 | FrontLeftOfCenter | FrontRightOfCenter);
+        const Surround_7_1_WIDE         = chn_fmt_masks!(Surround_5_1 | FrontLeftOfCenter | FrontRightOfCenter);
+        const Surround_7_1_WIDE_BACK    = chn_fmt_masks!(Surround_5_1_BACK | FrontLeftOfCenter | FrontRightOfCenter);
+        const Surround_5_1_2            = chn_fmt_masks!(Surround_5_1 | TopFrontLeft | TopFrontRight);
+        const Surround_5_1_2_BACK       = chn_fmt_masks!(Surround_5_1_BACK | TopFrontLeft | TopFrontRight);
+        const Octagonal                 = chn_fmt_masks!(Surround_5_0 | BackLeft | BackCenter | BackRight);
+        const Cube                      = chn_fmt_masks!(Quad | TopFrontLeft | TopFrontRight | TopBackLeft | TopBackRight);
+        const Surround_5_1_4_BACK       = chn_fmt_masks!(Surround_5_1_2 | TopBackLeft | TopBackRight);
+        const Surround_7_1_2            = chn_fmt_masks!(Surround_7_1 | TopFrontLeft | TopFrontRight);
+        const Surround_7_1_4_BACK       = chn_fmt_masks!(Surround_7_1_2 | TopBackLeft | TopBackRight);
+        const Surround_9_1_4_BACK       = chn_fmt_masks!(Surround_7_1_4_BACK | FrontLeftOfCenter | FrontRightOfCenter);
     }
 }
 

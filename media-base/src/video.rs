@@ -285,6 +285,7 @@ impl From<VideoFrameDescriptor> for FrameDescriptor {
 }
 
 bitflags! {
+    #[repr(transparent)]
     struct PixelFormatFlags: u32 {
         const Alpha    = 1 << 0;
         const RGB      = 1 << 1;
@@ -296,12 +297,21 @@ bitflags! {
 }
 
 struct PixelFormatDescriptor {
-    pub components: u8,
-    pub chroma_shift_x: u8,
-    pub chroma_shift_y: u8,
-    pub depth: u8,
-    pub flags: u32,
-    pub component_bytes: [u8; 4],
+    components: u8,
+    chroma_shift_x: u8,
+    chroma_shift_y: u8,
+    depth: u8,
+    flags: PixelFormatFlags,
+    component_bytes: [u8; 4],
+}
+
+macro_rules! pix_fmt_flags {
+    ($($flag:ident)|+) => {
+        PixelFormatFlags::from_bits_truncate(0 $(| PixelFormatFlags::$flag.bits())+)
+    };
+    ($flag:ident) => {
+        PixelFormatFlags::from_bits_truncate(PixelFormatFlags::$flag.bits())
+    };
 }
 
 static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
@@ -311,7 +321,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        flags: PixelFormatFlags::Alpha.bits() | PixelFormatFlags::RGB.bits() | PixelFormatFlags::Packed.bits(),
+        flags: pix_fmt_flags!(Alpha | RGB | Packed),
         component_bytes: [4, 0, 0, 0],
     },
     // BGRA32
@@ -320,7 +330,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        flags: PixelFormatFlags::Alpha.bits() | PixelFormatFlags::RGB.bits() | PixelFormatFlags::Packed.bits(),
+        flags: pix_fmt_flags!(Alpha | RGB | Packed),
         component_bytes: [4, 0, 0, 0],
     },
     // ABGR32
@@ -329,7 +339,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        flags: PixelFormatFlags::Alpha.bits() | PixelFormatFlags::RGB.bits() | PixelFormatFlags::Packed.bits(),
+        flags: pix_fmt_flags!(Alpha | RGB | Packed),
         component_bytes: [4, 0, 0, 0],
     },
     // RGBA32
@@ -338,7 +348,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        flags: PixelFormatFlags::Alpha.bits() | PixelFormatFlags::RGB.bits() | PixelFormatFlags::Packed.bits(),
+        flags: pix_fmt_flags!(Alpha | RGB | Packed),
         component_bytes: [4, 0, 0, 0],
     },
     // RGB24
@@ -347,7 +357,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        flags: PixelFormatFlags::RGB.bits() | PixelFormatFlags::Packed.bits(),
+        flags: pix_fmt_flags!(RGB | Packed),
         component_bytes: [3, 0, 0, 0],
     },
     // BGR24
@@ -356,7 +366,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        flags: PixelFormatFlags::RGB.bits() | PixelFormatFlags::Packed.bits(),
+        flags: pix_fmt_flags!(RGB | Packed),
         component_bytes: [3, 0, 0, 0],
     },
     // I420
@@ -365,7 +375,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 1,
         chroma_shift_y: 1,
         depth: 8,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
+        flags: pix_fmt_flags!(YUV | Planar),
         component_bytes: [1, 1, 1, 0],
     },
     // I422
@@ -374,7 +384,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 8,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
+        flags: pix_fmt_flags!(YUV | Planar),
         component_bytes: [1, 1, 1, 0],
     },
     // I444
@@ -383,7 +393,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
+        flags: pix_fmt_flags!(YUV | Planar),
         component_bytes: [1, 1, 1, 0],
     },
     // NV12
@@ -392,7 +402,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 1,
         chroma_shift_y: 1,
         depth: 8,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
+        flags: pix_fmt_flags!(YUV | BiPlanar),
         component_bytes: [1, 2, 0, 0],
     },
     // NV21
@@ -401,7 +411,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 1,
         chroma_shift_y: 1,
         depth: 8,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
+        flags: pix_fmt_flags!(YUV | BiPlanar),
         component_bytes: [1, 2, 0, 0],
     },
     // NV16
@@ -410,7 +420,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 8,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
+        flags: pix_fmt_flags!(YUV | BiPlanar),
         component_bytes: [1, 2, 0, 0],
     },
     // NV61
@@ -419,7 +429,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 8,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
+        flags: pix_fmt_flags!(YUV | BiPlanar),
         component_bytes: [1, 2, 0, 0],
     },
     // NV24
@@ -428,7 +438,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
+        flags: pix_fmt_flags!(YUV | BiPlanar),
         component_bytes: [1, 2, 0, 0],
     },
     // NV42
@@ -437,7 +447,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
+        flags: pix_fmt_flags!(YUV | BiPlanar),
         component_bytes: [1, 2, 0, 0],
     },
     // YV12
@@ -446,7 +456,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 1,
         chroma_shift_y: 1,
         depth: 8,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
+        flags: pix_fmt_flags!(YUV | Planar),
         component_bytes: [1, 1, 1, 0],
     },
     // YV16
@@ -455,7 +465,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 8,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
+        flags: pix_fmt_flags!(YUV | Planar),
         component_bytes: [1, 1, 1, 0],
     },
     // YV24
@@ -464,7 +474,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
+        flags: pix_fmt_flags!(YUV | Planar),
         component_bytes: [1, 1, 1, 0],
     },
     // YUYV
@@ -473,7 +483,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 8,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Packed.bits(),
+        flags: pix_fmt_flags!(YUV | Packed),
         component_bytes: [4, 0, 0, 0],
     },
     // YVYU
@@ -482,7 +492,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 8,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Packed.bits(),
+        flags: pix_fmt_flags!(YUV | Packed),
         component_bytes: [4, 0, 0, 0],
     },
     // UYVY
@@ -491,7 +501,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 8,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Packed.bits(),
+        flags: pix_fmt_flags!(YUV | Packed),
         component_bytes: [4, 0, 0, 0],
     },
     // VYUY
@@ -500,7 +510,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 8,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Packed.bits(),
+        flags: pix_fmt_flags!(YUV | Packed),
         component_bytes: [4, 0, 0, 0],
     },
     // AYUV
@@ -509,7 +519,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        flags: PixelFormatFlags::Alpha.bits() | PixelFormatFlags::YUV.bits() | PixelFormatFlags::Packed.bits(),
+        flags: pix_fmt_flags!(Alpha | YUV | Packed),
         component_bytes: [4, 0, 0, 0],
     },
     // Y8
@@ -518,7 +528,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        flags: PixelFormatFlags::Planar.bits(),
+        flags: PixelFormatFlags::Planar,
         component_bytes: [1, 0, 0, 0],
     },
     // YA8
@@ -527,7 +537,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 8,
-        flags: PixelFormatFlags::Alpha.bits() | PixelFormatFlags::Planar.bits(),
+        flags: pix_fmt_flags!(Alpha | Planar),
         component_bytes: [1, 1, 0, 0],
     },
     // RGB30
@@ -536,7 +546,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 10,
-        flags: PixelFormatFlags::RGB.bits() | PixelFormatFlags::Packed.bits(),
+        flags: pix_fmt_flags!(RGB | Packed),
         component_bytes: [4, 0, 0, 0],
     },
     // BGR30
@@ -545,7 +555,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 10,
-        flags: PixelFormatFlags::RGB.bits() | PixelFormatFlags::Packed.bits(),
+        flags: pix_fmt_flags!(RGB | Packed),
         component_bytes: [4, 0, 0, 0],
     },
     // ARGB64
@@ -554,7 +564,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 16,
-        flags: PixelFormatFlags::Alpha.bits() | PixelFormatFlags::RGB.bits() | PixelFormatFlags::Packed.bits(),
+        flags: pix_fmt_flags!(Alpha | RGB | Packed),
         component_bytes: [8, 0, 0, 0],
     },
     // ABGR64
@@ -563,7 +573,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 16,
-        flags: PixelFormatFlags::Alpha.bits() | PixelFormatFlags::RGB.bits() | PixelFormatFlags::Packed.bits(),
+        flags: pix_fmt_flags!(Alpha | RGB | Packed),
         component_bytes: [8, 0, 0, 0],
     },
     // I010
@@ -572,7 +582,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 1,
         chroma_shift_y: 1,
         depth: 10,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
+        flags: pix_fmt_flags!(YUV | Planar),
         component_bytes: [2, 2, 2, 0],
     },
     // I210
@@ -581,7 +591,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 10,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
+        flags: pix_fmt_flags!(YUV | Planar),
         component_bytes: [2, 2, 2, 0],
     },
     // I410
@@ -590,7 +600,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 10,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
+        flags: pix_fmt_flags!(YUV | Planar),
         component_bytes: [2, 2, 2, 0],
     },
     // P010
@@ -599,7 +609,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 1,
         chroma_shift_y: 1,
         depth: 10,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
+        flags: pix_fmt_flags!(YUV | BiPlanar),
         component_bytes: [2, 4, 0, 0],
     },
     // P210
@@ -608,7 +618,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 10,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
+        flags: pix_fmt_flags!(YUV | BiPlanar),
         component_bytes: [2, 4, 0, 0],
     },
     // P410
@@ -617,7 +627,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 10,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
+        flags: pix_fmt_flags!(YUV | BiPlanar),
         component_bytes: [2, 4, 0, 0],
     },
     // I012
@@ -626,7 +636,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 1,
         chroma_shift_y: 1,
         depth: 12,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
+        flags: pix_fmt_flags!(YUV | Planar),
         component_bytes: [2, 2, 2, 0],
     },
     // I212
@@ -635,7 +645,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 12,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
+        flags: pix_fmt_flags!(YUV | Planar),
         component_bytes: [2, 2, 2, 0],
     },
     // I412
@@ -644,7 +654,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 12,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
+        flags: pix_fmt_flags!(YUV | Planar),
         component_bytes: [2, 2, 2, 0],
     },
     // P012
@@ -653,7 +663,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 1,
         chroma_shift_y: 1,
         depth: 12,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
+        flags: pix_fmt_flags!(YUV | BiPlanar),
         component_bytes: [2, 4, 0, 0],
     },
     // P212
@@ -662,7 +672,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 12,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
+        flags: pix_fmt_flags!(YUV | BiPlanar),
         component_bytes: [2, 4, 0, 0],
     },
     // P412
@@ -671,7 +681,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 12,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
+        flags: pix_fmt_flags!(YUV | BiPlanar),
         component_bytes: [2, 4, 0, 0],
     },
     // I016
@@ -680,7 +690,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 1,
         chroma_shift_y: 1,
         depth: 16,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
+        flags: pix_fmt_flags!(YUV | Planar),
         component_bytes: [2, 2, 2, 0],
     },
     // I216
@@ -689,7 +699,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 16,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
+        flags: pix_fmt_flags!(YUV | Planar),
         component_bytes: [2, 2, 2, 0],
     },
     // I416
@@ -698,7 +708,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 16,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
+        flags: pix_fmt_flags!(YUV | Planar),
         component_bytes: [2, 2, 2, 0],
     },
     // P016
@@ -707,7 +717,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 1,
         chroma_shift_y: 1,
         depth: 16,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
+        flags: pix_fmt_flags!(YUV | BiPlanar),
         component_bytes: [2, 4, 0, 0],
     },
     // P216
@@ -716,7 +726,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 1,
         chroma_shift_y: 0,
         depth: 16,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
+        flags: pix_fmt_flags!(YUV | BiPlanar),
         component_bytes: [2, 4, 0, 0],
     },
     // P416
@@ -725,7 +735,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 0,
         depth: 16,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::BiPlanar.bits(),
+        flags: pix_fmt_flags!(YUV | BiPlanar),
         component_bytes: [2, 4, 0, 0],
     },
 ];
@@ -759,23 +769,23 @@ impl PixelFormat {
     }
 
     pub fn is_rgb(&self) -> bool {
-        PIXEL_FORMAT_DESC[*self as usize].flags & PixelFormatFlags::RGB.bits() != 0
+        PIXEL_FORMAT_DESC[*self as usize].flags.contains(PixelFormatFlags::RGB)
     }
 
     pub fn is_yuv(&self) -> bool {
-        PIXEL_FORMAT_DESC[*self as usize].flags & PixelFormatFlags::YUV.bits() != 0
+        PIXEL_FORMAT_DESC[*self as usize].flags.contains(PixelFormatFlags::YUV)
     }
 
     pub fn is_planar(&self) -> bool {
-        PIXEL_FORMAT_DESC[*self as usize].flags & PixelFormatFlags::Planar.bits() != 0
+        PIXEL_FORMAT_DESC[*self as usize].flags.contains(PixelFormatFlags::Planar)
     }
 
     pub fn is_packed(&self) -> bool {
-        PIXEL_FORMAT_DESC[*self as usize].flags & PixelFormatFlags::Packed.bits() != 0
+        PIXEL_FORMAT_DESC[*self as usize].flags.contains(PixelFormatFlags::Packed)
     }
 
     pub fn is_biplanar(&self) -> bool {
-        PIXEL_FORMAT_DESC[*self as usize].flags & PixelFormatFlags::BiPlanar.bits() != 0
+        PIXEL_FORMAT_DESC[*self as usize].flags.contains(PixelFormatFlags::BiPlanar)
     }
 
     pub(crate) fn calc_plane_row_bytes(&self, plane_index: usize, width: u32) -> u32 {

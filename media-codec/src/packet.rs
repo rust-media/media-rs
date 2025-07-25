@@ -4,10 +4,11 @@ use bitflags::bitflags;
 use num_rational::Rational64;
 
 bitflags! {
+    #[repr(transparent)]
     #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct PacketFlags: u32 {
-        const KEY = 0x0001;
-        const CORRUPT = 0x0002;
+        const Key = 1;
+        const Corrupt = 2;
     }
 }
 
