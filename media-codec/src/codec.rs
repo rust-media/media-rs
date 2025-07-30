@@ -1,15 +1,16 @@
-use std::{collections::HashMap, num::NonZeroU32};
+use std::{
+    collections::HashMap,
+    num::NonZeroU32,
+    sync::{Arc, LazyLock, RwLock},
+};
 
 use media_base::{
     audio::{ChannelLayout, SampleFormat},
     error::Error,
-    frame::Frame,
     video::{ChromaLocation, ColorMatrix, ColorPrimaries, ColorRange, ColorTransferCharacteristics, PixelFormat},
     MediaType, Result,
 };
 use num_rational::Rational64;
-
-use crate::packet::Packet;
 
 #[repr(u16)]
 enum AudioCodecID {
@@ -33,7 +34,7 @@ macro_rules! codec_id {
 }
 
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum CodecID {
     // Audio codecs
     AAC  = codec_id!(Audio, AudioCodecID, AAC),
@@ -96,4 +97,63 @@ impl CodecSpecificParameters {
 pub struct CodecParameters {
     pub id: Option<CodecID>,
     pub specific: Option<CodecSpecificParameters>,
+}
+
+pub trait CodecBuilder: Send + Sync {
+    fn id(&self) -> CodecID;
+    fn name(&self) -> &'static str;
+}
+
+pub(crate) struct CodecList<T> {
+    pub(crate) codecs: HashMap<CodecID, Vec<T>>,
+}
+
+pub(crate) type LazyCodecList<T> = LazyLock<RwLock<CodecList<Arc<T>>>>;
+
+pub(crate) fn register_codec<T>(codec_list: &LazyCodecList<T>, builder: Arc<T>, default: bool) -> Result<()>
+where
+    T: CodecBuilder + ?Sized,
+{
+    let mut codec_list = codec_list.write().map_err(|err| Error::Invalid(err.to_string()))?;
+    let entry = codec_list.codecs.entry(builder.id()).or_default();
+
+    if default {
+        entry.insert(0, builder);
+    } else {
+        entry.push(builder);
+    }
+
+    Ok(())
+}
+
+pub(crate) fn find_codec<T>(codec_list: &LazyCodecList<T>, codec_id: CodecID) -> Result<Arc<T>>
+where
+    T: CodecBuilder + ?Sized,
+{
+    let codec_list = codec_list.read().map_err(|err| Error::Invalid(err.to_string()))?;
+
+    if let Some(builders) = codec_list.codecs.get(&codec_id) {
+        if let Some(builder) = builders.first() {
+            return Ok(builder.clone());
+        }
+    }
+
+    Err(Error::NotFound(format!("codec: {:?}", codec_id)))
+}
+
+pub(crate) fn find_codec_by_name<T>(codec_list: &LazyCodecList<T>, name: &str) -> Result<Arc<T>>
+where
+    T: CodecBuilder + ?Sized,
+{
+    let codec_list = codec_list.read().map_err(|err| Error::Invalid(err.to_string()))?;
+
+    for builders in codec_list.codecs.values() {
+        for builder in builders {
+            if builder.name() == name {
+                return Ok(builder.clone());
+            }
+        }
+    }
+
+    Err(Error::NotFound(format!("codec with name: {}", name)))
 }
