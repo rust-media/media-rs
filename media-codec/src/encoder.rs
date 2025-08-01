@@ -18,7 +18,7 @@ pub trait Encoder: Send + Sync {
 }
 
 pub trait EncoderBuilder: CodecBuilder {
-    fn new(&self, parameters: Option<CodecParameters>, options: Option<Variant>) -> Result<Box<dyn Encoder>>;
+    fn new_encoder(&self, parameters: Option<CodecParameters>, options: Option<Variant>) -> Result<Box<dyn Encoder>>;
 }
 
 type EncoderBuilderList = CodecList<Arc<dyn EncoderBuilder>>;
@@ -50,7 +50,7 @@ pub(crate) fn find_encoder_by_name(name: &str) -> Result<Arc<dyn EncoderBuilder>
 impl EncoderContext {
     pub fn from_codec_id(codec_id: CodecID, parameters: Option<CodecParameters>, options: Option<Variant>) -> Result<Self> {
         let builder = find_encoder(codec_id)?;
-        let encoder = builder.new(parameters.clone(), options.clone())?;
+        let encoder = builder.new_encoder(parameters.clone(), options.clone())?;
 
         Ok(Self {
             parameters,
@@ -61,7 +61,7 @@ impl EncoderContext {
 
     pub fn from_codec_name(name: &str, parameters: Option<CodecParameters>, options: Option<Variant>) -> Result<Self> {
         let builder = find_encoder_by_name(name)?;
-        let encoder = builder.new(parameters.clone(), options.clone())?;
+        let encoder = builder.new_encoder(parameters.clone(), options.clone())?;
 
         Ok(Self {
             parameters,

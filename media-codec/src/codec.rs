@@ -84,6 +84,18 @@ pub enum CodecSpecificParameters {
     Video(VideoCodecParameters),
 }
 
+impl From<AudioCodecParameters> for CodecSpecificParameters {
+    fn from(params: AudioCodecParameters) -> Self {
+        CodecSpecificParameters::Audio(params)
+    }
+}
+
+impl From<VideoCodecParameters> for CodecSpecificParameters {
+    fn from(params: VideoCodecParameters) -> Self {
+        CodecSpecificParameters::Video(params)
+    }
+}
+
 impl CodecSpecificParameters {
     pub fn media_type(&self) -> MediaType {
         match self {
@@ -97,6 +109,32 @@ impl CodecSpecificParameters {
 pub struct CodecParameters {
     pub id: Option<CodecID>,
     pub specific: Option<CodecSpecificParameters>,
+}
+
+impl CodecParameters {
+    pub fn new<T>(id: CodecID, params: T) -> Self
+    where
+        T: Into<CodecSpecificParameters>,
+    {
+        Self {
+            id: Some(id),
+            specific: Some(params.into()),
+        }
+    }
+
+    pub fn audio(&self) -> Option<&AudioCodecParameters> {
+        self.specific.as_ref().and_then(|spec| match spec {
+            CodecSpecificParameters::Audio(params) => Some(params),
+            _ => None,
+        })
+    }
+
+    pub fn video(&self) -> Option<&VideoCodecParameters> {
+        self.specific.as_ref().and_then(|spec| match spec {
+            CodecSpecificParameters::Video(params) => Some(params),
+            _ => None,
+        })
+    }
 }
 
 pub trait CodecBuilder: Send + Sync {

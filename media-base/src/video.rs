@@ -788,7 +788,7 @@ impl PixelFormat {
         PIXEL_FORMAT_DESC[*self as usize].flags.contains(PixelFormatFlags::BiPlanar)
     }
 
-    pub(crate) fn calc_plane_row_bytes(&self, plane_index: usize, width: u32) -> u32 {
+    pub fn calc_plane_row_bytes(&self, plane_index: usize, width: u32) -> u32 {
         let desc = &PIXEL_FORMAT_DESC[*self as usize];
         let component_bytes = desc.component_bytes[plane_index];
 
@@ -799,7 +799,7 @@ impl PixelFormat {
         }
     }
 
-    pub(crate) fn calc_plane_height(&self, plane_index: usize, height: u32) -> u32 {
+    pub fn calc_plane_height(&self, plane_index: usize, height: u32) -> u32 {
         if plane_index > 0 && (self.is_planar() || self.is_biplanar()) {
             let desc = &PIXEL_FORMAT_DESC[*self as usize];
             ceil_rshift(height, desc.chroma_shift_y as u32)
