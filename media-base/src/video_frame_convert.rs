@@ -575,7 +575,7 @@ fn data_copy(src: &MappedPlanes, dst: &mut MappedPlanes, format: PixelFormat, wi
 
 impl Frame<'_> {
     pub fn convert_to(&self, dst: &mut Frame) -> Result<()> {
-        if self.media_type() != dst.media_type() || self.is_video() {
+        if self.media_type() != dst.media_type() || !self.is_video() {
             return Err(Error::Unsupported("media type".to_string()));
         }
 
