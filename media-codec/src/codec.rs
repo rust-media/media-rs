@@ -193,5 +193,5 @@ where
         }
     }
 
-    Err(Error::NotFound(format!("codec with name: {}", name)))
+    Err(Error::NotFound(format!("codec: {}", name)))
 }
