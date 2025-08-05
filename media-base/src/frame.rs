@@ -2,14 +2,15 @@ use std::sync::{Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use num_rational::Rational64;
 use smallvec::SmallVec;
-use variant::Variant;
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 use crate::pixel_buffer::video_frame::PixelBuffer;
 use crate::{
     error::Error,
     media::{FrameDescriptor, MediaType},
-    unsupported_error, Result,
+    unsupported_error,
+    variant::Variant,
+    Result,
 };
 
 const DEFAULT_MAX_PLANES: usize = 8;

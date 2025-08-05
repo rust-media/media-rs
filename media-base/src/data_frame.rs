@@ -1,9 +1,8 @@
-use variant::Variant;
-
 use crate::{
     data::{DataFormat, DataFrameDescriptor},
     frame::{Frame, FrameData},
     media::FrameDescriptor,
+    variant::Variant,
     Result,
 };
 

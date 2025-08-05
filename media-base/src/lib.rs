@@ -1,4 +1,4 @@
-pub extern crate x_variant as variant;
+pub use x_variant as variant;
 
 pub mod audio;
 pub mod audio_frame;
