@@ -21,7 +21,7 @@ edition = "2021"
 
 [workspace.dependencies.media-base]
 path = "media-base"
-version = "0.2.0"
+version = "0.2.1"
 
 [workspace.dependencies.media-device]
 path = "media-device"
@@ -29,4 +29,4 @@ version = "0.2.0"
 
 [workspace.dependencies.media]
 path = "media"
-version = "0.2.0"
+version = "0.2.1"
