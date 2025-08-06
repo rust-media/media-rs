@@ -116,7 +116,7 @@ impl MappedGuard<'_> {
     pub fn planes(&self) -> Option<MappedPlanes<'_>> {
         match &self.data_ref {
             DataRef::Immutable(data) => data.planes(),
-            DataRef::Mutable(_) => None,
+            DataRef::Mutable(data) => data.planes(),
         }
     }
 
@@ -520,6 +520,10 @@ impl Frame<'_> {
             metadata: self.metadata,
             data: self.data.into_owned(),
         }
+    }
+
+    pub fn to_owned(&self) -> Frame<'static> {
+        self.clone().into_owned()
     }
 
     pub fn descriptor(&self) -> &FrameDescriptor {
