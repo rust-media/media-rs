@@ -67,7 +67,8 @@ pub enum ColorMatrix {
     Identity = 0, // The identity matrix
     BT709,            // BT.709
     Unspecified,      // Unspecified
-    FCC      = 4,     // FCC Title 47 Code of Federal Regulations 73.682(a)(20)
+    Reserved,         // Reserved
+    FCC,              // FCC Title 47 Code of Federal Regulations 73.682(a)(20)
     BT470BG,          // BT.601 PAL & SECAM
     SMPTE170M,        // BT.601 NTSC
     SMPTE240M,        // SMPTE ST 240
@@ -139,6 +140,7 @@ pub enum PixelFormat {
     I420,   // planar YUV 4:2:0, 12 bits
     I422,   // planar YUV 4:2:2, 16 bits
     I444,   // planar YUV 4:4:4, 24 bits
+    I440,   // planar YUV 4:4:0, 16 bits
     NV12,   // biplanar YUV 4:2:0, 12 bits
     NV21,   // biplanar YUV 4:2:0, 12 bits
     NV16,   // biplanar YUV 4:2:2, 16 bits
@@ -162,18 +164,21 @@ pub enum PixelFormat {
     I010,   // planar YUV 4:2:0, 10 bits per channel
     I210,   // planar YUV 4:2:2, 10 bits per channel
     I410,   // planar YUV 4:4:4, 10 bits per channel
+    I44010, // planar YUV 4:4:0, 10 bits per channel
     P010,   // biplanar YUV 4:2:0, 10 bits per channel
     P210,   // biplanar YUV 4:2:2, 10 bits per channel
     P410,   // biplanar YUV 4:4:4, 10 bits per channel
     I012,   // planar YUV 4:2:2, 12 bits per channel
     I212,   // planar YUV 4:2:2, 12 bits per channel
     I412,   // planar YUV 4:4:4, 12 bits per channel
+    I44012, // planar YUV 4:4:0, 12 bits per channel
     P012,   // biplanar YUV 4:2:0, 12 bits per channel
     P212,   // biplanar YUV 4:2:2, 12 bits per channel
     P412,   // biplanar YUV 4:4:4, 12 bits per channel
     I016,   // planar YUV 4:2:0, 16 bits per channel
     I216,   // planar YUV 4:2:2, 16 bits per channel
     I416,   // planar YUV 4:4:4, 16 bits per channel
+    I44016, // planar YUV 4:4:0, 16 bits per channel
     P016,   // biplanar YUV 4:2:0, 16 bits per channel
     P216,   // biplanar YUV 4:2:2, 16 bits per channel
     P416,   // biplanar YUV 4:4:4, 16 bits per channel
@@ -396,6 +401,15 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         flags: pix_fmt_flags!(YUV | Planar),
         component_bytes: [1, 1, 1, 0],
     },
+    // I440
+    PixelFormatDescriptor {
+        components: 3,
+        chroma_shift_x: 0,
+        chroma_shift_y: 1,
+        depth: 8,
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
+        component_bytes: [1, 1, 1, 0],
+    },
     // NV12
     PixelFormatDescriptor {
         components: 2,
@@ -603,6 +617,15 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         flags: pix_fmt_flags!(YUV | Planar),
         component_bytes: [2, 2, 2, 0],
     },
+    // I44010
+    PixelFormatDescriptor {
+        components: 3,
+        chroma_shift_x: 0,
+        chroma_shift_y: 1,
+        depth: 10,
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
+        component_bytes: [2, 2, 2, 0],
+    },
     // P010
     PixelFormatDescriptor {
         components: 2,
@@ -657,6 +680,15 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         flags: pix_fmt_flags!(YUV | Planar),
         component_bytes: [2, 2, 2, 0],
     },
+    // I44012
+    PixelFormatDescriptor {
+        components: 3,
+        chroma_shift_x: 0,
+        chroma_shift_y: 1,
+        depth: 12,
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
+        component_bytes: [2, 2, 2, 0],
+    },
     // P012
     PixelFormatDescriptor {
         components: 2,
@@ -709,6 +741,15 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_y: 0,
         depth: 16,
         flags: pix_fmt_flags!(YUV | Planar),
+        component_bytes: [2, 2, 2, 0],
+    },
+    // I44016
+    PixelFormatDescriptor {
+        components: 3,
+        chroma_shift_x: 0,
+        chroma_shift_y: 1,
+        depth: 16,
+        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
         component_bytes: [2, 2, 2, 0],
     },
     // P016
