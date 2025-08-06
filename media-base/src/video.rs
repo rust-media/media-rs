@@ -407,7 +407,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 1,
         depth: 8,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
+        flags: pix_fmt_flags!(YUV | Planar),
         component_bytes: [1, 1, 1, 0],
     },
     // NV12
@@ -623,7 +623,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 1,
         depth: 10,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
+        flags: pix_fmt_flags!(YUV | Planar),
         component_bytes: [2, 2, 2, 0],
     },
     // P010
@@ -686,7 +686,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 1,
         depth: 12,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
+        flags: pix_fmt_flags!(YUV | Planar),
         component_bytes: [2, 2, 2, 0],
     },
     // P012
@@ -749,7 +749,7 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         chroma_shift_x: 0,
         chroma_shift_y: 1,
         depth: 16,
-        flags: PixelFormatFlags::YUV.bits() | PixelFormatFlags::Planar.bits(),
+        flags: pix_fmt_flags!(YUV | Planar),
         component_bytes: [2, 2, 2, 0],
     },
     // P016
