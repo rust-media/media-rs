@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, LazyLock, RwLock},
 };
 
-use media_base::{frame::SharedFrame, Result};
+use media_base::{frame::Frame, Result};
 use x_variant::Variant;
 
 use crate::{
@@ -13,7 +13,7 @@ use crate::{
 
 pub trait Decoder: Send + Sync {
     fn send_packet(&mut self, packet: &Packet) -> Result<()>;
-    fn receive_frame(&mut self) -> Result<SharedFrame>;
+    fn receive_frame(&mut self) -> Result<Frame<'static>>;
     fn flush(&mut self) -> Result<()>;
 }
 
@@ -74,7 +74,7 @@ impl DecoderContext {
         self.decoder.send_packet(packet)
     }
 
-    pub fn receive_frame(&mut self) -> Result<SharedFrame> {
+    pub fn receive_frame(&mut self) -> Result<Frame<'static>> {
         self.decoder.receive_frame()
     }
 

@@ -1,5 +1,7 @@
-use std::io::{self, Read, Write};
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    io::{self, Read, Write},
+};
 
 use bitflags::bitflags;
 use num_rational::Rational64;
@@ -53,7 +55,7 @@ impl<'a> Packet<'a> {
     pub fn from_slice(data: &'a [u8]) -> Self {
         Self::from_data(data)
     }
-    
+
     pub fn to_owned(&self) -> Packet<'static> {
         Packet {
             pts: self.pts,
@@ -66,7 +68,7 @@ impl<'a> Packet<'a> {
             data: Cow::Owned(self.data.to_vec()),
         }
     }
-    
+
     pub fn into_owned(self) -> Packet<'static> {
         Packet {
             pts: self.pts,
