@@ -161,6 +161,10 @@ impl MappedPlanes<'_> {
     pub fn plane_height(&self, index: usize) -> Option<u32> {
         self.planes.get(index).and_then(|plane| plane.height())
     }
+
+    pub fn len(&self) -> usize {
+        self.planes.len()
+    }
 }
 
 #[derive(Copy, Clone)]
