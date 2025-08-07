@@ -164,6 +164,14 @@ impl Frame<'_> {
         VideoFrameBuilder
     }
 
+    pub fn video_descriptor(&self) -> Option<&VideoFrameDescriptor> {
+        if let FrameDescriptor::Video(desc) = &self.desc {
+            Some(desc)
+        } else {
+            None
+        }
+    }
+
     pub fn is_video(&self) -> bool {
         self.desc.is_video()
     }

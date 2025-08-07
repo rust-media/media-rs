@@ -29,6 +29,14 @@ impl Frame<'_> {
         DataFrameBuilder
     }
 
+    pub fn data_descriptor(&self) -> Option<&DataFrameDescriptor> {
+        if let FrameDescriptor::Data(desc) = &self.desc {
+            Some(desc)
+        } else {
+            None
+        }
+    }
+
     pub fn is_data(&self) -> bool {
         self.desc.is_data()
     }

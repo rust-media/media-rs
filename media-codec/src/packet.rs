@@ -104,5 +104,5 @@ pub trait WritePacket: Write {
     }
 }
 
-impl<R: Read + ?Sized> ReadPacket for R {}
-impl<W: Write + ?Sized> WritePacket for W {}
+impl<T: Read + ?Sized> ReadPacket for T {}
+impl<T: Write + ?Sized> WritePacket for T {}
