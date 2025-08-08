@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use media_base::{error::Error, frame::Frame, Result};
+use media_base::{frame::Frame, Result};
 use variant::Variant;
 
 #[derive(Clone, Debug)]
