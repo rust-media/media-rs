@@ -12,9 +12,8 @@ use crate::{
 };
 
 pub trait Decoder: Send + Sync {
-    fn send_packet(&mut self, packet: &Packet) -> Result<()>;
-    fn receive_frame(&mut self) -> Result<Frame<'static>>;
-    fn flush(&mut self) -> Result<()>;
+    fn send_packet(&mut self, parameters: Option<&CodecParameters>, packet: &Packet) -> Result<()>;
+    fn receive_frame(&mut self, parameters: Option<&CodecParameters>) -> Result<Frame>;
 }
 
 pub trait DecoderBuilder: CodecBuilder {
@@ -71,14 +70,12 @@ impl DecoderContext {
     }
 
     pub fn send_packet(&mut self, packet: &Packet) -> Result<()> {
-        self.decoder.send_packet(packet)
+        let params = self.parameters.as_ref();
+        self.decoder.send_packet(params, packet)
     }
 
-    pub fn receive_frame(&mut self) -> Result<Frame<'static>> {
-        self.decoder.receive_frame()
-    }
-
-    pub fn flush(&mut self) -> Result<()> {
-        self.decoder.flush()
+    pub fn receive_frame(&mut self) -> Result<Frame> {
+        let params = self.parameters.as_ref();
+        self.decoder.receive_frame(params)
     }
 }

@@ -56,19 +56,6 @@ impl<'a> Packet<'a> {
         Self::from_data(data)
     }
 
-    pub fn to_owned(&self) -> Packet<'static> {
-        Packet {
-            pts: self.pts,
-            dts: self.dts,
-            duration: self.duration,
-            time_base: self.time_base,
-            flags: self.flags,
-            pos: self.pos,
-            stream_index: self.stream_index,
-            data: Cow::Owned(self.data.to_vec()),
-        }
-    }
-
     pub fn into_owned(self) -> Packet<'static> {
         Packet {
             pts: self.pts,
