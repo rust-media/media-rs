@@ -1,9 +1,12 @@
-use std::num::{NonZeroU32, NonZeroU8};
+use std::{
+    borrow::Cow,
+    num::{NonZeroU32, NonZeroU8},
+};
 
 use crate::{
     audio::{AudioFrameDescriptor, SampleFormat},
     error::Error,
-    frame::{Data, Frame, FrameData, MemoryData},
+    frame::{Frame, FrameData, MemoryData},
     media::FrameDescriptor,
     Result,
 };
@@ -20,20 +23,24 @@ impl AudioDataBuilder {
         };
 
         Ok(MemoryData {
-            data: Data::Owned(vec![initial_value; size as usize]),
+            data: vec![initial_value; size as usize].into(),
             planes,
         })
     }
 
-    fn from_buffer<'a>(format: SampleFormat, channels: NonZeroU8, samples: NonZeroU32, buffer: &'a [u8]) -> Result<MemoryData<'a>> {
+    fn from_buffer<'a, T>(format: SampleFormat, channels: NonZeroU8, samples: NonZeroU32, buffer: T) -> Result<MemoryData<'a>>
+    where
+        T: Into<Cow<'a, [u8]>>,
+    {
         let (size, planes) = format.calc_data(channels.get(), samples.get());
+        let buffer = buffer.into();
 
         if buffer.len() != size as usize {
             return Err(Error::Invalid("buffer size".to_string()));
         }
 
         Ok(MemoryData {
-            data: Data::Borrowed(buffer),
+            data: buffer,
             planes,
         })
     }
@@ -54,13 +61,19 @@ impl AudioFrameBuilder {
         Ok(Frame::default(FrameDescriptor::Audio(desc), FrameData::Memory(data)))
     }
 
-    pub fn from_buffer<'a>(&self, format: SampleFormat, channels: u8, samples: u32, sample_rate: u32, buffer: &'a [u8]) -> Result<Frame<'a>> {
+    pub fn from_buffer<'a, T>(&self, format: SampleFormat, channels: u8, samples: u32, sample_rate: u32, buffer: T) -> Result<Frame<'a>>
+    where
+        T: Into<Cow<'a, [u8]>>,
+    {
         let desc = AudioFrameDescriptor::try_new(format, channels, samples, sample_rate)?;
 
         self.from_buffer_with_descriptor(desc, buffer)
     }
 
-    pub fn from_buffer_with_descriptor<'a>(&self, desc: AudioFrameDescriptor, buffer: &'a [u8]) -> Result<Frame<'a>> {
+    pub fn from_buffer_with_descriptor<'a, T>(&self, desc: AudioFrameDescriptor, buffer: T) -> Result<Frame<'a>>
+    where
+        T: Into<Cow<'a, [u8]>>,
+    {
         let data = AudioDataBuilder::from_buffer(desc.format, desc.channels(), desc.samples, buffer)?;
 
         Ok(Frame::default(FrameDescriptor::Audio(desc), FrameData::Memory(data)))

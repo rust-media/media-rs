@@ -1,4 +1,7 @@
-use std::sync::{Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::{
+    borrow::Cow,
+    sync::{Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard},
+};
 
 use num_rational::Rational64;
 use smallvec::SmallVec;
@@ -174,46 +177,15 @@ pub(crate) enum PlaneInformation {
 pub(crate) type PlaneInformationVec = SmallVec<[PlaneInformation; DEFAULT_MAX_PLANES]>;
 
 #[derive(Clone)]
-pub(crate) enum Data<'a> {
-    Owned(Vec<u8>),
-    Borrowed(&'a [u8]),
-}
-
-impl Data<'_> {
-    fn as_slice(&self) -> &[u8] {
-        match self {
-            Data::Owned(ref vec) => vec.as_slice(),
-            Data::Borrowed(slice) => slice,
-        }
-    }
-
-    fn as_mut_slice(&mut self) -> Option<&mut [u8]> {
-        match self {
-            Data::Owned(ref mut vec) => Some(vec.as_mut_slice()),
-            Data::Borrowed(_) => None,
-        }
-    }
-}
-
-impl Data<'_> {
-    fn into_owned(self) -> Vec<u8> {
-        match self {
-            Data::Owned(data) => data,
-            Data::Borrowed(data) => data.to_vec(),
-        }
-    }
-}
-
-#[derive(Clone)]
 pub(crate) struct MemoryData<'a> {
-    pub(crate) data: Data<'a>,
+    pub(crate) data: Cow<'a, [u8]>,
     pub(crate) planes: PlaneInformationVec,
 }
 
 impl MemoryData<'_> {
     fn into_owned(self) -> MemoryData<'static> {
         MemoryData {
-            data: Data::Owned(self.data.into_owned()),
+            data: Cow::Owned(self.data.into_owned()),
             planes: self.planes,
         }
     }
@@ -237,7 +209,7 @@ impl SeparateMemoryData<'_> {
         }
 
         MemoryData {
-            data: Data::Owned(data),
+            data: Cow::Owned(data),
             planes,
         }
     }
@@ -295,7 +267,7 @@ impl DataMappable for MemoryData<'_> {
     }
 
     fn planes(&self) -> Option<MappedPlanes<'_>> {
-        let mut data_slice = self.data.as_slice();
+        let mut data_slice = self.data.as_ref();
         let mut planes = SmallVec::new();
 
         for plane in &self.planes {
@@ -330,7 +302,10 @@ impl DataMappable for MemoryData<'_> {
     }
 
     fn planes_mut(&mut self) -> Option<MappedPlanes<'_>> {
-        let mut data_slice = self.data.as_mut_slice()?;
+        let mut data_slice = match &mut self.data {
+            Cow::Owned(vec) => vec.as_mut_slice(),
+            Cow::Borrowed(_) => return None,
+        };
         let mut planes = SmallVec::new();
 
         for plane in &self.planes {
@@ -526,10 +501,6 @@ impl Frame<'_> {
         }
     }
 
-    pub fn to_owned(&self) -> Frame<'static> {
-        self.clone().into_owned()
-    }
-
     pub fn descriptor(&self) -> &FrameDescriptor {
         &self.desc
     }
@@ -549,9 +520,9 @@ pub struct SharedFrame {
 }
 
 impl SharedFrame {
-    pub fn new(frame: Frame<'static>) -> Self {
+    pub fn new(frame: Frame<'_>) -> Self {
         Self {
-            inner: Arc::new(RwLock::new(frame)),
+            inner: Arc::new(RwLock::new(frame.into_owned())),
         }
     }
 
