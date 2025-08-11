@@ -71,7 +71,7 @@ impl<'a> Packet<'a> {
 }
 
 pub trait ReadPacket: Read {
-    fn read_packet(&mut self, size: usize) -> io::Result<Packet> {
+    fn read_packet(&mut self, size: usize) -> io::Result<Packet<'_>> {
         let mut packet = Packet::new(size);
 
         if let Cow::Owned(ref mut vec) = packet.data {

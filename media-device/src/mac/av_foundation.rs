@@ -160,7 +160,7 @@ impl AVFoundationCaptureDeviceManager {
     fn list_devices() -> Result<Vec<AVFoundationCaptureDevice>> {
         let av_capture_devices = Self::get_av_devices();
 
-        let mut devices = Vec::with_capacity(av_capture_devices.count() as usize);
+        let mut devices = Vec::with_capacity(av_capture_devices.count() as _);
 
         for device in av_capture_devices.iter() {
             let dev_info = DeviceInformation::from_av_capture_device(device);
@@ -229,7 +229,7 @@ declare_class!(
             let video_frame = sample_buffer
                 .get_image_buffer()
                 .and_then(|image_buffer| image_buffer.downcast::<CVPixelBuffer>())
-                .and_then(|pixel_buffer| Frame::video_builder().from_pixel_buffer(&pixel_buffer).ok());
+                .and_then(|pixel_buffer| Frame::video_creator().create_from_pixel_buffer(&pixel_buffer).ok());
 
             if let Some(mut video_frame) = video_frame {
                 if let Some(handler) = self.ivars().handler.as_ref() {
@@ -562,8 +562,8 @@ impl Device for AVFoundationCaptureDevice {
         Ok(())
     }
 
-    fn control(&mut self, action: Variant) -> Result<()> {
-        Ok(())
+    fn control(&mut self, _action: Variant) -> Result<()> {
+        Err(Error::NotImplemented)
     }
 
     fn running(&self) -> bool {

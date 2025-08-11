@@ -154,9 +154,9 @@ where
     })
 }
 
-impl Into<YuvRange> for ColorRange {
-    fn into(self) -> YuvRange {
-        match self {
+impl From<ColorRange> for YuvRange {
+    fn from(range: ColorRange) -> Self {
+        match range {
             ColorRange::Video => YuvRange::Limited,
             ColorRange::Full => YuvRange::Full,
             _ => YuvRange::Limited,
@@ -164,9 +164,9 @@ impl Into<YuvRange> for ColorRange {
     }
 }
 
-impl Into<YuvStandardMatrix> for ColorMatrix {
-    fn into(self) -> YuvStandardMatrix {
-        match self {
+impl From<ColorMatrix> for YuvStandardMatrix {
+    fn from(color_matrix: ColorMatrix) -> Self {
+        match color_matrix {
             ColorMatrix::BT709 => YuvStandardMatrix::Bt709,
             ColorMatrix::BT2020CL | ColorMatrix::BT2020NCL => YuvStandardMatrix::Bt2020,
             ColorMatrix::SMPTE240M => YuvStandardMatrix::Smpte240,

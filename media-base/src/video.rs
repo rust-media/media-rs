@@ -862,7 +862,7 @@ impl PixelFormat {
             }
             PixelFormat::YA8 => {
                 let stride = align_to(width * desc.component_bytes[0] as u32, cmp::max(alignment, 4));
-                planes.extend(iter::repeat(PlaneInformation::Video(stride, height)).take(2));
+                planes.extend(iter::repeat_n(PlaneInformation::Video(stride, height), 2));
                 size = stride * height * 2;
             }
             PixelFormat::YUYV | PixelFormat::YVYU | PixelFormat::UYVY | PixelFormat::VYUY | PixelFormat::AYUV => {

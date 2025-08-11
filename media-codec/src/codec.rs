@@ -12,12 +12,14 @@ use media_base::{
 };
 use num_rational::Rational64;
 
+#[allow(non_camel_case_types, clippy::upper_case_acronyms)]
 #[repr(u16)]
 enum AudioCodecID {
     AAC = 1,
     Opus,
 }
 
+#[allow(non_camel_case_types, clippy::upper_case_acronyms)]
 #[repr(u16)]
 enum VideoCodecID {
     H264 = 1,

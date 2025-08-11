@@ -9,10 +9,10 @@ use crate::{
     Result, DEFAULT_ALIGNMENT,
 };
 
-pub struct VideoDataBuilder;
+pub struct VideoDataCreator;
 
-impl VideoDataBuilder {
-    fn new(format: PixelFormat, width: NonZeroU32, height: NonZeroU32) -> Result<MemoryData<'static>> {
+impl VideoDataCreator {
+    fn create(format: PixelFormat, width: NonZeroU32, height: NonZeroU32) -> Result<MemoryData<'static>> {
         let (size, planes) = format.calc_data(width.get(), height.get(), DEFAULT_ALIGNMENT);
 
         Ok(MemoryData {
@@ -21,7 +21,7 @@ impl VideoDataBuilder {
         })
     }
 
-    fn from_buffer<'a, T>(format: PixelFormat, width: NonZeroU32, height: NonZeroU32, buffer: T) -> Result<MemoryData<'a>>
+    fn create_from_buffer<'a, T>(format: PixelFormat, width: NonZeroU32, height: NonZeroU32, buffer: T) -> Result<MemoryData<'a>>
     where
         T: Into<Cow<'a, [u8]>>,
     {
@@ -38,7 +38,7 @@ impl VideoDataBuilder {
         })
     }
 
-    fn from_aligned_buffer<'a, T>(format: PixelFormat, height: NonZeroU32, stride: NonZeroU32, buffer: T) -> Result<MemoryData<'a>>
+    fn create_from_aligned_buffer<'a, T>(format: PixelFormat, height: NonZeroU32, stride: NonZeroU32, buffer: T) -> Result<MemoryData<'a>>
     where
         T: Into<Cow<'a, [u8]>>,
     {
@@ -57,7 +57,7 @@ impl VideoDataBuilder {
         Ok(data)
     }
 
-    fn from_packed_buffer<'a, T>(format: PixelFormat, height: NonZeroU32, stride: NonZeroU32, buffer: T) -> Result<MemoryData<'a>>
+    fn create_from_packed_buffer<'a, T>(format: PixelFormat, height: NonZeroU32, stride: NonZeroU32, buffer: T) -> Result<MemoryData<'a>>
     where
         T: Into<Cow<'a, [u8]>>,
     {
@@ -82,56 +82,56 @@ impl VideoDataBuilder {
     }
 }
 
-pub struct VideoFrameBuilder;
+pub struct VideoFrameCreator;
 
-impl VideoFrameBuilder {
-    pub fn new(&self, format: PixelFormat, width: u32, height: u32) -> Result<Frame<'static>> {
+impl VideoFrameCreator {
+    pub fn create(&self, format: PixelFormat, width: u32, height: u32) -> Result<Frame<'static>> {
         let desc = VideoFrameDescriptor::try_new(format, width, height)?;
 
-        self.new_with_descriptor(desc)
+        self.create_with_descriptor(desc)
     }
 
-    pub fn new_with_descriptor(&self, desc: VideoFrameDescriptor) -> Result<Frame<'static>> {
-        let data = VideoDataBuilder::new(desc.format, desc.width, desc.height)?;
+    pub fn create_with_descriptor(&self, desc: VideoFrameDescriptor) -> Result<Frame<'static>> {
+        let data = VideoDataCreator::create(desc.format, desc.width, desc.height)?;
 
-        Ok(Self::from_data(desc, data))
+        Ok(Self::create_from_data(desc, data))
     }
 
-    pub fn from_buffer<'a, T>(&self, format: PixelFormat, width: u32, height: u32, buffer: T) -> Result<Frame<'a>>
+    pub fn create_from_buffer<'a, T>(&self, format: PixelFormat, width: u32, height: u32, buffer: T) -> Result<Frame<'a>>
     where
         T: Into<Cow<'a, [u8]>>,
     {
         let desc = VideoFrameDescriptor::try_new(format, width, height)?;
 
-        self.from_buffer_with_descriptor(desc, buffer)
+        self.create_from_buffer_with_descriptor(desc, buffer)
     }
 
-    pub fn from_buffer_with_descriptor<'a, T>(&self, desc: VideoFrameDescriptor, buffer: T) -> Result<Frame<'a>>
+    pub fn create_from_buffer_with_descriptor<'a, T>(&self, desc: VideoFrameDescriptor, buffer: T) -> Result<Frame<'a>>
     where
         T: Into<Cow<'a, [u8]>>,
     {
-        let data = VideoDataBuilder::from_buffer(desc.format, desc.width, desc.height, buffer)?;
+        let data = VideoDataCreator::create_from_buffer(desc.format, desc.width, desc.height, buffer)?;
 
-        Ok(Self::from_data(desc, data))
+        Ok(Self::create_from_data(desc, data))
     }
 
-    pub fn from_aligned_buffer<'a, T>(&self, format: PixelFormat, width: u32, height: u32, stride: u32, buffer: T) -> Result<Frame<'a>>
+    pub fn create_from_aligned_buffer<'a, T>(&self, format: PixelFormat, width: u32, height: u32, stride: u32, buffer: T) -> Result<Frame<'a>>
     where
         T: Into<Cow<'a, [u8]>>,
     {
         let desc = VideoFrameDescriptor::try_new(format, width, height)?;
         let stride = NonZeroU32::new(stride).ok_or(invalid_param_error!(stride))?;
 
-        self.from_aligned_buffer_with_descriptor(desc, stride, buffer)
+        self.create_from_aligned_buffer_with_descriptor(desc, stride, buffer)
     }
 
-    pub fn from_aligned_buffer_with_descriptor<'a, T>(&self, desc: VideoFrameDescriptor, stride: NonZeroU32, buffer: T) -> Result<Frame<'a>>
+    pub fn create_from_aligned_buffer_with_descriptor<'a, T>(&self, desc: VideoFrameDescriptor, stride: NonZeroU32, buffer: T) -> Result<Frame<'a>>
     where
         T: Into<Cow<'a, [u8]>>,
     {
-        let data = VideoDataBuilder::from_aligned_buffer(desc.format, desc.height, stride, buffer)?;
+        let data = VideoDataCreator::create_from_aligned_buffer(desc.format, desc.height, stride, buffer)?;
 
-        Ok(Self::from_data(desc, data))
+        Ok(Self::create_from_data(desc, data))
     }
 
     pub fn from_packed_buffer<'a, T>(&self, format: PixelFormat, width: u32, height: u32, stride: u32, buffer: T) -> Result<Frame<'a>>
@@ -148,25 +148,25 @@ impl VideoFrameBuilder {
     where
         T: Into<Cow<'a, [u8]>>,
     {
-        let data = VideoDataBuilder::from_packed_buffer(desc.format, desc.height, stride, buffer)?;
+        let data = VideoDataCreator::create_from_packed_buffer(desc.format, desc.height, stride, buffer)?;
 
-        Ok(Self::from_data(desc, data))
+        Ok(Self::create_from_data(desc, data))
     }
 
-    pub fn from_buffers<'a>(&self, format: PixelFormat, width: u32, height: u32, buffers: &[(&'a [u8], u32)]) -> Result<Frame<'a>> {
+    pub fn create_from_buffers<'a>(&self, format: PixelFormat, width: u32, height: u32, buffers: &[(&'a [u8], u32)]) -> Result<Frame<'a>> {
         let desc = VideoFrameDescriptor::try_new(format, width, height)?;
 
-        self.from_buffers_with_descriptor(desc, buffers)
+        self.create_from_buffers_with_descriptor(desc, buffers)
     }
 
-    pub fn from_buffers_with_descriptor<'a>(&self, desc: VideoFrameDescriptor, buffers: &[(&'a [u8], u32)]) -> Result<Frame<'a>> {
+    pub fn create_from_buffers_with_descriptor<'a>(&self, desc: VideoFrameDescriptor, buffers: &[(&'a [u8], u32)]) -> Result<Frame<'a>> {
         let data = SeparateMemoryData::from_buffers(desc.format, desc.height, buffers)?;
 
-        Ok(Frame::default(FrameDescriptor::Video(desc), FrameData::SeparateMemory(data)))
+        Ok(Frame::from_data(FrameDescriptor::Video(desc), FrameData::SeparateMemory(data)))
     }
 
-    fn from_data<'a>(desc: VideoFrameDescriptor, data: MemoryData<'a>) -> Frame<'a> {
-        Frame::default(FrameDescriptor::Video(desc), FrameData::Memory(data))
+    fn create_from_data(desc: VideoFrameDescriptor, data: MemoryData<'_>) -> Frame<'_> {
+        Frame::from_data(FrameDescriptor::Video(desc), FrameData::Memory(data))
     }
 }
 
@@ -191,8 +191,8 @@ impl<'a> SeparateMemoryData<'a> {
 }
 
 impl Frame<'_> {
-    pub fn video_builder() -> VideoFrameBuilder {
-        VideoFrameBuilder
+    pub fn video_creator() -> VideoFrameCreator {
+        VideoFrameCreator
     }
 
     pub fn video_descriptor(&self) -> Option<&VideoFrameDescriptor> {

@@ -285,7 +285,7 @@ impl SampleFormat {
         let stride = self.stride(channels, samples);
 
         if self.is_planar() {
-            planes.extend(iter::repeat(PlaneInformation::Audio(stride)).take(channels as usize));
+            planes.extend(iter::repeat_n(PlaneInformation::Audio(stride), channels as usize));
             size += stride * channels as u32;
         } else {
             planes.push(PlaneInformation::Audio(stride));

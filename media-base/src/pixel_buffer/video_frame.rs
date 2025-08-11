@@ -22,7 +22,7 @@ use crate::{
     media::FrameDescriptor,
     none_param_error,
     video::{ColorMatrix, ColorPrimaries, ColorRange, ColorTransferCharacteristics, PixelFormat, VideoFrameDescriptor},
-    video_frame::VideoFrameBuilder,
+    video_frame::VideoFrameCreator,
     Result,
 };
 
@@ -376,14 +376,14 @@ fn from_cv_color_transfer_function(color_transfer_function: &CFString, gamma: Op
     }
 }
 
-impl VideoFrameBuilder {
-    pub fn new_pixel_buffer(&self, format: PixelFormat, width: u32, height: u32) -> Result<Frame<'static>> {
+impl VideoFrameCreator {
+    pub fn create_pixel_buffer(&self, format: PixelFormat, width: u32, height: u32) -> Result<Frame<'static>> {
         let desc = VideoFrameDescriptor::try_new(format, width, height)?;
 
-        self.new_pixel_buffer_with_descriptor(desc)
+        self.create_pixel_buffer_with_descriptor(desc)
     }
 
-    pub fn new_pixel_buffer_with_descriptor(&self, desc: VideoFrameDescriptor) -> Result<Frame<'static>> {
+    pub fn create_pixel_buffer_with_descriptor(&self, desc: VideoFrameDescriptor) -> Result<Frame<'static>> {
         let pixel_format = into_cv_format(desc.format, desc.color_range);
         #[cfg(target_os = "macos")]
         let compatibility_key: CFString = {
@@ -441,10 +441,10 @@ impl VideoFrameBuilder {
             buffer.set_attachment(&CVImageBufferKeys::GammaLevel.into(), &gamma.as_CFType(), kCVAttachmentMode_ShouldPropagate);
         }
 
-        Ok(Frame::default(FrameDescriptor::Video(desc), FrameData::PixelBuffer(PixelBuffer(pixel_buffer))))
+        Ok(Frame::from_data(FrameDescriptor::Video(desc), FrameData::PixelBuffer(PixelBuffer(pixel_buffer))))
     }
 
-    pub fn from_pixel_buffer(&self, pixel_buffer: &CVPixelBuffer) -> Result<Frame<'static>> {
+    pub fn create_from_pixel_buffer(&self, pixel_buffer: &CVPixelBuffer) -> Result<Frame<'static>> {
         let width = pixel_buffer.get_width() as u32;
         let width = NonZeroU32::new(width).ok_or(invalid_param_error!(width))?;
         let height = pixel_buffer.get_height() as u32;
@@ -517,7 +517,7 @@ impl VideoFrameBuilder {
             }
         }
 
-        Ok(Frame::default(FrameDescriptor::Video(desc), FrameData::PixelBuffer(PixelBuffer(pixel_buffer.clone()))))
+        Ok(Frame::from_data(FrameDescriptor::Video(desc), FrameData::PixelBuffer(PixelBuffer(pixel_buffer.clone()))))
     }
 }
 

@@ -11,10 +11,10 @@ use crate::{
     Result,
 };
 
-pub struct AudioDataBuilder;
+pub struct AudioDataCreator;
 
-impl AudioDataBuilder {
-    fn new(format: SampleFormat, channels: NonZeroU8, samples: NonZeroU32) -> Result<MemoryData<'static>> {
+impl AudioDataCreator {
+    fn create(format: SampleFormat, channels: NonZeroU8, samples: NonZeroU32) -> Result<MemoryData<'static>> {
         let (size, planes) = format.calc_data(channels.get(), samples.get());
         let initial_value = if matches!(format, SampleFormat::U8 | SampleFormat::U8P) {
             0x80
@@ -28,7 +28,7 @@ impl AudioDataBuilder {
         })
     }
 
-    fn from_buffer<'a, T>(format: SampleFormat, channels: NonZeroU8, samples: NonZeroU32, buffer: T) -> Result<MemoryData<'a>>
+    fn create_from_buffer<'a, T>(format: SampleFormat, channels: NonZeroU8, samples: NonZeroU32, buffer: T) -> Result<MemoryData<'a>>
     where
         T: Into<Cow<'a, [u8]>>,
     {
@@ -46,48 +46,48 @@ impl AudioDataBuilder {
     }
 }
 
-pub struct AudioFrameBuilder;
+pub struct AudioFrameCreator;
 
-impl AudioFrameBuilder {
-    pub fn new(&self, format: SampleFormat, channels: u8, samples: u32, sample_rate: u32) -> Result<Frame<'static>> {
+impl AudioFrameCreator {
+    pub fn create(&self, format: SampleFormat, channels: u8, samples: u32, sample_rate: u32) -> Result<Frame<'static>> {
         let desc = AudioFrameDescriptor::try_new(format, channels, samples, sample_rate)?;
 
-        self.new_with_descriptor(desc)
+        self.create_with_descriptor(desc)
     }
 
-    pub fn new_with_descriptor(&self, desc: AudioFrameDescriptor) -> Result<Frame<'static>> {
-        let data = AudioDataBuilder::new(desc.format, desc.channels(), desc.samples)?;
+    pub fn create_with_descriptor(&self, desc: AudioFrameDescriptor) -> Result<Frame<'static>> {
+        let data = AudioDataCreator::create(desc.format, desc.channels(), desc.samples)?;
 
-        Ok(Frame::default(FrameDescriptor::Audio(desc), FrameData::Memory(data)))
+        Ok(Frame::from_data(FrameDescriptor::Audio(desc), FrameData::Memory(data)))
     }
 
-    pub fn from_buffer<'a, T>(&self, format: SampleFormat, channels: u8, samples: u32, sample_rate: u32, buffer: T) -> Result<Frame<'a>>
+    pub fn create_from_buffer<'a, T>(&self, format: SampleFormat, channels: u8, samples: u32, sample_rate: u32, buffer: T) -> Result<Frame<'a>>
     where
         T: Into<Cow<'a, [u8]>>,
     {
         let desc = AudioFrameDescriptor::try_new(format, channels, samples, sample_rate)?;
 
-        self.from_buffer_with_descriptor(desc, buffer)
+        self.create_from_buffer_with_descriptor(desc, buffer)
     }
 
-    pub fn from_buffer_with_descriptor<'a, T>(&self, desc: AudioFrameDescriptor, buffer: T) -> Result<Frame<'a>>
+    pub fn create_from_buffer_with_descriptor<'a, T>(&self, desc: AudioFrameDescriptor, buffer: T) -> Result<Frame<'a>>
     where
         T: Into<Cow<'a, [u8]>>,
     {
-        let data = AudioDataBuilder::from_buffer(desc.format, desc.channels(), desc.samples, buffer)?;
+        let data = AudioDataCreator::create_from_buffer(desc.format, desc.channels(), desc.samples, buffer)?;
 
-        Ok(Frame::default(FrameDescriptor::Audio(desc), FrameData::Memory(data)))
+        Ok(Frame::from_data(FrameDescriptor::Audio(desc), FrameData::Memory(data)))
     }
 }
 
 impl Frame<'_> {
-    pub fn audio_builder() -> AudioFrameBuilder {
-        AudioFrameBuilder
+    pub fn audio_creator() -> AudioFrameCreator {
+        AudioFrameCreator
     }
 
     pub fn audio_descriptor(&self) -> Option<&AudioFrameDescriptor> {
         if let FrameDescriptor::Audio(desc) = &self.desc {
-            Some(&desc)
+            Some(desc)
         } else {
             None
         }

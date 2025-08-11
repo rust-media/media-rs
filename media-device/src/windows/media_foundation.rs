@@ -387,9 +387,9 @@ impl IMFSourceReaderCallback_Impl for SourceReaderCallback_Impl {
                 desc.origin = origin;
 
                 let video_frame = if stride != 0 {
-                    Frame::video_builder().from_aligned_buffer_with_descriptor(desc, NonZeroU32::new(stride).unwrap(), locked_buffer.data)
+                    Frame::video_creator().create_from_aligned_buffer_with_descriptor(desc, NonZeroU32::new(stride).unwrap(), locked_buffer.data)
                 } else {
-                    Frame::video_builder().from_buffer_with_descriptor(desc, locked_buffer.data)
+                    Frame::video_creator().create_from_buffer_with_descriptor(desc, locked_buffer.data)
                 };
 
                 if let Ok(mut video_frame) = video_frame {
@@ -427,8 +427,7 @@ impl IMFSourceReaderCallback_Impl for SourceReaderCallback_Impl {
 }
 
 fn from_mf_video_format(subtype: GUID) -> Option<VideoFormat> {
-    #[allow(non_snake_case)]
-    #[allow(non_upper_case_globals)]
+    #[allow(non_snake_case, non_upper_case_globals)]
     match subtype {
         MFVideoFormat_I420 => Some(VideoFormat::Pixel(PixelFormat::I420)),
         MFVideoFormat_YUY2 => Some(VideoFormat::Pixel(PixelFormat::YUYV)),
@@ -469,10 +468,7 @@ fn from_mf_media_type(media_type: &IMFMediaType) -> Option<CameraFormat> {
         Err(_) => return None,
     };
 
-    let format = match from_mf_video_format(subtype) {
-        Some(format) => format,
-        None => return None,
-    };
+    let format = from_mf_video_format(subtype)?;
 
     let color_range = match unsafe { media_type.GetUINT32(&MF_MT_VIDEO_NOMINAL_RANGE) } {
         #[allow(non_upper_case_globals)]
@@ -752,8 +748,8 @@ impl Device for MediaFoundationDevice {
         Ok(())
     }
 
-    fn control(&mut self, action: Variant) -> Result<()> {
-        Ok(())
+    fn control(&mut self, _action: Variant) -> Result<()> {
+        Err(Error::NotImplemented)
     }
 
     fn running(&self) -> bool {

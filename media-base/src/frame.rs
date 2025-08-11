@@ -163,6 +163,10 @@ impl MappedPlanes<'_> {
         self.planes.get(index).and_then(|plane| plane.height())
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.planes.is_empty()
+    }
+
     pub fn len(&self) -> usize {
         self.planes.len()
     }
@@ -459,19 +463,19 @@ pub struct Frame<'a> {
 pub type MediaFrame<'a> = Frame<'a>;
 
 impl Frame<'_> {
-    pub fn new_with_descriptor<T>(desc: T) -> Result<Frame<'static>>
+    pub fn with_descriptor<T>(desc: T) -> Result<Frame<'static>>
     where
         T: Into<FrameDescriptor> + Clone,
     {
         let desc = desc.into();
         match desc {
-            FrameDescriptor::Audio(audio_desc) => Self::audio_builder().new_with_descriptor(audio_desc),
-            FrameDescriptor::Video(video_desc) => Self::video_builder().new_with_descriptor(video_desc),
-            FrameDescriptor::Data(data_desc) => Self::data_builder().new_with_descriptor(data_desc),
+            FrameDescriptor::Audio(audio_desc) => Self::audio_creator().create_with_descriptor(audio_desc),
+            FrameDescriptor::Video(video_desc) => Self::video_creator().create_with_descriptor(video_desc),
+            FrameDescriptor::Data(data_desc) => Self::data_creator().create_with_descriptor(data_desc),
         }
     }
 
-    pub(crate) fn default<'a>(desc: FrameDescriptor, data: FrameData<'a>) -> Frame<'a> {
+    pub(crate) fn from_data(desc: FrameDescriptor, data: FrameData<'_>) -> Frame<'_> {
         Frame {
             desc,
             source: None,
@@ -526,11 +530,11 @@ impl SharedFrame {
         }
     }
 
-    pub fn read(&self) -> LockResult<RwLockReadGuard<Frame<'static>>> {
+    pub fn read(&self) -> LockResult<RwLockReadGuard<'_, Frame<'static>>> {
         self.inner.read()
     }
 
-    pub fn write(&self) -> LockResult<RwLockWriteGuard<Frame<'static>>> {
+    pub fn write(&self) -> LockResult<RwLockWriteGuard<'_, Frame<'static>>> {
         self.inner.write()
     }
 }
