@@ -1,91 +1,99 @@
-use std::num::{NonZeroU32, NonZeroU8};
-
-use super::{
-    audio::{AudioFormat, AudioFrameDescriptor},
-    error::MediaError,
-    media::MediaFrameType,
-    media_frame::{Data, MediaFrame, MediaFrameData, MediaFrameDescriptor, MemoryData},
+use std::{
+    borrow::Cow,
+    num::{NonZeroU32, NonZeroU8},
 };
 
-pub struct AudioDataBuilder;
+use crate::{
+    audio::{AudioFrameDescriptor, SampleFormat},
+    error::Error,
+    frame::{Frame, FrameData, MemoryData},
+    media::FrameDescriptor,
+    Result,
+};
 
-impl AudioDataBuilder {
-    fn new(format: AudioFormat, channels: NonZeroU8, samples: NonZeroU32) -> Result<MemoryData<'static>, MediaError> {
+pub struct AudioDataCreator;
+
+impl AudioDataCreator {
+    fn create(format: SampleFormat, channels: NonZeroU8, samples: NonZeroU32) -> Result<MemoryData<'static>> {
         let (size, planes) = format.calc_data(channels.get(), samples.get());
-        let initial_value = if matches!(format, AudioFormat::U8 | AudioFormat::U8P) {
+        let initial_value = if matches!(format, SampleFormat::U8 | SampleFormat::U8P) {
             0x80
         } else {
             0
         };
 
         Ok(MemoryData {
-            data: Data::Owned(vec![initial_value; size as usize]),
+            data: vec![initial_value; size as usize].into(),
             planes,
         })
     }
 
-    fn from_buffer<'a>(format: AudioFormat, channels: NonZeroU8, samples: NonZeroU32, buffer: &'a [u8]) -> Result<MemoryData<'a>, MediaError> {
+    fn create_from_buffer<'a, T>(format: SampleFormat, channels: NonZeroU8, samples: NonZeroU32, buffer: T) -> Result<MemoryData<'a>>
+    where
+        T: Into<Cow<'a, [u8]>>,
+    {
         let (size, planes) = format.calc_data(channels.get(), samples.get());
+        let buffer = buffer.into();
 
         if buffer.len() != size as usize {
-            return Err(MediaError::Invalid("buffer size".to_string()));
+            return Err(Error::Invalid("buffer size".to_string()));
         }
 
         Ok(MemoryData {
-            data: Data::Borrowed(buffer),
+            data: buffer,
             planes,
         })
     }
 }
 
-pub struct AudioFrameBuilder;
+pub struct AudioFrameCreator;
 
-impl AudioFrameBuilder {
-    pub fn new(&self, format: AudioFormat, channels: u8, samples: u32, sample_rate: u32) -> Result<MediaFrame<'static>, MediaError> {
+impl AudioFrameCreator {
+    pub fn create(&self, format: SampleFormat, channels: u8, samples: u32, sample_rate: u32) -> Result<Frame<'static>> {
         let desc = AudioFrameDescriptor::try_new(format, channels, samples, sample_rate)?;
 
-        self.new_with_descriptor(desc)
+        self.create_with_descriptor(desc)
     }
 
-    pub fn new_with_descriptor(&self, desc: AudioFrameDescriptor) -> Result<MediaFrame<'static>, MediaError> {
-        let data = AudioDataBuilder::new(desc.format, desc.channels, desc.samples)?;
+    pub fn create_with_descriptor(&self, desc: AudioFrameDescriptor) -> Result<Frame<'static>> {
+        let data = AudioDataCreator::create(desc.format, desc.channels(), desc.samples)?;
 
-        Ok(MediaFrame {
-            media_type: MediaFrameType::Audio,
-            source: None,
-            timestamp: 0,
-            desc: MediaFrameDescriptor::Audio(desc),
-            metadata: None,
-            data: MediaFrameData::Memory(data),
-        })
+        Ok(Frame::from_data(FrameDescriptor::Audio(desc), FrameData::Memory(data)))
     }
 
-    pub fn from_buffer<'a>(&self, format: AudioFormat, channels: u8, samples: u32, sample_rate: u32, buffer: &'a [u8]) -> Result<MediaFrame<'a>, MediaError> {
+    pub fn create_from_buffer<'a, T>(&self, format: SampleFormat, channels: u8, samples: u32, sample_rate: u32, buffer: T) -> Result<Frame<'a>>
+    where
+        T: Into<Cow<'a, [u8]>>,
+    {
         let desc = AudioFrameDescriptor::try_new(format, channels, samples, sample_rate)?;
 
-        self.from_buffer_with_descriptor(desc, buffer)
+        self.create_from_buffer_with_descriptor(desc, buffer)
     }
 
-    pub fn from_buffer_with_descriptor<'a>(
-        &self,
-        desc: AudioFrameDescriptor,
-        buffer: &'a [u8],
-    ) -> Result<MediaFrame<'a>, MediaError> {
-        let data = AudioDataBuilder::from_buffer(desc.format, desc.channels, desc.samples, buffer)?;
+    pub fn create_from_buffer_with_descriptor<'a, T>(&self, desc: AudioFrameDescriptor, buffer: T) -> Result<Frame<'a>>
+    where
+        T: Into<Cow<'a, [u8]>>,
+    {
+        let data = AudioDataCreator::create_from_buffer(desc.format, desc.channels(), desc.samples, buffer)?;
 
-        Ok(MediaFrame {
-            media_type: MediaFrameType::Audio,
-            source: None,
-            timestamp: 0,
-            desc: MediaFrameDescriptor::Audio(desc),
-            metadata: None,
-            data: MediaFrameData::Memory(data),
-        })
+        Ok(Frame::from_data(FrameDescriptor::Audio(desc), FrameData::Memory(data)))
     }
 }
 
-impl MediaFrame<'_> {
-    pub fn audio_builder() -> AudioFrameBuilder {
-        AudioFrameBuilder
+impl Frame<'_> {
+    pub fn audio_creator() -> AudioFrameCreator {
+        AudioFrameCreator
+    }
+
+    pub fn audio_descriptor(&self) -> Option<&AudioFrameDescriptor> {
+        if let FrameDescriptor::Audio(desc) = &self.desc {
+            Some(desc)
+        } else {
+            None
+        }
+    }
+
+    pub fn is_audio(&self) -> bool {
+        self.desc.is_audio()
     }
 }

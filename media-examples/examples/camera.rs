@@ -1,6 +1,6 @@
 use media::{
     device::{camera::CameraManager, Device, OutputDevice},
-    media_frame::SharedMediaFrame,
+    frame::SharedFrame,
     variant::Variant,
 };
 
@@ -34,7 +34,7 @@ fn main() {
     if let Err(e) = device.set_output_handler(|frame| {
         println!("frame source: {:?}", frame.source);
         println!("frame desc: {:?}", frame.descriptor());
-        println!("frame timestamp: {:?}", frame.timestamp);
+        println!("frame timestamp: {:?}", frame.pts);
 
         if let Ok(mapped_guard) = frame.map() {
             if let Some(planes) = mapped_guard.planes() {
@@ -50,7 +50,7 @@ fn main() {
         }
 
         // Create a video frame that can be sent across threads
-        let _shared_frame = SharedMediaFrame::new(frame.into_owned());
+        let _shared_frame = SharedFrame::new(frame.into_owned());
 
         Ok(())
     }) {

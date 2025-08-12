@@ -1,16 +1,16 @@
 use cfg_if::cfg_if;
 use media_base::{
-    error::MediaError,
     video::{ColorRange, VideoFormat},
+    Result,
 };
 
-use super::{DeviceEvent, DeviceManager};
+use crate::{DeviceEvent, DeviceManager};
 
 cfg_if! {
     if #[cfg(target_os = "windows")] {
-        pub use super::backend::media_foundation::MediaFoundationDeviceManager as DefaultCameraManager;
+        pub use crate::backend::media_foundation::MediaFoundationDeviceManager as DefaultCameraManager;
     } else if #[cfg(any(target_os = "macos", target_os = "ios"))] {
-        pub use super::backend::av_foundation::AVFoundationCaptureDeviceManager as DefaultCameraManager;
+        pub use crate::backend::av_foundation::AVFoundationCaptureDeviceManager as DefaultCameraManager;
     } else {
         compile_error!("unsupported target");
     }
@@ -30,7 +30,7 @@ pub struct CameraManager<T: DeviceManager> {
 }
 
 impl<T: DeviceManager> CameraManager<T> {
-    pub fn new() -> Result<Self, MediaError> {
+    pub fn new() -> Result<Self> {
         let mut backend = T::init()?;
         backend.refresh()?;
         Ok(Self {
@@ -58,11 +58,11 @@ impl<T: DeviceManager> CameraManager<T> {
         self.backend.lookup_mut(id)
     }
 
-    pub fn refresh(&mut self) -> Result<(), MediaError> {
+    pub fn refresh(&mut self) -> Result<()> {
         self.backend.refresh()
     }
 
-    pub fn set_change_handler<F>(&mut self, handler: F) -> Result<(), MediaError>
+    pub fn set_change_handler<F>(&mut self, handler: F) -> Result<()>
     where
         F: Fn(&DeviceEvent) + Send + Sync + 'static,
     {
@@ -77,7 +77,7 @@ impl<T: DeviceManager> Drop for CameraManager<T> {
 }
 
 impl CameraManager<DefaultCameraManager> {
-    pub fn new_default() -> Result<Self, MediaError> {
+    pub fn new_default() -> Result<Self> {
         Self::new()
     }
 }

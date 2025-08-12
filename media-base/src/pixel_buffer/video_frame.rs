@@ -1,4 +1,4 @@
-use std::{borrow::Cow, num::NonZeroU32, sync::OnceLock};
+use std::{borrow::Cow, num::NonZeroU32, sync::LazyLock};
 
 use core_foundation::{base::*, boolean::*, dictionary::*, number::CFNumber, string::*};
 use core_video::{
@@ -16,13 +16,14 @@ use os_ver::if_greater_than;
 use smallvec::SmallVec;
 
 use crate::{
-    error::MediaError,
+    error::Error,
+    frame::*,
     invalid_param_error,
-    media::MediaFrameType,
-    media_frame::*,
+    media::FrameDescriptor,
     none_param_error,
     video::{ColorMatrix, ColorPrimaries, ColorRange, ColorTransferCharacteristics, PixelFormat, VideoFrameDescriptor},
-    video_frame::VideoFrameBuilder,
+    video_frame::VideoFrameCreator,
+    Result,
 };
 
 const ITU_R_601_4: &str = "ITU_R_601_4";
@@ -41,33 +42,29 @@ const EBU_3213: &str = "EBU_3213";
 const P22: &str = "P22";
 const LINEAR: &str = "Linear";
 
-static PIXEL_FORMATS: OnceLock<[[u32; ColorRange::MAX as usize]; PixelFormat::MAX as usize]> = OnceLock::new();
-
-fn pixel_formats() -> &'static [[u32; ColorRange::MAX as usize]; PixelFormat::MAX as usize] {
-    PIXEL_FORMATS.get_or_init(|| {
-        let mut formats = [[0; ColorRange::MAX as usize]; PixelFormat::MAX as usize];
-        formats[PixelFormat::ARGB32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32ARGB;
-        formats[PixelFormat::BGRA32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32BGRA;
-        formats[PixelFormat::ABGR32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32ABGR;
-        formats[PixelFormat::RGBA32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32RGBA;
-        formats[PixelFormat::RGB24 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_24RGB;
-        formats[PixelFormat::BGR24 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_24BGR;
-        formats[PixelFormat::I420 as usize][ColorRange::Video as usize] = kCVPixelFormatType_420YpCbCr8Planar;
-        formats[PixelFormat::I420 as usize][ColorRange::Full as usize] = kCVPixelFormatType_420YpCbCr8PlanarFullRange;
-        formats[PixelFormat::NV12 as usize][ColorRange::Video as usize] = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange;
-        formats[PixelFormat::NV12 as usize][ColorRange::Full as usize] = kCVPixelFormatType_420YpCbCr8BiPlanarFullRange;
-        formats[PixelFormat::YUYV as usize][ColorRange::Video as usize] = kCVPixelFormatType_422YpCbCr8_yuvs;
-        formats[PixelFormat::UYVY as usize][ColorRange::Video as usize] = kCVPixelFormatType_422YpCbCr8;
-        formats
-    })
-}
+static PIXEL_FORMATS: LazyLock<[[u32; ColorRange::MAX as usize]; PixelFormat::MAX as usize]> = LazyLock::new(|| {
+    let mut formats = [[0; ColorRange::MAX as usize]; PixelFormat::MAX as usize];
+    formats[PixelFormat::ARGB32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32ARGB;
+    formats[PixelFormat::BGRA32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32BGRA;
+    formats[PixelFormat::ABGR32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32ABGR;
+    formats[PixelFormat::RGBA32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32RGBA;
+    formats[PixelFormat::RGB24 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_24RGB;
+    formats[PixelFormat::BGR24 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_24BGR;
+    formats[PixelFormat::I420 as usize][ColorRange::Video as usize] = kCVPixelFormatType_420YpCbCr8Planar;
+    formats[PixelFormat::I420 as usize][ColorRange::Full as usize] = kCVPixelFormatType_420YpCbCr8PlanarFullRange;
+    formats[PixelFormat::NV12 as usize][ColorRange::Video as usize] = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange;
+    formats[PixelFormat::NV12 as usize][ColorRange::Full as usize] = kCVPixelFormatType_420YpCbCr8BiPlanarFullRange;
+    formats[PixelFormat::YUYV as usize][ColorRange::Video as usize] = kCVPixelFormatType_422YpCbCr8_yuvs;
+    formats[PixelFormat::UYVY as usize][ColorRange::Video as usize] = kCVPixelFormatType_422YpCbCr8;
+    formats
+});
 
 fn into_cv_format(format: PixelFormat, color_range: ColorRange) -> u32 {
-    pixel_formats()[format as usize][color_range as usize]
+    PIXEL_FORMATS[format as usize][color_range as usize]
 }
 
 fn from_cv_format(format: u32) -> (Option<PixelFormat>, ColorRange) {
-    for (i, formats) in pixel_formats().iter().enumerate() {
+    for (i, formats) in PIXEL_FORMATS.iter().enumerate() {
         for (j, &f) in formats.iter().enumerate() {
             if f == format {
                 return (PixelFormat::try_from(i).ok(), ColorRange::from(j));
@@ -379,14 +376,14 @@ fn from_cv_color_transfer_function(color_transfer_function: &CFString, gamma: Op
     }
 }
 
-impl VideoFrameBuilder {
-    pub fn new_pixel_buffer(&self, format: PixelFormat, width: u32, height: u32) -> Result<MediaFrame<'static>, MediaError> {
+impl VideoFrameCreator {
+    pub fn create_pixel_buffer(&self, format: PixelFormat, width: u32, height: u32) -> Result<Frame<'static>> {
         let desc = VideoFrameDescriptor::try_new(format, width, height)?;
 
-        self.new_pixel_buffer_with_descriptor(desc)
+        self.create_pixel_buffer_with_descriptor(desc)
     }
 
-    pub fn new_pixel_buffer_with_descriptor(&self, desc: VideoFrameDescriptor) -> Result<MediaFrame<'static>, MediaError> {
+    pub fn create_pixel_buffer_with_descriptor(&self, desc: VideoFrameDescriptor) -> Result<Frame<'static>> {
         let pixel_format = into_cv_format(desc.format, desc.color_range);
         #[cfg(target_os = "macos")]
         let compatibility_key: CFString = {
@@ -414,7 +411,7 @@ impl VideoFrameBuilder {
         let width = desc.width.get() - desc.crop_left - desc.crop_right;
         let height = desc.height.get() - desc.crop_top - desc.crop_bottom;
         let pixel_buffer = CVPixelBuffer::new(pixel_format, width as usize, height as usize, Some(&options))
-            .map_err(|_| MediaError::CreationFailed(stringify!(CVPixelBuffer).to_string()))?;
+            .map_err(|_| Error::CreationFailed(stringify!(CVPixelBuffer).to_string()))?;
 
         let buffer = pixel_buffer.as_buffer();
 
@@ -444,17 +441,10 @@ impl VideoFrameBuilder {
             buffer.set_attachment(&CVImageBufferKeys::GammaLevel.into(), &gamma.as_CFType(), kCVAttachmentMode_ShouldPropagate);
         }
 
-        Ok(MediaFrame {
-            media_type: MediaFrameType::Video,
-            source: None,
-            timestamp: 0,
-            desc: MediaFrameDescriptor::Video(desc),
-            metadata: None,
-            data: MediaFrameData::PixelBuffer(PixelBuffer(pixel_buffer)),
-        })
+        Ok(Frame::from_data(FrameDescriptor::Video(desc), FrameData::PixelBuffer(PixelBuffer(pixel_buffer))))
     }
 
-    pub fn from_pixel_buffer(&self, pixel_buffer: &CVPixelBuffer) -> Result<MediaFrame<'static>, MediaError> {
+    pub fn create_from_pixel_buffer(&self, pixel_buffer: &CVPixelBuffer) -> Result<Frame<'static>> {
         let width = pixel_buffer.get_width() as u32;
         let width = NonZeroU32::new(width).ok_or(invalid_param_error!(width))?;
         let height = pixel_buffer.get_height() as u32;
@@ -527,14 +517,7 @@ impl VideoFrameBuilder {
             }
         }
 
-        Ok(MediaFrame {
-            media_type: MediaFrameType::Video,
-            source: None,
-            timestamp: 0,
-            desc: MediaFrameDescriptor::Video(desc),
-            metadata: None,
-            data: MediaFrameData::PixelBuffer(PixelBuffer(pixel_buffer.clone())),
-        })
+        Ok(Frame::from_data(FrameDescriptor::Video(desc), FrameData::PixelBuffer(PixelBuffer(pixel_buffer.clone()))))
     }
 }
 
@@ -545,9 +528,9 @@ unsafe impl Send for PixelBuffer {}
 unsafe impl Sync for PixelBuffer {}
 
 impl DataMappable for PixelBuffer {
-    fn map(&self) -> Result<MappedGuard, MediaError> {
+    fn map(&self) -> Result<MappedGuard> {
         if self.0.lock_base_address(kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess {
-            return Err(MediaError::Failed("lock base address".to_string()));
+            return Err(Error::Failed("lock base address".to_string()));
         }
 
         Ok(MappedGuard {
@@ -555,9 +538,9 @@ impl DataMappable for PixelBuffer {
         })
     }
 
-    fn map_mut(&mut self) -> Result<MappedGuard, MediaError> {
+    fn map_mut(&mut self) -> Result<MappedGuard> {
         if self.0.lock_base_address(0) != kCVReturnSuccess {
-            return Err(MediaError::Failed("lock base address".to_string()));
+            return Err(Error::Failed("lock base address".to_string()));
         }
 
         Ok(MappedGuard {
@@ -565,16 +548,16 @@ impl DataMappable for PixelBuffer {
         })
     }
 
-    fn unmap(&self) -> Result<(), MediaError> {
+    fn unmap(&self) -> Result<()> {
         if self.0.unlock_base_address(kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess {
-            return Err(MediaError::Failed("unlock base address".to_string()));
+            return Err(Error::Failed("unlock base address".to_string()));
         }
         Ok(())
     }
 
-    fn unmap_mut(&mut self) -> Result<(), MediaError> {
+    fn unmap_mut(&mut self) -> Result<()> {
         if self.0.unlock_base_address(0) != kCVReturnSuccess {
-            return Err(MediaError::Failed("unlock base address".to_string()));
+            return Err(Error::Failed("unlock base address".to_string()));
         }
         Ok(())
     }

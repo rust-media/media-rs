@@ -1,4 +1,6 @@
-#[derive(Clone, Copy, Debug, PartialEq)]
+use crate::media::FrameDescriptor;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DataFormat {
     Variant = 0, // Variant
     String,      // String
@@ -14,5 +16,11 @@ impl DataFrameDescriptor {
         Self {
             format,
         }
+    }
+}
+
+impl From<DataFrameDescriptor> for FrameDescriptor {
+    fn from(desc: DataFrameDescriptor) -> Self {
+        FrameDescriptor::Data(desc)
     }
 }
