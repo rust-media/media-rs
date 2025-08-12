@@ -1,29 +1,43 @@
-use variant::Variant;
-
-use super::{
+use crate::{
     data::{DataFormat, DataFrameDescriptor},
-    media::MediaFrameType,
-    media_frame::{MediaFrame, MediaFrameData, MediaFrameDescriptor},
+    frame::{Frame, FrameData},
+    media::FrameDescriptor,
+    variant::Variant,
+    Result,
 };
-use crate::error::MediaError;
 
-pub struct DataFrameBuilder;
+pub struct DataFrameCreator;
 
-impl DataFrameBuilder {
-    pub fn from_variant(&self, variant: &Variant) -> Result<MediaFrame<'static>, MediaError> {
-        Ok(MediaFrame {
-            media_type: MediaFrameType::Data,
-            source: None,
-            timestamp: 0,
-            desc: MediaFrameDescriptor::Data(DataFrameDescriptor::new(DataFormat::Variant)),
-            metadata: None,
-            data: MediaFrameData::Variant(variant.clone()),
-        })
+impl DataFrameCreator {
+    pub fn create(&self, format: DataFormat) -> Result<Frame<'static>> {
+        let desc = DataFrameDescriptor::new(format);
+
+        self.create_with_descriptor(desc)
+    }
+
+    pub fn create_with_descriptor(&self, desc: DataFrameDescriptor) -> Result<Frame<'static>> {
+        Ok(Frame::from_data(FrameDescriptor::Data(desc), FrameData::Variant(Variant::new())))
+    }
+
+    pub fn create_from_variant(&self, variant: &Variant) -> Result<Frame<'static>> {
+        Ok(Frame::from_data(FrameDescriptor::Data(DataFrameDescriptor::new(DataFormat::Variant)), FrameData::Variant(variant.clone())))
     }
 }
 
-impl MediaFrame<'_> {
-    pub fn data_builder() -> DataFrameBuilder {
-        DataFrameBuilder
+impl Frame<'_> {
+    pub fn data_creator() -> DataFrameCreator {
+        DataFrameCreator
+    }
+
+    pub fn data_descriptor(&self) -> Option<&DataFrameDescriptor> {
+        if let FrameDescriptor::Data(desc) = &self.desc {
+            Some(desc)
+        } else {
+            None
+        }
+    }
+
+    pub fn is_data(&self) -> bool {
+        self.desc.is_data()
     }
 }

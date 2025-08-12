@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 #[derive(Clone, Debug, Error)]
-pub enum MediaError {
+pub enum Error {
     #[error("Failed: {0}")]
     Failed(String),
     #[error("Invalid: {0}")]
@@ -42,30 +42,33 @@ pub enum MediaError {
     WriteFailed(String),
 }
 
+#[deprecated = "Use 'Error' directly"]
+pub type MediaError = Error;
+
 #[macro_export]
 macro_rules! invalid_param_error {
     ($param:expr) => {
-        MediaError::InvalidParameter(stringify!($param).to_string(), format!("{:?}", $param).to_string())
+        Error::InvalidParameter(stringify!($param).to_string(), format!("{:?}", $param).to_string())
     };
 }
 
 #[macro_export]
 macro_rules! none_param_error {
     ($param:expr) => {
-        MediaError::InvalidParameter(stringify!($param).to_string(), stringify!(None).to_string())
+        Error::InvalidParameter(stringify!($param).to_string(), stringify!(None).to_string())
     };
 }
 
 #[macro_export]
 macro_rules! not_found_error {
     ($param:expr) => {
-        MediaError::NotFound(format!("{:?}", $param).to_string())
+        Error::NotFound(format!("{:?}", $param).to_string())
     };
 }
 
 #[macro_export]
 macro_rules! unsupported_error {
     ($param:expr) => {
-        MediaError::Unsupported(stringify!($param).to_string())
+        Error::Unsupported(stringify!($param).to_string())
     };
 }

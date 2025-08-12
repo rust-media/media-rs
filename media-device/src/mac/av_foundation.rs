@@ -26,11 +26,13 @@ use core_video::pixel_buffer::{
 };
 use dispatch2::Queue;
 use media_base::{
-    error::MediaError,
-    media_frame::MediaFrame,
+    error::Error,
+    frame::Frame,
     none_param_error, not_found_error,
     time::MSEC_PER_SEC,
+    variant::Variant,
     video::{ColorRange, PixelFormat, VideoFormat},
+    Result,
 };
 use objc2::{
     declare_class, extern_methods, msg_send_id, mutability,
@@ -40,7 +42,6 @@ use objc2::{
 };
 use objc2_foundation::{NSArray, NSMutableArray, NSMutableDictionary, NSNumber, NSObject, NSObjectProtocol, NSString};
 use os_ver::if_greater_than;
-use variant::Variant;
 
 use crate::{camera::CameraFormat, Device, DeviceEvent, DeviceEventHandler, DeviceInformation, DeviceManager, OutputDevice, OutputHandler};
 
@@ -52,7 +53,7 @@ pub struct AVFoundationCaptureDeviceManager {
 impl DeviceManager for AVFoundationCaptureDeviceManager {
     type DeviceType = AVFoundationCaptureDevice;
 
-    fn init() -> Result<Self, MediaError>
+    fn init() -> Result<Self>
     where
         Self: Sized,
     {
@@ -84,7 +85,7 @@ impl DeviceManager for AVFoundationCaptureDeviceManager {
         self.devices.as_mut().and_then(|devices| devices.iter_mut().find(|device| device.info.id == id))
     }
 
-    fn refresh(&mut self) -> Result<(), MediaError> {
+    fn refresh(&mut self) -> Result<()> {
         let devices = Self::list_devices()?;
 
         let count = devices.len();
@@ -96,7 +97,7 @@ impl DeviceManager for AVFoundationCaptureDeviceManager {
         Ok(())
     }
 
-    fn set_change_handler<F>(&mut self, handler: F) -> Result<(), MediaError>
+    fn set_change_handler<F>(&mut self, handler: F) -> Result<()>
     where
         F: Fn(&DeviceEvent) + Send + Sync + 'static,
     {
@@ -156,10 +157,10 @@ impl AVFoundationCaptureDeviceManager {
         }
     }
 
-    fn list_devices() -> Result<Vec<AVFoundationCaptureDevice>, MediaError> {
+    fn list_devices() -> Result<Vec<AVFoundationCaptureDevice>> {
         let av_capture_devices = Self::get_av_devices();
 
-        let mut devices = Vec::with_capacity(av_capture_devices.count() as usize);
+        let mut devices = Vec::with_capacity(av_capture_devices.count() as _);
 
         for device in av_capture_devices.iter() {
             let dev_info = DeviceInformation::from_av_capture_device(device);
@@ -228,14 +229,14 @@ declare_class!(
             let video_frame = sample_buffer
                 .get_image_buffer()
                 .and_then(|image_buffer| image_buffer.downcast::<CVPixelBuffer>())
-                .and_then(|pixel_buffer| MediaFrame::video_builder().from_pixel_buffer(&pixel_buffer).ok());
+                .and_then(|pixel_buffer| Frame::video_creator().create_from_pixel_buffer(&pixel_buffer).ok());
 
             if let Some(mut video_frame) = video_frame {
                 if let Some(handler) = self.ivars().handler.as_ref() {
                     if let Some(info) = self.ivars().info.as_ref() {
                         video_frame.source = Some(info.id.clone());
                     }
-                    video_frame.timestamp = (sample_buffer.get_presentation_time_stamp().get_seconds() * MSEC_PER_SEC as f64) as u64;
+                    video_frame.pts = Some((sample_buffer.get_presentation_time_stamp().get_seconds() * MSEC_PER_SEC as f64) as i64);
                     handler(video_frame).ok();
                 }
             }
@@ -432,13 +433,13 @@ impl Device for AVFoundationCaptureDevice {
         &self.info.id
     }
 
-    fn start(&mut self) -> Result<(), MediaError> {
+    fn start(&mut self) -> Result<()> {
         let (running, formats) = {
             let session = AVCaptureSession::new();
             let id = NSString::from_str(self.info.id.as_str());
             let device = AVCaptureDevice::device_with_unique_id(&id).ok_or(not_found_error!(id))?;
             let output = AVCaptureVideoDataOutput::new();
-            let input = AVCaptureDeviceInput::from_device(&device).map_err(|err| MediaError::Invalid(err.to_string()))?;
+            let input = AVCaptureDeviceInput::from_device(&device).map_err(|err| Error::Invalid(err.to_string()))?;
             let mut delegate = OutputDelegate::new();
             let queue = Queue::new("com.x-device.video-capture", dispatch2::QueueAttribute::Serial);
             let handler = self.handler.as_ref().ok_or_else(|| none_param_error!(handler))?;
@@ -454,7 +455,7 @@ impl Device for AVFoundationCaptureDevice {
                 session.add_input(&input);
                 session.add_output(&output);
             } else {
-                return Err(MediaError::Invalid("cannot add input or output".to_string()));
+                return Err(Error::Invalid("cannot add input or output".to_string()));
             }
 
             session.begin_configuration();
@@ -495,9 +496,9 @@ impl Device for AVFoundationCaptureDevice {
         Ok(())
     }
 
-    fn stop(&mut self) -> Result<(), MediaError> {
+    fn stop(&mut self) -> Result<()> {
         if !self.running {
-            return Err(MediaError::NotRunning(self.info.name.clone()));
+            return Err(Error::NotRunning(self.info.name.clone()));
         }
 
         self.running = false;
@@ -523,7 +524,7 @@ impl Device for AVFoundationCaptureDevice {
         Ok(())
     }
 
-    fn configure(&mut self, options: Variant) -> Result<(), MediaError> {
+    fn configure(&mut self, options: Variant) -> Result<()> {
         let width = options["width"].get_uint32();
         let height = options["height"].get_uint32();
         let video_format = options["format"].get_uint32();
@@ -561,20 +562,20 @@ impl Device for AVFoundationCaptureDevice {
         Ok(())
     }
 
-    fn control(&mut self, action: Variant) -> Result<(), MediaError> {
-        Ok(())
+    fn control(&mut self, _action: Variant) -> Result<()> {
+        Err(Error::NotImplemented)
     }
 
     fn running(&self) -> bool {
         self.running
     }
 
-    fn formats(&self) -> Result<Variant, MediaError> {
+    fn formats(&self) -> Result<Variant> {
         if !self.running {
-            return Err(MediaError::NotRunning(self.info.name.clone()));
+            return Err(Error::NotRunning(self.info.name.clone()));
         }
 
-        let video_formats = self.formats.as_ref().ok_or(MediaError::NotFound(String::from("video formats")))?;
+        let video_formats = self.formats.as_ref().ok_or(Error::NotFound(String::from("video formats")))?;
         let mut formats = Variant::new_array();
         for video_format in video_formats {
             let mut format = Variant::new_dict();
@@ -591,9 +592,9 @@ impl Device for AVFoundationCaptureDevice {
 }
 
 impl OutputDevice for AVFoundationCaptureDevice {
-    fn set_output_handler<F>(&mut self, handler: F) -> Result<(), MediaError>
+    fn set_output_handler<F>(&mut self, handler: F) -> Result<()>
     where
-        F: Fn(MediaFrame) -> Result<(), MediaError> + Send + Sync + 'static,
+        F: Fn(Frame) -> Result<()> + Send + Sync + 'static,
     {
         self.handler = Some(Arc::new(handler));
         Ok(())
@@ -601,7 +602,7 @@ impl OutputDevice for AVFoundationCaptureDevice {
 }
 
 impl AVFoundationCaptureDevice {
-    fn new(dev_info: DeviceInformation) -> Result<Self, MediaError> {
+    fn new(dev_info: DeviceInformation) -> Result<Self> {
         Ok(Self {
             info: dev_info,
             running: false,

@@ -10,17 +10,22 @@ license.workspace = true
 categories.workspace = true
 keywords.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 readme = "../README.md"
 
 [dependencies.media-base]
 workspace = true
+
+[dependencies.media-codec]
+workspace = true
+optional = true
 
 [dependencies.media-device]
 workspace = true
 optional = true
 
 [features]
-default = ["media-device"]
+default = ["media-codec", "media-device"]
 
 [package.metadata.docs.rs]
 default-target = "x86_64-pc-windows-msvc"
