@@ -1,5 +1,3 @@
-pub extern crate x_variant as variant;
-
 mod base;
 pub mod camera;
 

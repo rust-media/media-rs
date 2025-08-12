@@ -15,10 +15,10 @@ use media_base::{
     frame::Frame,
     none_param_error, not_found_error,
     time::NSEC_PER_MSEC,
+    variant::Variant,
     video::{ColorRange, CompressionFormat, Origin, PixelFormat, VideoFormat, VideoFrameDescriptor},
     Result,
 };
-use variant::Variant;
 use windows::{
     core::{implement, AsImpl, Interface, GUID, PWSTR},
     Win32::{

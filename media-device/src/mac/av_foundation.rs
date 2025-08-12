@@ -30,6 +30,7 @@ use media_base::{
     frame::Frame,
     none_param_error, not_found_error,
     time::MSEC_PER_SEC,
+    variant::Variant,
     video::{ColorRange, PixelFormat, VideoFormat},
     Result,
 };
@@ -41,7 +42,6 @@ use objc2::{
 };
 use objc2_foundation::{NSArray, NSMutableArray, NSMutableDictionary, NSNumber, NSObject, NSObjectProtocol, NSString};
 use os_ver::if_greater_than;
-use variant::Variant;
 
 use crate::{camera::CameraFormat, Device, DeviceEvent, DeviceEventHandler, DeviceInformation, DeviceManager, OutputDevice, OutputHandler};
 

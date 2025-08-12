@@ -18,7 +18,6 @@ workspace = true
 cfg-if = "1.0"
 os-ver = "0.2"
 thiserror = "1.0"
-x-variant = "0.1"
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 av-foundation = "0.5"
