@@ -3,15 +3,14 @@ use std::{
     sync::{Arc, LazyLock, RwLock},
 };
 
-use media_base::{frame::Frame, Result};
-use x_variant::Variant;
+use media_base::{frame::Frame, variant::Variant, Result};
 
 use crate::{
-    codec::{find_codec, find_codec_by_name, register_codec, CodecBuilder, CodecID, CodecList, CodecParameters, LazyCodecList},
+    codec::{find_codec, find_codec_by_name, register_codec, Codec, CodecBuilder, CodecID, CodecList, CodecParameters, LazyCodecList},
     packet::Packet,
 };
 
-pub trait Decoder: Send + Sync {
+pub trait Decoder: Codec + Send + Sync {
     fn send_packet(&mut self, parameters: Option<&CodecParameters>, packet: &Packet) -> Result<()>;
     fn receive_frame(&mut self, parameters: Option<&CodecParameters>) -> Result<Frame<'_>>;
 }

@@ -7,6 +7,7 @@ use std::{
 use media_base::{
     audio::{ChannelLayout, SampleFormat},
     error::Error,
+    variant::Variant,
     video::{ChromaLocation, ColorMatrix, ColorPrimaries, ColorRange, ColorTransferCharacteristics, PixelFormat},
     MediaType, Result,
 };
@@ -137,6 +138,11 @@ impl CodecParameters {
             _ => None,
         })
     }
+}
+
+pub trait Codec {
+    fn configure(&mut self, parameters: Option<&CodecParameters>, options: Option<&Variant>) -> Result<()>;
+    fn set_option(&mut self, key: &str, value: &Variant) -> Result<()>;
 }
 
 pub trait CodecBuilder: Send + Sync {

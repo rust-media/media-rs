@@ -19,11 +19,6 @@ bitflags = "2.6"
 num-rational = "0.4"
 x-variant = "0.1"
 
-[dependencies.rav1e]
-version = "0.8"
-optional = true
-default-features = false
-
 [features]
 default = ["av1-enc"]
 opus-enc = []
@@ -32,7 +27,7 @@ h264-enc = []
 h264-dec = []
 vpx-enc = []
 vpx-dec = []
-av1-enc = ["dep:rav1e"]
+av1-enc = []
 av1-dec = []
 audio-enc = ["opus-enc"]
 audio-dec = ["opus-dec"]
