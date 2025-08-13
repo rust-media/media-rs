@@ -11,6 +11,7 @@ pub mod time;
 pub mod video;
 pub mod video_frame;
 pub mod video_frame_convert;
+pub mod video_frame_scale;
 
 mod utils;
 

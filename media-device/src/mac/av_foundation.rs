@@ -25,7 +25,7 @@ use core_video::pixel_buffer::{
     kCVPixelFormatType_422YpCbCr8_yuvs, CVPixelBuffer, CVPixelBufferKeys,
 };
 use dispatch2::Queue;
-use media_base::{
+use media_core::{
     error::Error,
     frame::Frame,
     none_param_error, not_found_error,

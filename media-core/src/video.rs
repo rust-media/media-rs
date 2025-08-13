@@ -160,7 +160,9 @@ pub enum PixelFormat {
     RGB30,  // packed RGB, 30 bits, 10 bits per channel, 2 bits unused(LSB)
     BGR30,  // packed BGR, 30 bits, 10 bits per channel, 2 bits unused(LSB)
     ARGB64, // packed ARGB, 64 bits, 16 bits per channel, 16-bit big-endian
+    BGRA64, // packed BGRA, 64 bits, 16 bits per channel, 16-bit big-endian
     ABGR64, // packed ABGR, 64 bits, 16 bits per channel, 16-bit big-endian
+    RGBA64, // packed RGBA, 64 bits, 16 bits per channel, 16-bit big-endian
     I010,   // planar YUV 4:2:0, 10 bits per channel
     I210,   // planar YUV 4:2:2, 10 bits per channel
     I410,   // planar YUV 4:4:4, 10 bits per channel
@@ -231,6 +233,14 @@ pub enum Origin {
     #[default]
     TopDown,
     BottomUp,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum ScaleFilter {
+    Nearest,
+    #[default]
+    Bilinear,
+    Bicubic,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -581,7 +591,25 @@ static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
         flags: pix_fmt_flags!(Alpha | RGB | Packed),
         component_bytes: [8, 0, 0, 0],
     },
+    // BGRA64
+    PixelFormatDescriptor {
+        components: 1,
+        chroma_shift_x: 0,
+        chroma_shift_y: 0,
+        depth: 16,
+        flags: pix_fmt_flags!(Alpha | RGB | Packed),
+        component_bytes: [8, 0, 0, 0],
+    },
     // ABGR64
+    PixelFormatDescriptor {
+        components: 1,
+        chroma_shift_x: 0,
+        chroma_shift_y: 0,
+        depth: 16,
+        flags: pix_fmt_flags!(Alpha | RGB | Packed),
+        component_bytes: [8, 0, 0, 0],
+    },
+    // RGBA64
     PixelFormatDescriptor {
         components: 1,
         chroma_shift_x: 0,
@@ -901,6 +929,13 @@ impl PixelFormat {
         }
 
         (size, planes)
+    }
+
+    pub(crate) fn calc_chroma_dimensions(&self, width: u32, height: u32) -> (u32, u32) {
+        let desc = &PIXEL_FORMAT_DESC[*self as usize];
+        let chroma_width = ceil_rshift(width, desc.chroma_shift_x as u32);
+        let chroma_height = ceil_rshift(height, desc.chroma_shift_y as u32);
+        (chroma_width, chroma_height)
     }
 }
 

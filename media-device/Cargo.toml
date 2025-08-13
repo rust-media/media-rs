@@ -11,7 +11,7 @@ categories.workspace = true
 keywords = ["audio", "video", "camera", "capture", "playback"]
 edition.workspace = true
 
-[dependencies.media-base]
+[dependencies.media-core]
 workspace = true
 
 [dependencies]

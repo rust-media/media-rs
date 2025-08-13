@@ -168,10 +168,11 @@ impl From<ColorMatrix> for YuvStandardMatrix {
     fn from(color_matrix: ColorMatrix) -> Self {
         match color_matrix {
             ColorMatrix::BT709 => YuvStandardMatrix::Bt709,
-            ColorMatrix::BT2020CL | ColorMatrix::BT2020NCL => YuvStandardMatrix::Bt2020,
-            ColorMatrix::SMPTE240M => YuvStandardMatrix::Smpte240,
-            ColorMatrix::BT470BG => YuvStandardMatrix::Bt470_6,
             ColorMatrix::FCC => YuvStandardMatrix::Fcc,
+            ColorMatrix::BT470BG | ColorMatrix::SMPTE170M => YuvStandardMatrix::Bt601,
+            ColorMatrix::SMPTE240M => YuvStandardMatrix::Custom(0.212, 0.087),
+            ColorMatrix::YCgCo => YuvStandardMatrix::Custom(0.25, 0.25),
+            ColorMatrix::BT2020NCL | ColorMatrix::BT2020CL => YuvStandardMatrix::Bt2020,
             _ => YuvStandardMatrix::Bt601,
         }
     }
@@ -579,31 +580,26 @@ impl Frame<'_> {
             return Err(Error::Unsupported("media type".to_string()));
         }
 
-        let dst_desc = dst.desc.clone();
+        let (FrameDescriptor::Video(src_desc), FrameDescriptor::Video(dst_desc)) = (&self.desc, &dst.desc.clone()) else {
+            return Err(Error::Invalid("not video frame".to_string()));
+        };
+
+        if src_desc.width != dst_desc.width || src_desc.height != dst_desc.height {
+            return Err(Error::Invalid("video frame size mismatch".to_string()));
+        }
 
         let guard = self.map().map_err(|_| Error::Invalid("not readable".into()))?;
         let mut dst_guard = dst.map_mut().map_err(|_| Error::Invalid("not writable".into()))?;
+        let src_planes = guard.planes().unwrap();
+        let mut dst_planes = dst_guard.planes_mut().unwrap();
 
-        if let (FrameDescriptor::Video(src_desc), FrameDescriptor::Video(dst_desc)) = (&self.desc, &dst_desc) {
-            if src_desc.width == dst_desc.width && src_desc.height == dst_desc.height {
-                let src_planes = guard.planes().unwrap();
-                let mut dst_planes = dst_guard.planes_mut().unwrap();
-                if src_desc.format == dst_desc.format {
-                    return data_copy(&src_planes, &mut dst_planes, src_desc.format, src_desc.width, src_desc.height);
-                } else {
-                    let convert_func = VIDEO_FORMAT_CONVERT_FUNCS[src_desc.format as usize][dst_desc.format as usize];
-
-                    if let Some(convert) = convert_func {
-                        return convert(&src_planes, &mut dst_planes, src_desc.color_range, src_desc.color_matrix, src_desc.width, src_desc.height);
-                    } else {
-                        return Err(Error::Unsupported("video format conversion".to_string()));
-                    }
-                }
-            } else {
-                return Err(Error::Invalid("video frame size mismatch".to_string()));
-            }
+        if src_desc.format == dst_desc.format {
+            return data_copy(&src_planes, &mut dst_planes, src_desc.format, src_desc.width, src_desc.height);
         }
 
-        Ok(())
+        let convert = VIDEO_FORMAT_CONVERT_FUNCS[src_desc.format as usize][dst_desc.format as usize]
+            .ok_or_else(|| Error::Unsupported("video format conversion".to_string()))?;
+
+        convert(&src_planes, &mut dst_planes, src_desc.color_range, src_desc.color_matrix, src_desc.width, src_desc.height)
     }
 }

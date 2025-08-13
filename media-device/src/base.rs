@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use media_base::{frame::Frame, variant::Variant, Result};
+use media_core::{frame::Frame, variant::Variant, Result};
 
 #[derive(Clone, Debug)]
 pub struct DeviceInformation {

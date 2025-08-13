@@ -13,7 +13,7 @@ edition.workspace = true
 rust-version.workspace = true
 readme = "../README.md"
 
-[dependencies.media-base]
+[dependencies.media-core]
 workspace = true
 
 [dependencies.media-codec]

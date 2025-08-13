@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, LazyLock, RwLock},
 };
 
-use media_base::{frame::Frame, variant::Variant, Result};
+use media_core::{frame::Frame, variant::Variant, Result};
 
 use crate::{
     codec::{find_codec, find_codec_by_name, register_codec, Codec, CodecBuilder, CodecID, CodecList, CodecParameters},
