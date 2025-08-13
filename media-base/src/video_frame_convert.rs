@@ -168,10 +168,11 @@ impl From<ColorMatrix> for YuvStandardMatrix {
     fn from(color_matrix: ColorMatrix) -> Self {
         match color_matrix {
             ColorMatrix::BT709 => YuvStandardMatrix::Bt709,
-            ColorMatrix::BT2020CL | ColorMatrix::BT2020NCL => YuvStandardMatrix::Bt2020,
-            ColorMatrix::SMPTE240M => YuvStandardMatrix::Smpte240,
-            ColorMatrix::BT470BG => YuvStandardMatrix::Bt470_6,
             ColorMatrix::FCC => YuvStandardMatrix::Fcc,
+            ColorMatrix::BT470BG | ColorMatrix::SMPTE170M => YuvStandardMatrix::Bt601,
+            ColorMatrix::SMPTE240M => YuvStandardMatrix::Custom(0.212, 0.087),
+            ColorMatrix::YCgCo => YuvStandardMatrix::Custom(0.25, 0.25),
+            ColorMatrix::BT2020NCL | ColorMatrix::BT2020CL => YuvStandardMatrix::Bt2020,
             _ => YuvStandardMatrix::Bt601,
         }
     }
