@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, LazyLock, RwLock},
 };
 
-use media_base::{
+use media_core::{
     audio::{ChannelLayout, SampleFormat},
     error::Error,
     variant::Variant,

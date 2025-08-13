@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "media-base",
+    "media-core",
     "media-codec",
     "media-device",
     "media-filter",
@@ -20,8 +20,8 @@ keywords = ["audio", "media", "video"]
 edition = "2021"
 rust-version = "1.83.0"
 
-[workspace.dependencies.media-base]
-path = "media-base"
+[workspace.dependencies.media-core]
+path = "media-core"
 version = "0.2.1"
 
 [workspace.dependencies.media-codec]
