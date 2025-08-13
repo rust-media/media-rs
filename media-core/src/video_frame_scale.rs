@@ -176,9 +176,7 @@ impl Frame<'_> {
                 // similar to UV component interleaving
                 scaler.resize_cbcr8(&src, &mut dst).map_err(|e| Error::Invalid(e.to_string()))
             }
-            _ => {
-                Err(Error::Invalid("unsupported pixel format".to_string()))
-            }
+            _ => Err(Error::Invalid("unsupported pixel format".to_string())),
         }
     }
 }

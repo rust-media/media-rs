@@ -10,7 +10,7 @@ use std::{
     time::Duration,
 };
 
-use media_base::{
+use media_core::{
     error::Error,
     frame::Frame,
     none_param_error, not_found_error,

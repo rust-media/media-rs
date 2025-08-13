@@ -1,9 +1,9 @@
 [package]
-name = "media-base"
-description = "Defines media types, such as Media Frame"
+name = "media-core"
+description = "Defines media types and provides basic media utilities"
 homepage.workspace = true
 repository.workspace = true
-documentation = "https://docs.rs/media-base"
+documentation = "https://docs.rs/media-core"
 version = "0.2.1"
 authors.workspace = true
 license.workspace = true
