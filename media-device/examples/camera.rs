@@ -1,3 +1,5 @@
+use env_logger;
+use log::{error, info, warn};
 use media::{
     device::{camera::CameraManager, Device, OutputDevice},
     frame::SharedFrame,
@@ -5,11 +7,13 @@ use media::{
 };
 
 fn main() {
+    std::env::set_var("RUST_LOG", "info");
+    env_logger::init();
     // Create a default instance of camera manager
     let mut cam_mgr = match CameraManager::new_default() {
         Ok(cam_mgr) => cam_mgr,
         Err(e) => {
-            println!("{:?}", e.to_string());
+            error!("{:?}", e.to_string());
             return;
         }
     };
@@ -17,24 +21,24 @@ fn main() {
     // List all camera devices
     let devices = cam_mgr.list();
     for device in devices {
-        println!("name: {}", device.name());
-        println!("id: {}", device.id());
+        info!("name: {}", device.name());
+        info!("id: {}", device.id());
     }
 
     // Get the first camera
     let device = match cam_mgr.index_mut(0) {
         Some(device) => device,
         None => {
-            println!("no camera found");
+            warn!("no camera found");
             return;
         }
     };
 
     // Set the output handler for the camera
     if let Err(e) = device.set_output_handler(|frame| {
-        println!("frame source: {:?}", frame.source);
-        println!("frame desc: {:?}", frame.descriptor());
-        println!("frame timestamp: {:?}", frame.pts);
+        info!("frame source: {:?}", frame.source);
+        info!("frame desc: {:?}", frame.descriptor());
+        info!("frame timestamp: {:?}", frame.pts);
 
         if let Ok(mapped_guard) = frame.map() {
             if let Some(planes) = mapped_guard.planes() {
@@ -43,8 +47,8 @@ fn main() {
                     let plane_height = plane.height();
                     let _plane_data = plane.data();
 
-                    println!("plane stride: {:?}", plane_stride);
-                    println!("plane height: {:?}", plane_height);
+                    info!("plane stride: {:?}", plane_stride);
+                    info!("plane height: {:?}", plane_height);
                 }
             }
         }
@@ -54,7 +58,7 @@ fn main() {
 
         Ok(())
     }) {
-        println!("{:?}", e.to_string());
+        error!("{:?}", e.to_string());
     };
 
     // Configure the camera
@@ -63,12 +67,12 @@ fn main() {
     option["height"] = 720.into();
     option["frame-rate"] = 30.0.into();
     if let Err(e) = device.configure(option) {
-        println!("{:?}", e.to_string());
+        error!("{:?}", e.to_string());
     }
 
     // Start the camera
     if let Err(e) = device.start() {
-        println!("{:?}", e.to_string());
+        error!("{:?}", e.to_string());
     }
 
     // Get supported formats
@@ -76,11 +80,11 @@ fn main() {
     if let Ok(formats) = formats {
         if let Some(iter) = formats.array_iter() {
             for format in iter {
-                println!("format: {:?}", format["format"]);
-                println!("color-range: {:?}", format["color-range"]);
-                println!("width: {:?}", format["width"]);
-                println!("height: {:?}", format["height"]);
-                println!("frame-rates: {:?}", format["frame-rates"]);
+                info!("format: {:?}", format["format"]);
+                info!("color-range: {:?}", format["color-range"]);
+                info!("width: {:?}", format["width"]);
+                info!("height: {:?}", format["height"]);
+                info!("frame-rates: {:?}", format["frame-rates"]);
             }
         }
     }
@@ -89,6 +93,6 @@ fn main() {
 
     // Stop the camera
     if let Err(e) = device.stop() {
-        println!("{:?}", e.to_string());
+        error!("{:?}", e.to_string());
     }
 }
