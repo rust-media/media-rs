@@ -1,6 +1,6 @@
 [package]
 name = "media-device"
-description = "Wrapper for capture and playback devices"
+description = "A cross-platform wrapper for capture and playback devices"
 homepage.workspace = true
 repository.workspace = true
 documentation = "https://docs.rs/media-device"
@@ -72,9 +72,6 @@ console_error_panic_hook = "0.1"
 env_logger = "0.11"
 log = "0.4"
 media = { workspace = true }
-
-[[example]]
-name = "camera"
 
 [package.metadata.docs.rs]
 default-target = "x86_64-pc-windows-msvc"
