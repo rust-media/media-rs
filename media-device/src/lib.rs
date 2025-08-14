@@ -1,8 +1,8 @@
-mod base;
 pub mod camera;
+mod device;
 
-pub use base::*;
 use cfg_if::cfg_if;
+pub use device::*;
 
 cfg_if! {
     if #[cfg(any(target_os = "ios", target_os = "macos"))] {
