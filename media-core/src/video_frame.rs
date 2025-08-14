@@ -134,17 +134,17 @@ impl VideoFrameCreator {
         Ok(Self::create_from_data(desc, data))
     }
 
-    pub fn from_packed_buffer<'a, T>(&self, format: PixelFormat, width: u32, height: u32, stride: u32, buffer: T) -> Result<Frame<'a>>
+    pub fn create_from_packed_buffer<'a, T>(&self, format: PixelFormat, width: u32, height: u32, stride: u32, buffer: T) -> Result<Frame<'a>>
     where
         T: Into<Cow<'a, [u8]>>,
     {
         let desc = VideoFrameDescriptor::try_new(format, width, height)?;
         let stride = NonZeroU32::new(stride).ok_or(invalid_param_error!(stride))?;
 
-        self.from_packed_buffer_with_descriptor(desc, stride, buffer)
+        self.create_from_packed_buffer_with_descriptor(desc, stride, buffer)
     }
 
-    pub fn from_packed_buffer_with_descriptor<'a, T>(&self, desc: VideoFrameDescriptor, stride: NonZeroU32, buffer: T) -> Result<Frame<'a>>
+    pub fn create_from_packed_buffer_with_descriptor<'a, T>(&self, desc: VideoFrameDescriptor, stride: NonZeroU32, buffer: T) -> Result<Frame<'a>>
     where
         T: Into<Cow<'a, [u8]>>,
     {
