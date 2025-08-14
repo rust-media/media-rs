@@ -6,8 +6,6 @@ members = [
     "media-device",
     "media-filter",
     "media",
-    # examples
-    "media-examples",
 ]
 
 [workspace.package]
