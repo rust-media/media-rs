@@ -7,8 +7,8 @@ documentation = "https://docs.rs/media-codec"
 version = "0.1.0"
 authors.workspace = true
 license.workspace = true
-categories.workspace = true
-keywords.workspace = true
+categories = ["multimedia", "multimedia::audio", "multimedia::video", "multimedia::encoding"]
+keywords = ["codec", "encoder", "decoder"]
 edition.workspace = true
 
 [dependencies.media-core]
