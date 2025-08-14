@@ -9,11 +9,11 @@ A pure Rust media framework for handling multimedia tasks such as encoding, deco
 
 ## Features
 
-### Base
+### Core
 - [x] **Media Types** - Definitions for media types
 - [x] **Media Frame** - Abstraction for raw multimedia data
 - [x] **Video Pixel Format Conversion** - Convert between RGB, YUV, and other pixel formats
-- [ ] **Video Scaling** - Change video resolution
+- [x] **Video Scaling** - Change video resolution
 - [ ] **Audio Sample Format Conversion** - Convert between different audio sample formats
 - [ ] **Audio Resampling** - Change audio sample rates
 
