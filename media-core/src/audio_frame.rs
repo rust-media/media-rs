@@ -7,6 +7,7 @@ use crate::{
     audio::{AudioFrameDescriptor, SampleFormat},
     error::Error,
     frame::{Frame, FrameData, MemoryData},
+    invalid_param_error,
     media::FrameDescriptor,
     Result,
 };
@@ -95,5 +96,21 @@ impl Frame<'_> {
 
     pub fn is_audio(&self) -> bool {
         self.desc.is_audio()
+    }
+
+    pub fn truncate(&mut self, samples: u32) -> Result<()> {
+        let FrameDescriptor::Audio(desc) = &mut self.desc else {
+            return Err(Error::Unsupported(format!("frame descriptor: {:?}", self.desc)));
+        };
+
+        if desc.samples.get() < samples || samples == 0 {
+            return Err(invalid_param_error!(samples));
+        }
+
+        let actual_bytes = desc.format.calc_actual_bytes(desc.channels().get(), samples);
+        self.data.truncate(actual_bytes)?;
+
+        desc.samples = NonZeroU32::new(samples).unwrap();
+        Ok(())
     }
 }

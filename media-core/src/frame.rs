@@ -10,6 +10,7 @@ use smallvec::SmallVec;
 use crate::pixel_buffer::video_frame::PixelBuffer;
 use crate::{
     error::Error,
+    invalid_param_error,
     media::{FrameDescriptor, MediaType},
     unsupported_error,
     variant::Variant,
@@ -27,11 +28,12 @@ pub enum MappedData<'a> {
 pub enum MappedPlane<'a> {
     Video {
         data: MappedData<'a>,
-        stride: u32,
+        stride: usize,
         height: u32,
     },
     Audio {
         data: MappedData<'a>,
+        actual_bytes: usize,
     },
     #[default]
     None,
@@ -47,7 +49,7 @@ impl MappedPlane<'_> {
                 MappedData::RefMut(data) => Some(data),
             },
             MappedPlane::Audio {
-                data,
+                data, ..
             } => match data {
                 MappedData::Ref(data) => Some(data),
                 MappedData::RefMut(data) => Some(data),
@@ -65,7 +67,7 @@ impl MappedPlane<'_> {
                 MappedData::RefMut(data) => Some(data),
             },
             MappedPlane::Audio {
-                data,
+                data, ..
             } => match data {
                 MappedData::Ref(_) => None,
                 MappedData::RefMut(data) => Some(data),
@@ -74,7 +76,7 @@ impl MappedPlane<'_> {
         }
     }
 
-    pub fn stride(&self) -> Option<u32> {
+    pub fn stride(&self) -> Option<usize> {
         match self {
             MappedPlane::Video {
                 stride, ..
@@ -155,7 +157,7 @@ impl MappedPlanes<'_> {
         self.planes.get_mut(index).and_then(|plane| plane.data_mut())
     }
 
-    pub fn plane_stride(&self, index: usize) -> Option<u32> {
+    pub fn plane_stride(&self, index: usize) -> Option<usize> {
         self.planes.get(index).and_then(|plane| plane.stride())
     }
 
@@ -174,8 +176,8 @@ impl MappedPlanes<'_> {
 
 #[derive(Copy, Clone)]
 pub(crate) enum PlaneInformation {
-    Video(u32, u32),
-    Audio(u32),
+    Video(usize, u32),   // stride, height
+    Audio(usize, usize), // stride, actual_bytes
 }
 
 pub(crate) type PlaneInformationVec = SmallVec<[PlaneInformation; DEFAULT_MAX_PLANES]>;
@@ -193,9 +195,27 @@ impl MemoryData<'_> {
             planes: self.planes,
         }
     }
+
+    pub(crate) fn truncate(&mut self, size: usize) -> Result<()> {
+        for plane in &mut self.planes {
+            match plane {
+                PlaneInformation::Audio(stride, actual_bytes) => {
+                    let plane_size = *stride;
+                    if size > plane_size || size == 0 {
+                        return Err(invalid_param_error!(size));
+                    }
+
+                    *actual_bytes = size;
+                }
+                _ => return Err(Error::Unsupported("truncate for video planes".to_string())),
+            }
+        }
+
+        Ok(())
+    }
 }
 
-pub(crate) type PlaneDataVec<'a> = SmallVec<[(&'a [u8], u32, u32); DEFAULT_MAX_PLANES]>;
+pub(crate) type PlaneDataVec<'a> = SmallVec<[(&'a [u8], usize, u32); DEFAULT_MAX_PLANES]>;
 
 #[derive(Clone)]
 pub(crate) struct SeparateMemoryData<'a> {
@@ -229,13 +249,21 @@ pub(crate) enum FrameData<'a> {
 }
 
 impl FrameData<'_> {
-    pub fn into_owned(self) -> FrameData<'static> {
+    pub(crate) fn into_owned(self) -> FrameData<'static> {
         match self {
             FrameData::Memory(data) => FrameData::Memory(data.into_owned()),
             FrameData::SeparateMemory(data) => FrameData::Memory(data.into_owned()),
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             FrameData::PixelBuffer(pixel_buffer) => FrameData::PixelBuffer(pixel_buffer),
             FrameData::Variant(variant) => FrameData::Variant(variant),
+        }
+    }
+
+    // Truncate audio frame data to the specified size
+    pub(crate) fn truncate(&mut self, size: usize) -> Result<()> {
+        match self {
+            FrameData::Memory(data) => data.truncate(size),
+            _ => Err(Error::Unsupported("truncate for non-memory data".to_string())),
         }
     }
 }
@@ -276,9 +304,9 @@ impl DataMappable for MemoryData<'_> {
 
         for plane in &self.planes {
             let plane_size = match plane {
-                PlaneInformation::Video(stride, height) => stride * height,
-                PlaneInformation::Audio(stride) => *stride,
-            } as usize;
+                PlaneInformation::Video(stride, height) => stride * (*height as usize),
+                PlaneInformation::Audio(stride, _) => *stride,
+            };
 
             if plane_size > data_slice.len() {
                 return None;
@@ -291,8 +319,9 @@ impl DataMappable for MemoryData<'_> {
                     stride: *stride,
                     height: *height,
                 },
-                PlaneInformation::Audio(_) => MappedPlane::Audio {
-                    data: MappedData::Ref(plane_data),
+                PlaneInformation::Audio(_, actual_bytes) => MappedPlane::Audio {
+                    data: MappedData::Ref(&plane_data[..*actual_bytes]),
+                    actual_bytes: *actual_bytes,
                 },
             };
 
@@ -314,9 +343,9 @@ impl DataMappable for MemoryData<'_> {
 
         for plane in &self.planes {
             let plane_size = match plane {
-                PlaneInformation::Video(stride, height) => stride * height,
-                PlaneInformation::Audio(stride) => *stride,
-            } as usize;
+                PlaneInformation::Video(stride, height) => stride * (*height as usize),
+                PlaneInformation::Audio(stride, _) => *stride,
+            };
 
             if plane_size > data_slice.len() {
                 return None;
@@ -329,8 +358,9 @@ impl DataMappable for MemoryData<'_> {
                     stride: *stride,
                     height: *height,
                 },
-                PlaneInformation::Audio(_) => MappedPlane::Audio {
-                    data: MappedData::RefMut(plane_data),
+                PlaneInformation::Audio(_, actual_bytes) => MappedPlane::Audio {
+                    data: MappedData::RefMut(&mut plane_data[..*actual_bytes]),
+                    actual_bytes: *actual_bytes,
                 },
             };
 
