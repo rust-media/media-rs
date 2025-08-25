@@ -23,15 +23,15 @@ where
     }
 
     let planes = &src.planes;
-    let size = size_of::<T>() as u32;
+    let size = size_of::<T>();
 
     Ok(YuvPlanarImage::<T> {
         y_plane: bytemuck::cast_slice(planes[0].data().unwrap()),
-        y_stride: planes[0].stride().unwrap() / size,
+        y_stride: (planes[0].stride().unwrap() / size) as u32,
         u_plane: bytemuck::cast_slice(planes[1].data().unwrap()),
-        u_stride: planes[1].stride().unwrap() / size,
+        u_stride: (planes[1].stride().unwrap() / size) as u32,
         v_plane: bytemuck::cast_slice(planes[2].data().unwrap()),
-        v_stride: planes[2].stride().unwrap() / size,
+        v_stride: (planes[2].stride().unwrap() / size) as u32,
         width: width.get(),
         height: height.get(),
     })
@@ -46,11 +46,11 @@ where
     }
 
     let planes = dst.planes.as_mut_slice();
-    let size = size_of::<T>() as u32;
+    let size = size_of::<T>();
 
-    let y_stride = planes[0].stride().unwrap() / size;
-    let u_stride = planes[1].stride().unwrap() / size;
-    let v_stride = planes[2].stride().unwrap() / size;
+    let y_stride = (planes[0].stride().unwrap() / size) as u32;
+    let u_stride = (planes[1].stride().unwrap() / size) as u32;
+    let v_stride = (planes[2].stride().unwrap() / size) as u32;
 
     let (y_plane, rest) = planes.split_at_mut(1);
     let (u_plane, v_plane) = rest.split_at_mut(1);
@@ -76,13 +76,13 @@ where
     }
 
     let planes = &src.planes;
-    let size = size_of::<T>() as u32;
+    let size = size_of::<T>();
 
     Ok(YuvBiPlanarImage::<T> {
         y_plane: bytemuck::cast_slice(planes[0].data().unwrap()),
-        y_stride: planes[0].stride().unwrap() / size,
+        y_stride: (planes[0].stride().unwrap() / size) as u32,
         uv_plane: bytemuck::cast_slice(planes[1].data().unwrap()),
-        uv_stride: planes[1].stride().unwrap() / size,
+        uv_stride: (planes[1].stride().unwrap() / size) as u32,
         width: width.get(),
         height: height.get(),
     })
@@ -97,10 +97,10 @@ where
     }
 
     let planes = dst.planes.as_mut_slice();
-    let size = size_of::<T>() as u32;
+    let size = size_of::<T>();
 
-    let y_stride = planes[0].stride().unwrap() / size;
-    let uv_stride = planes[1].stride().unwrap() / size;
+    let y_stride = (planes[0].stride().unwrap() / size) as u32;
+    let uv_stride = (planes[1].stride().unwrap() / size) as u32;
 
     let (y_plane, uv_plane) = planes.split_at_mut(1);
 
@@ -123,11 +123,11 @@ where
     }
 
     let planes = &src.planes;
-    let size = size_of::<T>() as u32;
+    let size = size_of::<T>();
 
     Ok(YuvPackedImage::<T> {
         yuy: bytemuck::cast_slice(planes[0].data().unwrap()),
-        yuy_stride: planes[0].stride().unwrap() / size,
+        yuy_stride: (planes[0].stride().unwrap() / size) as u32,
         width: width.get(),
         height: height.get(),
     })
@@ -142,9 +142,9 @@ where
     }
 
     let planes = dst.planes.as_mut();
-    let size = size_of::<T>() as u32;
+    let size = size_of::<T>();
 
-    let yuy_stride = planes[0].stride().unwrap() / size;
+    let yuy_stride = (planes[0].stride().unwrap() / size) as u32;
 
     Ok(YuvPackedImageMut::<T> {
         yuy: BufferStoreMut::Borrowed(bytemuck::cast_slice_mut(planes[0].data_mut().unwrap())),
@@ -188,11 +188,11 @@ macro_rules! impl_rgb_to_rgb {
             width: NonZeroU32,
             height: NonZeroU32,
         ) -> Result<()> {
-            let dst_stride = dst.plane_stride(0).unwrap();
+            let dst_stride = dst.plane_stride(0).unwrap() as u32;
 
             yuv::$convert_func(
                 src.plane_data(0).unwrap(),
-                src.plane_stride(0).unwrap(),
+                src.plane_stride(0).unwrap() as u32,
                 dst.plane_data_mut(0).unwrap(),
                 dst_stride,
                 width.get(),
@@ -220,7 +220,7 @@ macro_rules! impl_rgb_to_yuv {
             yuv::$convert_func(
                 &mut yuv_image,
                 src.plane_data(0).unwrap(),
-                src.plane_stride(0).unwrap(),
+                src.plane_stride(0).unwrap() as u32,
                 color_range.into(),
                 color_matrix.into(),
                 YuvConversionMode::Fast,
@@ -243,7 +243,7 @@ macro_rules! impl_yuv_to_rgb {
             height: NonZeroU32,
         ) -> Result<()> {
             let yuv_image = $into_image_func(src, width, height)?;
-            let dst_stride = dst.plane_stride(0).unwrap();
+            let dst_stride = dst.plane_stride(0).unwrap() as u32;
 
             yuv::$convert_func(&yuv_image, dst.plane_data_mut(0).unwrap(), dst_stride, color_range.into(), color_matrix.into())
                 .map_err(|e| Error::Invalid(e.to_string()))?;
@@ -264,7 +264,7 @@ macro_rules! impl_yuv_to_rgb_with_conversion_mode {
             height: NonZeroU32,
         ) -> Result<()> {
             let yuv_image = $into_image_func(src, width, height)?;
-            let dst_stride = dst.plane_stride(0).unwrap();
+            let dst_stride = dst.plane_stride(0).unwrap() as u32;
 
             yuv::$convert_func(&yuv_image, dst.plane_data_mut(0).unwrap(), dst_stride, color_range.into(), color_matrix.into(), $conversion_mode)
                 .map_err(|e| Error::Invalid(e.to_string()))?;
@@ -285,7 +285,7 @@ macro_rules! impl_yuv_to_rgb_with_byte_order {
             height: NonZeroU32,
         ) -> Result<()> {
             let yuv_image = $into_image_func(src, width, height)?;
-            let dst_stride = dst.plane_stride(0).unwrap();
+            let dst_stride = dst.plane_stride(0).unwrap() as u32;
 
             yuv::$convert_func(&yuv_image, dst.plane_data_mut(0).unwrap(), dst_stride, $byte_order, color_range.into(), color_matrix.into())
                 .map_err(|e| Error::Invalid(e.to_string()))?;
@@ -563,8 +563,8 @@ fn data_copy(src: &MappedPlanes, dst: &mut MappedPlanes, format: PixelFormat, wi
         if let (Some(src_stride), Some(dst_stride)) = (src_plane.stride(), dst_plane.stride()) {
             if let (Some(src_data), Some(dst_data)) = (src_plane.data(), dst_plane.data_mut()) {
                 for row in 0..plane_height {
-                    let src_start = (row * src_stride) as usize;
-                    let dst_start = (row * dst_stride) as usize;
+                    let src_start = row as usize * src_stride;
+                    let dst_start = row as usize * dst_stride;
                     dst_data[dst_start..dst_start + plane_row_bytes].copy_from_slice(&src_data[src_start..src_start + plane_row_bytes]);
                 }
             }

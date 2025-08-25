@@ -30,7 +30,7 @@ where
         channels: N,
         width: width as usize,
         height: height as usize,
-        stride: src.stride().unwrap() as usize / size_of::<T>(),
+        stride: src.stride().unwrap() / size_of::<T>(),
         bit_depth: 0,
     })
 }
@@ -39,7 +39,7 @@ fn into_image_store_mut<'a, T, const N: usize>(dst: &'a mut MappedPlane, width: 
 where
     T: Copy + Clone + Debug + Default + Pod,
 {
-    let stride = dst.stride().unwrap() as usize / size_of::<T>();
+    let stride = dst.stride().unwrap() / size_of::<T>();
 
     Ok(ImageStoreMut::<T, N> {
         buffer: BufferStore::Borrowed(bytemuck::cast_slice_mut(dst.data_mut().unwrap())),
