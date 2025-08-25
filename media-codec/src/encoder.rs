@@ -12,7 +12,8 @@ use crate::{
 
 pub trait Encoder: Codec + Send + Sync {
     fn send_frame(&mut self, parameters: Option<&CodecParameters>, frame: &Frame) -> Result<()>;
-    fn receive_packet(&mut self, parameters: Option<&CodecParameters>) -> Result<Packet<'_>>;
+    fn receive_packet(&mut self, parameters: Option<&CodecParameters>) -> Result<Packet<'static>>;
+    fn receive_packet_borrowed(&mut self, parameters: Option<&CodecParameters>) -> Result<Packet<'_>>;
 }
 
 pub trait EncoderBuilder: CodecBuilder {
@@ -73,8 +74,13 @@ impl EncoderContext {
         self.encoder.send_frame(params, frame)
     }
 
-    pub fn receive_packet(&mut self) -> Result<Packet<'_>> {
+    pub fn receive_packet(&mut self) -> Result<Packet<'static>> {
         let params = self.parameters.as_ref();
         self.encoder.receive_packet(params)
+    }
+
+    pub fn receive_packet_borrowed(&mut self) -> Result<Packet<'_>> {
+        let params = self.parameters.as_ref();
+        self.encoder.receive_packet_borrowed(params)
     }
 }
