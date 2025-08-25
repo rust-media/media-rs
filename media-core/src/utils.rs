@@ -1,4 +1,7 @@
+use std::ops::{Add, BitAnd, Not, Shl, Shr, Sub};
+
 use cfg_if::cfg_if;
+use num_traits::One;
 
 cfg_if! {
     if #[cfg(target_arch = "x86_64")] {
@@ -8,10 +11,16 @@ cfg_if! {
     }
 }
 
-pub fn align_to(value: u32, alignment: u32) -> u32 {
-    (value + alignment - 1) & !(alignment - 1)
+pub fn align_to<T>(value: T, alignment: T) -> T
+where
+    T: Copy + Add<Output = T> + Sub<Output = T> + BitAnd<Output = T> + Not<Output = T> + One,
+{
+    (value + alignment - T::one()) & !(alignment - T::one())
 }
 
-pub fn ceil_rshift(value: u32, shift: u32) -> u32 {
-    (value + (1 << shift) - 1) >> shift
+pub fn ceil_rshift<T>(value: T, shift: T) -> T
+where
+    T: Copy + Add<Output = T> + Sub<Output = T> + Shl<Output = T> + Shr<Output = T> + One,
+{
+    (value + (T::one() << shift) - T::one()) >> shift
 }

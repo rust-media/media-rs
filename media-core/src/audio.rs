@@ -271,28 +271,37 @@ impl SampleFormat {
         SAMPLE_FORMAT_DESC[*self as usize].is_planar
     }
 
-    pub fn stride(&self, channels: u8, samples: u32) -> u32 {
+    pub fn stride(&self, channels: u8, samples: u32) -> usize {
         if self.is_planar() {
-            self.bytes() as u32 * samples
+            self.bytes() as usize * samples as usize
         } else {
-            self.bytes() as u32 * channels as u32 * samples
+            self.bytes() as usize * channels as usize * samples as usize
         }
     }
 
-    pub(crate) fn calc_data(&self, channels: u8, samples: u32) -> (u32, PlaneInformationVec) {
+    pub(crate) fn calc_data(&self, channels: u8, samples: u32) -> (usize, PlaneInformationVec) {
         let mut size = 0;
         let mut planes = PlaneInformationVec::new();
         let stride = self.stride(channels, samples);
 
         if self.is_planar() {
-            planes.extend(iter::repeat_n(PlaneInformation::Audio(stride), channels as usize));
-            size += stride * channels as u32;
+            planes.extend(iter::repeat_n(PlaneInformation::Audio(stride, stride), channels as usize));
+            size += stride * channels as usize;
         } else {
-            planes.push(PlaneInformation::Audio(stride));
+            planes.push(PlaneInformation::Audio(stride, stride));
             size = stride;
         }
 
         (size, planes)
+    }
+
+    pub(crate) fn calc_actual_bytes(&self, channels: u8, samples: u32) -> usize {
+        let bytes = self.stride(channels, samples);
+        if self.is_planar() {
+            bytes * channels as usize
+        } else {
+            bytes
+        }
     }
 }
 
@@ -318,6 +327,22 @@ impl Default for ChannelLayout {
     }
 }
 
+impl TryFrom<ChannelFormatMasks> for ChannelLayout {
+    type Error = Error;
+
+    fn try_from(mask: ChannelFormatMasks) -> std::result::Result<Self, Self::Error> {
+        Self::from_mask(mask)
+    }
+}
+
+impl TryFrom<u8> for ChannelLayout {
+    type Error = Error;
+
+    fn try_from(channels: u8) -> std::result::Result<Self, Self::Error> {
+        Self::default_from_channels(channels)
+    }
+}
+
 impl ChannelLayout {
     pub fn from_mask(mask: ChannelFormatMasks) -> Result<Self> {
         let channels = mask.bits().count_ones() as u8;
@@ -332,7 +357,7 @@ impl ChannelLayout {
             .ok_or_else(|| invalid_param_error!("channel mask is empty"))
     }
 
-    pub fn default(channels: u8) -> Result<Self> {
+    pub fn default_from_channels(channels: u8) -> Result<Self> {
         let channels = NonZeroU8::new(channels).ok_or(invalid_param_error!(channels))?;
 
         Ok(CHANNEL_LAYOUT_MAP
@@ -355,7 +380,7 @@ impl AudioFrameDescriptor {
             format,
             samples,
             sample_rate,
-            channel_layout: ChannelLayout::default(channels.get()).unwrap_or_default(),
+            channel_layout: ChannelLayout::default_from_channels(channels.get()).unwrap_or_default(),
         }
     }
 
@@ -365,6 +390,22 @@ impl AudioFrameDescriptor {
         let sample_rate = NonZeroU32::new(sample_rate).ok_or(invalid_param_error!(sample_rate))?;
 
         Ok(Self::new(format, channels, samples, sample_rate))
+    }
+
+    pub fn from_channel_layout(format: SampleFormat, samples: NonZeroU32, sample_rate: NonZeroU32, channel_layout: ChannelLayout) -> Self {
+        Self {
+            format,
+            samples,
+            sample_rate,
+            channel_layout,
+        }
+    }
+
+    pub fn try_from_channel_layout(format: SampleFormat, samples: u32, sample_rate: u32, channel_layout: ChannelLayout) -> Result<Self> {
+        let samples = NonZeroU32::new(samples).ok_or(invalid_param_error!(samples))?;
+        let sample_rate = NonZeroU32::new(sample_rate).ok_or(invalid_param_error!(sample_rate))?;
+
+        Ok(Self::from_channel_layout(format, samples, sample_rate, channel_layout))
     }
 
     pub fn channels(&self) -> NonZeroU8 {

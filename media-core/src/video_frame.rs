@@ -16,7 +16,7 @@ impl VideoDataCreator {
         let (size, planes) = format.calc_data(width.get(), height.get(), DEFAULT_ALIGNMENT);
 
         Ok(MemoryData {
-            data: vec![0; size as usize].into(),
+            data: vec![0; size].into(),
             planes,
         })
     }
@@ -28,7 +28,7 @@ impl VideoDataCreator {
         let (size, planes) = format.calc_data(width.get(), height.get(), 1);
         let buffer = buffer.into();
 
-        if buffer.len() != size as usize {
+        if buffer.len() != size {
             return Err(Error::Invalid("buffer size".to_string()));
         }
 
@@ -42,10 +42,10 @@ impl VideoDataCreator {
     where
         T: Into<Cow<'a, [u8]>>,
     {
-        let (size, planes) = format.calc_data_with_stride(height.get(), stride.get());
+        let (size, planes) = format.calc_data_with_stride(height.get(), stride.get() as usize);
         let buffer = buffer.into();
 
-        if buffer.len() != size as usize {
+        if buffer.len() != size {
             return Err(Error::Invalid("buffer size".to_string()));
         }
 
@@ -71,7 +71,7 @@ impl VideoDataCreator {
             return Err(Error::Invalid("buffer size".to_string()));
         }
 
-        let planes = PlaneInformationVec::from_slice(&[PlaneInformation::Video(stride.get(), height.get())]);
+        let planes = PlaneInformationVec::from_slice(&[PlaneInformation::Video(stride.get() as usize, height.get())]);
 
         let data = MemoryData {
             data: buffer,
@@ -181,7 +181,7 @@ impl<'a> SeparateMemoryData<'a> {
                 return Err(Error::Invalid("buffer size".to_string()));
             }
 
-            data_vec.push((*buffer, *stride, height));
+            data_vec.push((*buffer, *stride as usize, height));
         }
 
         Ok(Self {

@@ -24,7 +24,7 @@ impl AudioDataCreator {
         };
 
         Ok(MemoryData {
-            data: vec![initial_value; size as usize].into(),
+            data: vec![initial_value; size].into(),
             planes,
         })
     }
@@ -36,7 +36,7 @@ impl AudioDataCreator {
         let (size, planes) = format.calc_data(channels.get(), samples.get());
         let buffer = buffer.into();
 
-        if buffer.len() != size as usize {
+        if buffer.len() != size {
             return Err(Error::Invalid("buffer size".to_string()));
         }
 

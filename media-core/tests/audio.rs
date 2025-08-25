@@ -39,15 +39,15 @@ fn test_channel_layout_from_mask() {
 
 #[test]
 fn test_channel_layout_default() {
-    let mono = ChannelLayout::default(1).unwrap();
+    let mono = ChannelLayout::default_from_channels(1).unwrap();
     assert_eq!(mono.channels.get(), 1);
     assert_eq!(mono.spec, ChannelLayoutSpec::Mask(ChannelFormatMasks::Mono));
 
-    let stereo = ChannelLayout::default(2).unwrap();
+    let stereo = ChannelLayout::default_from_channels(2).unwrap();
     assert_eq!(stereo.channels.get(), 2);
     assert_eq!(stereo.spec, ChannelLayoutSpec::Mask(ChannelFormatMasks::Stereo));
 
-    assert!(ChannelLayout::default(0).is_err());
+    assert!(ChannelLayout::default_from_channels(0).is_err());
 }
 
 #[test]

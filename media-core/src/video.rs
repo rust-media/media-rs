@@ -877,36 +877,36 @@ impl PixelFormat {
         }
     }
 
-    pub(crate) fn calc_data(&self, width: u32, height: u32, alignment: u32) -> (u32, PlaneInformationVec) {
+    pub(crate) fn calc_data(&self, width: u32, height: u32, alignment: u32) -> (usize, PlaneInformationVec) {
         let desc = &PIXEL_FORMAT_DESC[*self as usize];
         let mut size;
         let mut planes = PlaneInformationVec::with_capacity(desc.components as usize);
 
         match self {
             PixelFormat::RGB24 | PixelFormat::BGR24 | PixelFormat::Y8 => {
-                let stride = align_to(width * desc.component_bytes[0] as u32, cmp::max(alignment, 4));
+                let stride = align_to(width * desc.component_bytes[0] as u32, cmp::max(alignment, 4)) as usize;
                 planes.push(PlaneInformation::Video(stride, height));
-                size = stride * height;
+                size = stride * height as usize;
             }
             PixelFormat::YA8 => {
-                let stride = align_to(width * desc.component_bytes[0] as u32, cmp::max(alignment, 4));
+                let stride = align_to(width * desc.component_bytes[0] as u32, cmp::max(alignment, 4)) as usize;
                 planes.extend(iter::repeat_n(PlaneInformation::Video(stride, height), 2));
-                size = stride * height * 2;
+                size = stride * height as usize * 2;
             }
             PixelFormat::YUYV | PixelFormat::YVYU | PixelFormat::UYVY | PixelFormat::VYUY | PixelFormat::AYUV => {
-                let stride = align_to(ceil_rshift(width, desc.chroma_shift_x as u32) * 4, alignment);
+                let stride = align_to(ceil_rshift(width, desc.chroma_shift_x as u32) * 4, alignment) as usize;
                 planes.push(PlaneInformation::Video(stride, height));
-                size = stride * height;
+                size = stride * height as usize;
             }
             _ => {
-                let stride = align_to(width * desc.component_bytes[0] as u32, alignment);
+                let stride = align_to(width * desc.component_bytes[0] as u32, alignment) as usize;
                 planes.push(PlaneInformation::Video(stride, height));
-                size = stride * height;
+                size = stride * height as usize;
                 for i in 1..desc.components as usize {
-                    let stride = align_to(ceil_rshift(width, desc.chroma_shift_x as u32) * desc.component_bytes[i] as u32, alignment);
+                    let stride = align_to(ceil_rshift(width, desc.chroma_shift_x as u32) * desc.component_bytes[i] as u32, alignment) as usize;
                     let height = ceil_rshift(height, desc.chroma_shift_y as u32);
                     planes.push(PlaneInformation::Video(stride, height));
-                    size += stride * height;
+                    size += stride * height as usize;
                 }
             }
         }
@@ -914,18 +914,18 @@ impl PixelFormat {
         (size, planes)
     }
 
-    pub(crate) fn calc_data_with_stride(&self, height: u32, stride: u32) -> (u32, PlaneInformationVec) {
+    pub(crate) fn calc_data_with_stride(&self, height: u32, stride: usize) -> (usize, PlaneInformationVec) {
         let desc = &PIXEL_FORMAT_DESC[*self as usize];
         let mut size;
         let mut planes = PlaneInformationVec::with_capacity(desc.components as usize);
 
         planes.push(PlaneInformation::Video(stride, height));
-        size = stride * height;
+        size = stride * height as usize;
         for i in 1..desc.components as usize {
-            let plane_stride = ceil_rshift(stride, desc.chroma_shift_x as u32) * desc.component_bytes[i] as u32;
+            let plane_stride = ceil_rshift(stride, desc.chroma_shift_x as usize) * desc.component_bytes[i] as usize;
             let plane_height = ceil_rshift(height, desc.chroma_shift_y as u32);
             planes.push(PlaneInformation::Video(plane_stride, plane_height));
-            size += plane_stride * plane_height;
+            size += plane_stride * plane_height as usize;
         }
 
         (size, planes)
