@@ -574,7 +574,7 @@ impl DataMappable for PixelBuffer {
                 let slice = unsafe { std::slice::from_raw_parts(base_address, bytes_per_row * height) };
                 planes.push(MappedPlane::Video {
                     data: MappedData::Ref(slice),
-                    stride: bytes_per_row as u32,
+                    stride: bytes_per_row,
                     height: height as u32,
                 });
             }
@@ -585,7 +585,7 @@ impl DataMappable for PixelBuffer {
             let slice = unsafe { std::slice::from_raw_parts(base_address, bytes_per_row * height) };
             planes.push(MappedPlane::Video {
                 data: MappedData::Ref(slice),
-                stride: bytes_per_row as u32,
+                stride: bytes_per_row,
                 height: height as u32,
             });
         }
@@ -607,7 +607,7 @@ impl DataMappable for PixelBuffer {
                 let slice = unsafe { std::slice::from_raw_parts_mut(base_address, bytes_per_row * height) };
                 planes[i] = MappedPlane::Video {
                     data: MappedData::RefMut(slice),
-                    stride: bytes_per_row as u32,
+                    stride: bytes_per_row,
                     height: height as u32,
                 };
             }
@@ -618,7 +618,7 @@ impl DataMappable for PixelBuffer {
             let slice = unsafe { std::slice::from_raw_parts_mut(base_address, bytes_per_row * height) };
             planes[0] = MappedPlane::Video {
                 data: MappedData::RefMut(slice),
-                stride: bytes_per_row as u32,
+                stride: bytes_per_row,
                 height: height as u32,
             };
         }
