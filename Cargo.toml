@@ -11,6 +11,7 @@ members = [
 [workspace.package]
 homepage = "https://github.com/rust-media"
 repository = "https://github.com/rust-media/media-rs"
+version = "0.4.0"
 authors = ["Zhou Wei <zhouwei@ehom.net>"]
 license = "MIT OR Apache-2.0"
 categories = ["multimedia", "multimedia::audio", "multimedia::video"]
@@ -20,16 +21,12 @@ rust-version = "1.83.0"
 
 [workspace.dependencies.media-core]
 path = "media-core"
-version = "0.3.0"
 
 [workspace.dependencies.media-codec]
 path = "media-codec"
-version = "0.1.0"
 
 [workspace.dependencies.media-device]
 path = "media-device"
-version = "0.3.0"
 
 [workspace.dependencies.media]
 path = "media"
-version = "0.3.0"
