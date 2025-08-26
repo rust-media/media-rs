@@ -19,14 +19,8 @@ keywords = ["audio", "media", "video"]
 edition = "2021"
 rust-version = "1.83.0"
 
-[workspace.dependencies.media-core]
-path = "media-core"
-
-[workspace.dependencies.media-codec]
-path = "media-codec"
-
-[workspace.dependencies.media-device]
-path = "media-device"
-
-[workspace.dependencies.media]
-path = "media"
+[workspace.dependencies]
+media = { version = "0.4.0", path = "./media" }
+media-core = { version = "0.4.0", path = "./media-core" }
+media-codec = { version = "0.4.0", path = "./media-codec" }
+media-device = { version = "0.4.0", path = "./media-device" }
