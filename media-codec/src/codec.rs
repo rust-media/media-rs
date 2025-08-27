@@ -4,15 +4,26 @@ use std::{
     sync::{Arc, LazyLock, RwLock},
 };
 
+#[cfg(feature = "audio")]
 use media_core::{
     audio::{ChannelLayout, SampleFormat},
+};
+
+#[cfg(feature = "video")]
+use media_core::{
+    video::{ChromaLocation, ColorMatrix, ColorPrimaries, ColorRange, ColorTransferCharacteristics, PixelFormat},
+};
+
+use media_core::{
     error::Error,
     variant::Variant,
-    video::{ChromaLocation, ColorMatrix, ColorPrimaries, ColorRange, ColorTransferCharacteristics, PixelFormat},
     MediaType, Result,
 };
+#[cfg(feature = "video")]
 use num_rational::Rational64;
 
+
+#[cfg(feature = "audio")]
 #[allow(non_camel_case_types, clippy::upper_case_acronyms)]
 #[repr(u16)]
 enum AudioCodecID {
@@ -20,6 +31,8 @@ enum AudioCodecID {
     Opus,
 }
 
+
+#[cfg(feature = "video")]
 #[allow(non_camel_case_types, clippy::upper_case_acronyms)]
 #[repr(u16)]
 enum VideoCodecID {
@@ -40,26 +53,36 @@ macro_rules! codec_id {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum CodecID {
     // Audio codecs
+    #[cfg(feature = "audio")]
     AAC  = codec_id!(Audio, AudioCodecID, AAC),
+    #[cfg(feature = "audio")]
     Opus = codec_id!(Audio, AudioCodecID, Opus),
     // Video codecs
+    #[cfg(feature = "video")]
     H264 = codec_id!(Video, VideoCodecID, H264),
+    #[cfg(feature = "video")]
     HEVC = codec_id!(Video, VideoCodecID, HEVC),
+    #[cfg(feature = "video")]
     VP8  = codec_id!(Video, VideoCodecID, VP8),
+    #[cfg(feature = "video")]
     VP9  = codec_id!(Video, VideoCodecID, VP9),
+    #[cfg(feature = "video")]
     AV1  = codec_id!(Video, VideoCodecID, AV1),
 }
 
 impl CodecID {
     pub fn media_type(&self) -> MediaType {
         match ((*self as u32) >> 16) as u16 {
+            #[cfg(feature = "audio")]
             x if x == MediaType::Audio as u16 => MediaType::Audio,
+            #[cfg(feature = "video")]
             x if x == MediaType::Video as u16 => MediaType::Video,
             _ => unreachable!(),
         }
     }
 }
 
+#[cfg(feature = "audio")]
 #[derive(Clone, Debug, Default)]
 pub struct AudioCodecParameters {
     pub format: Option<SampleFormat>,
@@ -68,6 +91,7 @@ pub struct AudioCodecParameters {
     pub channel_layout: Option<ChannelLayout>,
 }
 
+#[cfg(feature = "video")]
 #[derive(Clone, Debug, Default)]
 pub struct VideoCodecParameters {
     pub format: Option<PixelFormat>,
@@ -83,16 +107,20 @@ pub struct VideoCodecParameters {
 
 #[derive(Clone, Debug)]
 pub enum CodecSpecificParameters {
+    #[cfg(feature = "audio")]
     Audio(AudioCodecParameters),
+    #[cfg(feature = "video")]
     Video(VideoCodecParameters),
 }
 
+#[cfg(feature = "audio")]
 impl From<AudioCodecParameters> for CodecSpecificParameters {
     fn from(params: AudioCodecParameters) -> Self {
         CodecSpecificParameters::Audio(params)
     }
 }
 
+#[cfg(feature = "video")]
 impl From<VideoCodecParameters> for CodecSpecificParameters {
     fn from(params: VideoCodecParameters) -> Self {
         CodecSpecificParameters::Video(params)
@@ -102,7 +130,9 @@ impl From<VideoCodecParameters> for CodecSpecificParameters {
 impl CodecSpecificParameters {
     pub fn media_type(&self) -> MediaType {
         match self {
+            #[cfg(feature = "audio")]
             CodecSpecificParameters::Audio(_) => MediaType::Audio,
+            #[cfg(feature = "video")]
             CodecSpecificParameters::Video(_) => MediaType::Video,
         }
     }
@@ -125,6 +155,8 @@ impl CodecParameters {
         }
     }
 
+    #[cfg(feature = "audio")]
+    #[allow(unreachable_patterns)]
     pub fn audio(&self) -> Option<&AudioCodecParameters> {
         self.specific.as_ref().and_then(|spec| match spec {
             CodecSpecificParameters::Audio(params) => Some(params),
@@ -132,6 +164,8 @@ impl CodecParameters {
         })
     }
 
+    #[cfg(feature = "video")]
+    #[allow(unreachable_patterns)]
     pub fn video(&self) -> Option<&VideoCodecParameters> {
         self.specific.as_ref().and_then(|spec| match spec {
             CodecSpecificParameters::Video(params) => Some(params),

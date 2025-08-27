@@ -20,17 +20,21 @@ num_enum = "0.7"
 num-rational = "0.4"
 num-traits = "0.2"
 os-ver = "0.2"
-pic-scale = "0.6"
+pic-scale = { version = "0.6", optional = true}
 smallvec = "1.15"
 thiserror = "1.0"
 x-variant = "0.1"
-yuv = { version = "0.8", features = ["fast_mode"] }
+yuv = { version = "0.8", features = ["fast_mode"], optional = true}
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 core-audio-types = "0.1"
 core-foundation = "0.10"
 core-media = "0.5"
 core-video = { version = "0.4", default-features = false, features = ["link"] }
+
+[features]
+audio = []
+video = ["dep:pic-scale", "dep:yuv"]
 
 [package.metadata.docs.rs]
 default-target = "x86_64-pc-windows-msvc"

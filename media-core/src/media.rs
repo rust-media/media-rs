@@ -1,4 +1,10 @@
-use crate::{audio::AudioFrameDescriptor, data::DataFrameDescriptor, video::VideoFrameDescriptor};
+use crate::data::DataFrameDescriptor;
+
+#[cfg(feature = "audio")]
+use crate::audio::AudioFrameDescriptor;
+
+#[cfg(feature = "video")]
+use crate::video::VideoFrameDescriptor;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MediaType {
@@ -9,7 +15,9 @@ pub enum MediaType {
 
 #[derive(Clone, Debug)]
 pub enum FrameDescriptor {
+    #[cfg(feature = "audio")]
     Audio(AudioFrameDescriptor),
+    #[cfg(feature = "video")]
     Video(VideoFrameDescriptor),
     Data(DataFrameDescriptor),
 }
@@ -17,16 +25,20 @@ pub enum FrameDescriptor {
 impl FrameDescriptor {
     pub fn media_type(&self) -> MediaType {
         match self {
+            #[cfg(feature = "audio")]
             FrameDescriptor::Audio(_) => MediaType::Audio,
+            #[cfg(feature = "video")]
             FrameDescriptor::Video(_) => MediaType::Video,
             FrameDescriptor::Data(_) => MediaType::Data,
         }
     }
 
+    #[cfg(feature = "audio")]
     pub fn is_audio(&self) -> bool {
         matches!(self, FrameDescriptor::Audio(_))
     }
 
+    #[cfg(feature = "video")]
     pub fn is_video(&self) -> bool {
         matches!(self, FrameDescriptor::Video(_))
     }

@@ -6,11 +6,10 @@ use std::{
 use num_rational::Rational64;
 use smallvec::SmallVec;
 
-#[cfg(any(target_os = "macos", target_os = "ios"))]
+#[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
 use crate::pixel_buffer::video_frame::PixelBuffer;
 use crate::{
     error::Error,
-    invalid_param_error,
     media::{FrameDescriptor, MediaType},
     unsupported_error,
     variant::Variant,
@@ -176,7 +175,9 @@ impl MappedPlanes<'_> {
 
 #[derive(Copy, Clone)]
 pub(crate) enum PlaneInformation {
+    #[cfg(feature = "video")]
     Video(usize, u32),   // stride, height
+    #[cfg(feature = "audio")]
     Audio(usize, usize), // stride, actual_bytes
 }
 
@@ -196,13 +197,15 @@ impl MemoryData<'_> {
         }
     }
 
+    #[cfg(feature = "audio")]
+    #[allow(unreachable_patterns)]
     pub(crate) fn truncate(&mut self, size: usize) -> Result<()> {
         for plane in &mut self.planes {
             match plane {
                 PlaneInformation::Audio(stride, actual_bytes) => {
                     let plane_size = *stride;
                     if size > plane_size || size == 0 {
-                        return Err(invalid_param_error!(size));
+                        return Err(crate::invalid_param_error!(size));
                     }
 
                     *actual_bytes = size;
@@ -215,13 +218,17 @@ impl MemoryData<'_> {
     }
 }
 
+
+#[cfg(feature = "video")]
 pub(crate) type PlaneDataVec<'a> = SmallVec<[(&'a [u8], usize, u32); DEFAULT_MAX_PLANES]>;
 
+#[cfg(feature = "video")]
 #[derive(Clone)]
 pub(crate) struct SeparateMemoryData<'a> {
     pub(crate) planes: PlaneDataVec<'a>,
 }
 
+#[cfg(feature = "video")]
 impl SeparateMemoryData<'_> {
     fn into_owned(self) -> MemoryData<'static> {
         let mut data = Vec::new();
@@ -242,8 +249,9 @@ impl SeparateMemoryData<'_> {
 #[derive(Clone)]
 pub(crate) enum FrameData<'a> {
     Memory(MemoryData<'a>),
+    #[cfg(feature = "video")]
     SeparateMemory(SeparateMemoryData<'a>),
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
+     #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
     PixelBuffer(PixelBuffer),
     Variant(Variant),
 }
@@ -252,14 +260,16 @@ impl FrameData<'_> {
     pub(crate) fn into_owned(self) -> FrameData<'static> {
         match self {
             FrameData::Memory(data) => FrameData::Memory(data.into_owned()),
+            #[cfg(feature = "video")]
             FrameData::SeparateMemory(data) => FrameData::Memory(data.into_owned()),
-            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(pixel_buffer) => FrameData::PixelBuffer(pixel_buffer),
             FrameData::Variant(variant) => FrameData::Variant(variant),
         }
     }
 
     // Truncate audio frame data to the specified size
+    #[cfg(feature = "audio")]
     pub(crate) fn truncate(&mut self, size: usize) -> Result<()> {
         match self {
             FrameData::Memory(data) => data.truncate(size),
@@ -304,7 +314,9 @@ impl DataMappable for MemoryData<'_> {
 
         for plane in &self.planes {
             let plane_size = match plane {
+                #[cfg(feature = "video")]
                 PlaneInformation::Video(stride, height) => stride * (*height as usize),
+                #[cfg(feature = "audio")]
                 PlaneInformation::Audio(stride, _) => *stride,
             };
 
@@ -314,11 +326,13 @@ impl DataMappable for MemoryData<'_> {
 
             let (plane_data, rest) = data_slice.split_at(plane_size);
             let mapped_plane = match plane {
+                #[cfg(feature = "video")]
                 PlaneInformation::Video(stride, height) => MappedPlane::Video {
                     data: MappedData::Ref(plane_data),
                     stride: *stride,
                     height: *height,
                 },
+                #[cfg(feature = "audio")]
                 PlaneInformation::Audio(_, actual_bytes) => MappedPlane::Audio {
                     data: MappedData::Ref(&plane_data[..*actual_bytes]),
                     actual_bytes: *actual_bytes,
@@ -343,7 +357,9 @@ impl DataMappable for MemoryData<'_> {
 
         for plane in &self.planes {
             let plane_size = match plane {
+                #[cfg(feature = "video")]
                 PlaneInformation::Video(stride, height) => stride * (*height as usize),
+                #[cfg(feature = "audio")]
                 PlaneInformation::Audio(stride, _) => *stride,
             };
 
@@ -353,11 +369,13 @@ impl DataMappable for MemoryData<'_> {
 
             let (plane_data, rest) = data_slice.split_at_mut(plane_size);
             let mapped_plane = match plane {
+                #[cfg(feature = "video")]
                 PlaneInformation::Video(stride, height) => MappedPlane::Video {
                     data: MappedData::RefMut(plane_data),
                     stride: *stride,
                     height: *height,
                 },
+                #[cfg(feature = "audio")]
                 PlaneInformation::Audio(_, actual_bytes) => MappedPlane::Audio {
                     data: MappedData::RefMut(&mut plane_data[..*actual_bytes]),
                     actual_bytes: *actual_bytes,
@@ -374,6 +392,7 @@ impl DataMappable for MemoryData<'_> {
     }
 }
 
+#[cfg(feature = "video")]
 impl DataMappable for SeparateMemoryData<'_> {
     fn map(&self) -> Result<MappedGuard<'_>> {
         Ok(MappedGuard {
@@ -419,8 +438,9 @@ impl DataMappable for FrameData<'_> {
     fn map(&self) -> Result<MappedGuard<'_>> {
         match self {
             FrameData::Memory(data) => data.map(),
+            #[cfg(feature = "video")]
             FrameData::SeparateMemory(data) => data.map(),
-            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(data) => data.map(),
             FrameData::Variant(_) => Err(unsupported_error!(Variant)),
         }
@@ -429,8 +449,9 @@ impl DataMappable for FrameData<'_> {
     fn map_mut(&mut self) -> Result<MappedGuard<'_>> {
         match self {
             FrameData::Memory(data) => data.map_mut(),
+            #[cfg(feature = "video")]
             FrameData::SeparateMemory(data) => data.map_mut(),
-            #[cfg(any(target_os = "macos", target_os = "ios"))]
+             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(data) => data.map_mut(),
             FrameData::Variant(_) => Err(unsupported_error!(Variant)),
         }
@@ -439,8 +460,9 @@ impl DataMappable for FrameData<'_> {
     fn unmap(&self) -> Result<()> {
         match self {
             FrameData::Memory(data) => data.unmap(),
+            #[cfg(feature = "video")]
             FrameData::SeparateMemory(data) => data.unmap(),
-            #[cfg(any(target_os = "macos", target_os = "ios"))]
+             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(data) => data.unmap(),
             FrameData::Variant(_) => Err(unsupported_error!(Variant)),
         }
@@ -449,8 +471,9 @@ impl DataMappable for FrameData<'_> {
     fn unmap_mut(&mut self) -> Result<()> {
         match self {
             FrameData::Memory(data) => data.unmap_mut(),
+            #[cfg(feature = "video")]
             FrameData::SeparateMemory(data) => data.unmap_mut(),
-            #[cfg(any(target_os = "macos", target_os = "ios"))]
+             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(data) => data.unmap_mut(),
             FrameData::Variant(_) => Err(unsupported_error!(Variant)),
         }
@@ -459,8 +482,9 @@ impl DataMappable for FrameData<'_> {
     fn planes(&self) -> Option<MappedPlanes<'_>> {
         match self {
             FrameData::Memory(data) => data.planes(),
+            #[cfg(feature = "video")]
             FrameData::SeparateMemory(data) => data.planes(),
-            #[cfg(any(target_os = "macos", target_os = "ios"))]
+             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(data) => data.planes(),
             FrameData::Variant(_) => None,
         }
@@ -469,8 +493,9 @@ impl DataMappable for FrameData<'_> {
     fn planes_mut(&mut self) -> Option<MappedPlanes<'_>> {
         match self {
             FrameData::Memory(data) => data.planes_mut(),
+            #[cfg(feature = "video")]
             FrameData::SeparateMemory(_) => None,
-            #[cfg(any(target_os = "macos", target_os = "ios"))]
+             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(data) => data.planes_mut(),
             FrameData::Variant(_) => None,
         }
@@ -499,7 +524,9 @@ impl Frame<'_> {
     {
         let desc = desc.into();
         match desc {
+            #[cfg(feature = "audio")]
             FrameDescriptor::Audio(audio_desc) => Self::audio_creator().create_with_descriptor(audio_desc),
+            #[cfg(feature = "video")]
             FrameDescriptor::Video(video_desc) => Self::video_creator().create_with_descriptor(video_desc),
             FrameDescriptor::Data(data_desc) => Self::data_creator().create_with_descriptor(data_desc),
         }
