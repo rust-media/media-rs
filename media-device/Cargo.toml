@@ -74,6 +74,7 @@ log = "0.4"
 media-core = { workspace = true }
 
 [features]
+default = ["audio", "video"]
 audio = ["media-core/audio"]
 video = ["media-core/video"]
 

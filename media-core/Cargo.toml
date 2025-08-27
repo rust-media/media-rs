@@ -33,6 +33,7 @@ core-media = "0.5"
 core-video = { version = "0.4", default-features = false, features = ["link"] }
 
 [features]
+default = ["audio", "video"]
 audio = []
 video = ["dep:pic-scale", "dep:yuv"]
 
