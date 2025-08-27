@@ -15,13 +15,16 @@ readme = "../README.md"
 
 [dependencies.media-core]
 workspace = true
+default-features = false
 
 [dependencies.media-codec]
 workspace = true
+default-features = false
 optional = true
 
 [dependencies.media-device]
 workspace = true
+default-features = false
 optional = true
 
 [features]
