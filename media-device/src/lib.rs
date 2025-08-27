@@ -1,4 +1,6 @@
+#[cfg(feature = "video")]
 pub mod camera;
+
 mod device;
 
 use cfg_if::cfg_if;
