@@ -1,12 +1,7 @@
 use env_logger;
 use log::{error, info, warn};
-use media_core::{
-    frame::SharedFrame,
-    variant::Variant,
-};
-use media_device::{
-    camera::CameraManager, Device, OutputDevice,
-};
+use media_core::{frame::SharedFrame, variant::Variant};
+use media_device::{camera::CameraManager, Device, OutputDevice};
 
 fn main() {
     std::env::set_var("RUST_LOG", "info");

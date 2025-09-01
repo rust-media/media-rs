@@ -5,23 +5,12 @@ use std::{
 };
 
 #[cfg(feature = "audio")]
-use media_core::{
-    audio::{ChannelLayout, SampleFormat},
-};
-
+use media_core::audio::{ChannelLayout, SampleFormat};
 #[cfg(feature = "video")]
-use media_core::{
-    video::{ChromaLocation, ColorMatrix, ColorPrimaries, ColorRange, ColorTransferCharacteristics, PixelFormat},
-};
-
-use media_core::{
-    error::Error,
-    variant::Variant,
-    MediaType, Result,
-};
+use media_core::video::{ChromaLocation, ColorMatrix, ColorPrimaries, ColorRange, ColorTransferCharacteristics, PixelFormat};
+use media_core::{error::Error, variant::Variant, MediaType, Result};
 #[cfg(feature = "video")]
 use num_rational::Rational64;
-
 
 #[cfg(feature = "audio")]
 #[allow(non_camel_case_types, clippy::upper_case_acronyms)]
@@ -30,7 +19,6 @@ enum AudioCodecID {
     AAC = 1,
     Opus,
 }
-
 
 #[cfg(feature = "video")]
 #[allow(non_camel_case_types, clippy::upper_case_acronyms)]

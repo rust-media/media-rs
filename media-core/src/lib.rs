@@ -1,6 +1,5 @@
-pub use x_variant as variant;
-
 use cfg_if::cfg_if;
+pub use x_variant as variant;
 
 cfg_if! {
     if #[cfg(feature = "audio")] {

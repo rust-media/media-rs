@@ -175,10 +175,10 @@ impl MappedPlanes<'_> {
 
 #[derive(Copy, Clone)]
 pub(crate) enum PlaneInformation {
-    #[cfg(feature = "video")]
-    Video(usize, u32),   // stride, height
     #[cfg(feature = "audio")]
     Audio(usize, usize), // stride, actual_bytes
+    #[cfg(feature = "video")]
+    Video(usize, u32),   // stride, height
 }
 
 pub(crate) type PlaneInformationVec = SmallVec<[PlaneInformation; DEFAULT_MAX_PLANES]>;
@@ -248,6 +248,7 @@ impl SeparateMemoryData<'_> {
 
 #[derive(Clone)]
 pub(crate) enum FrameData<'a> {
+    #[allow(dead_code)]
     Memory(MemoryData<'a>),
     #[cfg(feature = "video")]
     SeparateMemory(SeparateMemoryData<'a>),
@@ -313,18 +314,23 @@ impl DataMappable for MemoryData<'_> {
         let mut planes = SmallVec::new();
 
         for plane in &self.planes {
+            #[allow(unreachable_patterns)]
             let plane_size = match plane {
                 #[cfg(feature = "video")]
                 PlaneInformation::Video(stride, height) => stride * (*height as usize),
                 #[cfg(feature = "audio")]
                 PlaneInformation::Audio(stride, _) => *stride,
+                #[cfg(not(any(feature = "audio", feature = "video")))]
+                _ => 0,
             };
 
-            if plane_size > data_slice.len() {
+            if plane_size > data_slice.len() || plane_size == 0 {
                 return None;
             }
 
+            #[allow(unused_variables)]
             let (plane_data, rest) = data_slice.split_at(plane_size);
+
             let mapped_plane = match plane {
                 #[cfg(feature = "video")]
                 PlaneInformation::Video(stride, height) => MappedPlane::Video {
@@ -337,6 +343,8 @@ impl DataMappable for MemoryData<'_> {
                     data: MappedData::Ref(&plane_data[..*actual_bytes]),
                     actual_bytes: *actual_bytes,
                 },
+                #[cfg(not(any(feature = "audio", feature = "video")))]
+                _ => MappedPlane::None,
             };
 
             planes.push(mapped_plane);
@@ -356,18 +364,23 @@ impl DataMappable for MemoryData<'_> {
         let mut planes = SmallVec::new();
 
         for plane in &self.planes {
+            #[allow(unreachable_patterns)]
             let plane_size = match plane {
                 #[cfg(feature = "video")]
                 PlaneInformation::Video(stride, height) => stride * (*height as usize),
                 #[cfg(feature = "audio")]
                 PlaneInformation::Audio(stride, _) => *stride,
+                #[cfg(not(any(feature = "audio", feature = "video")))]
+                _ => 0,
             };
 
             if plane_size > data_slice.len() {
                 return None;
             }
 
+            #[allow(unused_variables)]
             let (plane_data, rest) = data_slice.split_at_mut(plane_size);
+
             let mapped_plane = match plane {
                 #[cfg(feature = "video")]
                 PlaneInformation::Video(stride, height) => MappedPlane::Video {
@@ -380,6 +393,8 @@ impl DataMappable for MemoryData<'_> {
                     data: MappedData::RefMut(&mut plane_data[..*actual_bytes]),
                     actual_bytes: *actual_bytes,
                 },
+                #[cfg(not(any(feature = "audio", feature = "video")))]
+                _ => MappedPlane::None,
             };
 
             planes.push(mapped_plane);
