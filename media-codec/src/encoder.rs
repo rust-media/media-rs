@@ -12,7 +12,9 @@ use crate::{
 
 pub trait Encoder: Codec + Send + Sync {
     fn send_frame(&mut self, parameters: Option<&CodecParameters>, frame: &Frame) -> Result<()>;
-    fn receive_packet(&mut self, parameters: Option<&CodecParameters>) -> Result<Packet<'static>>;
+    fn receive_packet(&mut self, parameters: Option<&CodecParameters>) -> Result<Packet<'static>> {
+        self.receive_packet_borrowed(parameters).map(|packet| packet.into_owned())
+    }
     fn receive_packet_borrowed(&mut self, parameters: Option<&CodecParameters>) -> Result<Packet<'_>>;
 }
 
