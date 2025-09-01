@@ -1,8 +1,6 @@
-use crate::data::DataFrameDescriptor;
-
 #[cfg(feature = "audio")]
 use crate::audio::AudioFrameDescriptor;
-
+use crate::data::DataFrameDescriptor;
 #[cfg(feature = "video")]
 use crate::video::VideoFrameDescriptor;
 

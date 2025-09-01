@@ -30,6 +30,7 @@ impl Frame<'_> {
     }
 
     pub fn data_descriptor(&self) -> Option<&DataFrameDescriptor> {
+        #[allow(irrefutable_let_patterns)]
         if let FrameDescriptor::Data(desc) = &self.desc {
             Some(desc)
         } else {

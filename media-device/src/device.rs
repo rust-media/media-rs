@@ -14,6 +14,7 @@ pub enum DeviceEvent {
     Refreshed(usize),         // All devices refreshed, number of devices
 }
 
+#[allow(unused)]
 pub(crate) type OutputHandler = Arc<dyn Fn(Frame) -> Result<()> + Send + Sync>;
 
 pub trait Device {
@@ -33,6 +34,7 @@ pub trait OutputDevice: Device {
         F: Fn(Frame) -> Result<()> + Send + Sync + 'static;
 }
 
+#[allow(unused)]
 pub(crate) type DeviceEventHandler = Box<dyn Fn(&DeviceEvent) + Send + Sync>;
 
 pub trait DeviceManager {
