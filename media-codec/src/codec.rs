@@ -1,4 +1,5 @@
 use std::{
+    any::Any,
     collections::HashMap,
     num::NonZeroU32,
     sync::{Arc, LazyLock, RwLock},
@@ -70,18 +71,60 @@ impl CodecID {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CodecType {
+    Decoder,
+    Encoder,
+}
+
+pub trait CodecParameters: Clone + Send + Sync + 'static {
+    fn media_type() -> MediaType;
+    fn codec_type() -> CodecType;
+}
+
+pub trait CodecConfiguration: Clone + Send + Sync + 'static {
+    type Parameters: CodecParameters;
+
+    fn media_type() -> MediaType {
+        Self::Parameters::media_type()
+    }
+    fn codec_type() -> CodecType {
+        Self::Parameters::codec_type()
+    }
+    fn from_parameters(parameters: &Self::Parameters) -> Result<Self>;
+    fn configure(&mut self, parameters: &Self::Parameters) -> Result<()>;
+}
+
 #[cfg(feature = "audio")]
 #[derive(Clone, Debug, Default)]
-pub struct AudioCodecParameters {
+pub struct AudioParameters {
     pub format: Option<SampleFormat>,
     pub samples: Option<NonZeroU32>,
     pub sample_rate: Option<NonZeroU32>,
     pub channel_layout: Option<ChannelLayout>,
 }
 
+#[cfg(feature = "audio")]
+impl AudioParameters {
+    pub(crate) fn update(&mut self, other: &AudioParameters) {
+        if other.format.is_some() {
+            self.format = other.format;
+        }
+        if other.samples.is_some() {
+            self.samples = other.samples;
+        }
+        if other.sample_rate.is_some() {
+            self.sample_rate = other.sample_rate;
+        }
+        if other.channel_layout.is_some() {
+            self.channel_layout = other.channel_layout.clone();
+        }
+    }
+}
+
 #[cfg(feature = "video")]
 #[derive(Clone, Debug, Default)]
-pub struct VideoCodecParameters {
+pub struct VideoParameters {
     pub format: Option<PixelFormat>,
     pub width: Option<NonZeroU32>,
     pub height: Option<NonZeroU32>,
@@ -93,94 +136,65 @@ pub struct VideoCodecParameters {
     pub frame_rate: Option<Rational64>,
 }
 
-#[derive(Clone, Debug)]
-pub enum CodecSpecificParameters {
-    #[cfg(feature = "audio")]
-    Audio(AudioCodecParameters),
-    #[cfg(feature = "video")]
-    Video(VideoCodecParameters),
-}
-
-#[cfg(feature = "audio")]
-impl From<AudioCodecParameters> for CodecSpecificParameters {
-    fn from(params: AudioCodecParameters) -> Self {
-        CodecSpecificParameters::Audio(params)
-    }
-}
-
 #[cfg(feature = "video")]
-impl From<VideoCodecParameters> for CodecSpecificParameters {
-    fn from(params: VideoCodecParameters) -> Self {
-        CodecSpecificParameters::Video(params)
-    }
-}
-
-impl CodecSpecificParameters {
-    pub fn media_type(&self) -> MediaType {
-        match self {
-            #[cfg(feature = "audio")]
-            CodecSpecificParameters::Audio(_) => MediaType::Audio,
-            #[cfg(feature = "video")]
-            CodecSpecificParameters::Video(_) => MediaType::Video,
+impl VideoParameters {
+    pub fn update(&mut self, other: &VideoParameters) {
+        if other.format.is_some() {
+            self.format = other.format;
+        }
+        if other.width.is_some() {
+            self.width = other.width;
+        }
+        if other.height.is_some() {
+            self.height = other.height;
+        }
+        if other.color_range.is_some() {
+            self.color_range = other.color_range;
+        }
+        if other.color_matrix.is_some() {
+            self.color_matrix = other.color_matrix;
+        }
+        if other.color_primaries.is_some() {
+            self.color_primaries = other.color_primaries;
+        }
+        if other.color_transfer_characteristics.is_some() {
+            self.color_transfer_characteristics = other.color_transfer_characteristics;
+        }
+        if other.chroma_location.is_some() {
+            self.chroma_location = other.chroma_location;
+        }
+        if other.frame_rate.is_some() {
+            self.frame_rate = other.frame_rate;
         }
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct CodecParameters {
-    pub id: Option<CodecID>,
-    pub specific: Option<CodecSpecificParameters>,
+pub trait Codec<T: CodecConfiguration> {
+    fn configure(&mut self, parameters: Option<T::Parameters>, options: Option<Variant>) -> Result<()>;
+    fn set_option(&mut self, key: &str, value: Variant) -> Result<()>;
 }
 
-impl CodecParameters {
-    pub fn new<T>(id: CodecID, params: T) -> Self
-    where
-        T: Into<CodecSpecificParameters>,
-    {
-        Self {
-            id: Some(id),
-            specific: Some(params.into()),
-        }
-    }
-
-    #[cfg(feature = "audio")]
-    #[allow(unreachable_patterns)]
-    pub fn audio(&self) -> Option<&AudioCodecParameters> {
-        self.specific.as_ref().and_then(|spec| match spec {
-            CodecSpecificParameters::Audio(params) => Some(params),
-            _ => None,
-        })
-    }
-
-    #[cfg(feature = "video")]
-    #[allow(unreachable_patterns)]
-    pub fn video(&self) -> Option<&VideoCodecParameters> {
-        self.specific.as_ref().and_then(|spec| match spec {
-            CodecSpecificParameters::Video(params) => Some(params),
-            _ => None,
-        })
-    }
-}
-
-pub trait Codec {
-    fn configure(&mut self, parameters: Option<&CodecParameters>, options: Option<&Variant>) -> Result<()>;
-    fn set_option(&mut self, key: &str, value: &Variant) -> Result<()>;
-}
-
-pub trait CodecBuilder: Send + Sync {
+pub trait CodecBuilder<T: CodecConfiguration>: Any + Send + Sync {
     fn id(&self) -> CodecID;
     fn name(&self) -> &'static str;
 }
 
-pub(crate) struct CodecList<T> {
-    pub(crate) codecs: HashMap<CodecID, Vec<T>>,
+pub(crate) struct CodecList<T: CodecConfiguration> {
+    pub(crate) codecs: HashMap<CodecID, Vec<Arc<dyn CodecBuilder<T>>>>,
 }
 
-pub(crate) type LazyCodecList<T> = LazyLock<RwLock<CodecList<Arc<T>>>>;
+pub(crate) type LazyCodecList<T> = LazyLock<RwLock<CodecList<T>>>;
 
-pub(crate) fn register_codec<T>(codec_list: &LazyCodecList<T>, builder: Arc<T>, default: bool) -> Result<()>
+pub(crate) fn convert_codec_builder<T>(builder: Arc<dyn Any>) -> Result<Arc<T>>
 where
-    T: CodecBuilder + ?Sized,
+    T: ?Sized + 'static,
+{
+    builder.downcast_ref::<Arc<T>>().cloned().ok_or_else(|| Error::Unsupported("codec builder conversion".to_string()))
+}
+
+pub(crate) fn register_codec<T>(codec_list: &LazyCodecList<T>, builder: Arc<dyn CodecBuilder<T>>, default: bool) -> Result<()>
+where
+    T: CodecConfiguration,
 {
     let mut codec_list = codec_list.write().map_err(|err| Error::Invalid(err.to_string()))?;
     let entry = codec_list.codecs.entry(builder.id()).or_default();
@@ -194,9 +208,9 @@ where
     Ok(())
 }
 
-pub(crate) fn find_codec<T>(codec_list: &LazyCodecList<T>, codec_id: CodecID) -> Result<Arc<T>>
+pub(crate) fn find_codec<T>(codec_list: &LazyCodecList<T>, codec_id: CodecID) -> Result<Arc<dyn CodecBuilder<T>>>
 where
-    T: CodecBuilder + ?Sized,
+    T: CodecConfiguration,
 {
     let codec_list = codec_list.read().map_err(|err| Error::Invalid(err.to_string()))?;
 
@@ -209,9 +223,9 @@ where
     Err(Error::NotFound(format!("codec: {:?}", codec_id)))
 }
 
-pub(crate) fn find_codec_by_name<T>(codec_list: &LazyCodecList<T>, name: &str) -> Result<Arc<T>>
+pub(crate) fn find_codec_by_name<T>(codec_list: &LazyCodecList<T>, name: &str) -> Result<Arc<dyn CodecBuilder<T>>>
 where
-    T: CodecBuilder + ?Sized,
+    T: CodecConfiguration,
 {
     let codec_list = codec_list.read().map_err(|err| Error::Invalid(err.to_string()))?;
 

@@ -1,88 +1,254 @@
 use std::{
+    any::TypeId,
     collections::HashMap,
     sync::{Arc, LazyLock, RwLock},
 };
 
-use media_core::{frame::Frame, variant::Variant, Result};
+use media_core::{error::Error, frame::Frame, variant::Variant, MediaType, Result};
 
+#[cfg(feature = "audio")]
+use crate::AudioParameters;
+#[cfg(feature = "video")]
+use crate::VideoParameters;
 use crate::{
-    codec::{find_codec, find_codec_by_name, register_codec, Codec, CodecBuilder, CodecID, CodecList, CodecParameters},
-    packet::Packet,
+    convert_codec_builder, find_codec, find_codec_by_name, packet::Packet, register_codec, Codec, CodecBuilder, CodecConfiguration, CodecID,
+    CodecList, CodecParameters, CodecType, LazyCodecList,
 };
 
-pub trait Encoder: Codec + Send + Sync {
-    fn send_frame(&mut self, parameters: Option<&CodecParameters>, frame: &Frame) -> Result<()>;
-    fn receive_packet(&mut self, parameters: Option<&CodecParameters>) -> Result<Packet<'static>> {
-        self.receive_packet_borrowed(parameters).map(|packet| packet.into_owned())
+#[derive(Clone, Debug, Default)]
+pub struct EncoderParameters {
+    pub bit_rate: Option<u64>,
+    pub profile: Option<i32>,
+    pub level: Option<i32>,
+}
+
+impl EncoderParameters {
+    pub fn update(&mut self, other: &EncoderParameters) {
+        if other.bit_rate.is_some() {
+            self.bit_rate = other.bit_rate;
+        }
+        if other.profile.is_some() {
+            self.profile = other.profile;
+        }
+        if other.level.is_some() {
+            self.level = other.level;
+        }
     }
-    fn receive_packet_borrowed(&mut self, parameters: Option<&CodecParameters>) -> Result<Packet<'_>>;
 }
 
-pub trait EncoderBuilder: CodecBuilder {
-    fn new_encoder(&self, codec_id: CodecID, parameters: Option<CodecParameters>, options: Option<Variant>) -> Result<Box<dyn Encoder>>;
+#[cfg(feature = "audio")]
+#[derive(Clone, Debug, Default)]
+pub struct AudioEncoderParameters {
+    pub audio: AudioParameters,
+    pub encoder: EncoderParameters,
 }
 
-type EncoderBuilderList = CodecList<Arc<dyn EncoderBuilder>>;
+#[cfg(feature = "audio")]
+impl CodecParameters for AudioEncoderParameters {
+    fn media_type() -> MediaType {
+        MediaType::Audio
+    }
 
-pub struct EncoderContext {
-    pub parameters: Option<CodecParameters>,
-    pub options: Option<Variant>,
-    encoder: Box<dyn Encoder>,
+    fn codec_type() -> crate::CodecType {
+        CodecType::Encoder
+    }
 }
 
-static CODEC_LIST: LazyLock<RwLock<EncoderBuilderList>> = LazyLock::new(|| {
-    RwLock::new(EncoderBuilderList {
+#[cfg(feature = "audio")]
+#[derive(Clone, Debug)]
+pub struct AudioEncoderConfiguration {
+    pub audio: AudioParameters,
+    pub encoder: EncoderParameters,
+    // audio encoder specific configuration
+    pub frame_size: Option<u32>,
+    pub delay: Option<u32>,
+}
+
+#[cfg(feature = "audio")]
+impl CodecConfiguration for AudioEncoderConfiguration {
+    type Parameters = AudioEncoderParameters;
+
+    fn from_parameters(parameters: &Self::Parameters) -> Result<Self> {
+        Ok(Self {
+            audio: parameters.audio.clone(),
+            encoder: parameters.encoder.clone(),
+            frame_size: None,
+            delay: None,
+        })
+    }
+
+    fn configure(&mut self, parameters: &Self::Parameters) -> Result<()> {
+        self.audio.update(&parameters.audio);
+        self.encoder.update(&parameters.encoder);
+        Ok(())
+    }
+}
+
+#[cfg(feature = "video")]
+#[derive(Clone, Debug, Default)]
+pub struct VideoEncoderParameters {
+    pub video: VideoParameters,
+    pub encoder: EncoderParameters,
+}
+
+#[cfg(feature = "video")]
+impl CodecParameters for VideoEncoderParameters {
+    fn media_type() -> MediaType {
+        MediaType::Video
+    }
+
+    fn codec_type() -> crate::CodecType {
+        crate::CodecType::Encoder
+    }
+}
+
+#[cfg(feature = "video")]
+#[derive(Clone, Debug)]
+pub struct VideoEncoderConfiguration {
+    pub video: VideoParameters,
+    pub encoder: EncoderParameters,
+}
+
+#[cfg(feature = "video")]
+impl CodecConfiguration for VideoEncoderConfiguration {
+    type Parameters = VideoEncoderParameters;
+
+    fn from_parameters(parameters: &Self::Parameters) -> Result<Self> {
+        Ok(Self {
+            video: parameters.video.clone(),
+            encoder: parameters.encoder.clone(),
+        })
+    }
+
+    fn configure(&mut self, parameters: &Self::Parameters) -> Result<()> {
+        self.video.update(&parameters.video);
+        self.encoder.update(&parameters.encoder);
+        Ok(())
+    }
+}
+
+pub trait Encoder<T: CodecConfiguration>: Codec<T> + Send + Sync {
+    fn send_frame(&mut self, config: &T, frame: &Frame) -> Result<()>;
+    fn receive_packet(&mut self, config: &T) -> Result<Packet<'static>> {
+        self.receive_packet_borrowed(config).map(|packet| packet.into_owned())
+    }
+    fn receive_packet_borrowed(&mut self, config: &T) -> Result<Packet<'_>>;
+}
+
+pub trait EncoderBuilder<T: CodecConfiguration>: CodecBuilder<T> {
+    fn new_encoder(&self, codec_id: CodecID, parameters: &T::Parameters, options: Option<Variant>) -> Result<Box<dyn Encoder<T>>>;
+}
+
+pub struct EncoderContext<T: CodecConfiguration> {
+    pub configurations: T,
+    encoder: Box<dyn Encoder<T>>,
+}
+
+#[cfg(feature = "audio")]
+static AUDIO_ENCODER_LIST: LazyCodecList<AudioEncoderConfiguration> = LazyLock::new(|| {
+    RwLock::new(CodecList::<AudioEncoderConfiguration> {
         codecs: HashMap::new(),
     })
 });
 
-pub fn register_encoder(builder: Arc<dyn EncoderBuilder>, default: bool) -> Result<()> {
-    register_codec(&CODEC_LIST, builder, default)
+#[cfg(feature = "video")]
+static VIDEO_ENCODER_LIST: LazyCodecList<VideoEncoderConfiguration> = LazyLock::new(|| {
+    RwLock::new(CodecList::<VideoEncoderConfiguration> {
+        codecs: HashMap::new(),
+    })
+});
+
+pub fn register_encoder<T: CodecConfiguration>(builder: Arc<dyn EncoderBuilder<T>>, default: bool) -> Result<()> {
+    match TypeId::of::<T>() {
+        #[cfg(feature = "audio")]
+        id if id == TypeId::of::<AudioEncoderConfiguration>() => {
+            let builder = convert_codec_builder::<dyn CodecBuilder<AudioEncoderConfiguration>>(builder)?;
+            register_codec(&AUDIO_ENCODER_LIST, builder, default)
+        }
+        #[cfg(feature = "video")]
+        id if id == TypeId::of::<VideoEncoderConfiguration>() => {
+            let builder = convert_codec_builder::<dyn CodecBuilder<VideoEncoderConfiguration>>(builder)?;
+            register_codec(&VIDEO_ENCODER_LIST, builder, default)
+        }
+        _ => Err(Error::Unsupported("codec parameters type".to_string())),
+    }
 }
 
-pub(crate) fn find_encoder(codec_id: CodecID) -> Result<Arc<dyn EncoderBuilder>> {
-    find_codec(&CODEC_LIST, codec_id)
+pub(crate) fn find_encoder<T: CodecConfiguration>(codec_id: CodecID) -> Result<Arc<dyn EncoderBuilder<T>>> {
+    match TypeId::of::<T>() {
+        #[cfg(feature = "audio")]
+        id if id == TypeId::of::<AudioEncoderConfiguration>() => {
+            let builder = find_codec(&AUDIO_ENCODER_LIST, codec_id)?;
+            convert_codec_builder::<dyn EncoderBuilder<T>>(builder)
+        }
+        #[cfg(feature = "video")]
+        id if id == TypeId::of::<VideoEncoderConfiguration>() => {
+            let builder = find_codec(&VIDEO_ENCODER_LIST, codec_id)?;
+            convert_codec_builder::<dyn EncoderBuilder<T>>(builder)
+        }
+        _ => Err(Error::Unsupported("codec parameters type".to_string())),
+    }
 }
 
-pub(crate) fn find_encoder_by_name(name: &str) -> Result<Arc<dyn EncoderBuilder>> {
-    find_codec_by_name(&CODEC_LIST, name)
+pub(crate) fn find_encoder_by_name<T: CodecConfiguration>(name: &str) -> Result<Arc<dyn EncoderBuilder<T>>> {
+    match TypeId::of::<T>() {
+        #[cfg(feature = "audio")]
+        id if id == TypeId::of::<AudioEncoderConfiguration>() => {
+            let builder = find_codec_by_name(&AUDIO_ENCODER_LIST, name)?;
+            convert_codec_builder::<dyn EncoderBuilder<T>>(builder)
+        }
+        #[cfg(feature = "video")]
+        id if id == TypeId::of::<VideoEncoderConfiguration>() => {
+            let builder = find_codec_by_name(&VIDEO_ENCODER_LIST, name)?;
+            convert_codec_builder::<dyn EncoderBuilder<T>>(builder)
+        }
+        _ => Err(Error::Unsupported("codec parameters type".to_string())),
+    }
 }
 
-impl EncoderContext {
-    pub fn from_codec_id(codec_id: CodecID, parameters: Option<CodecParameters>, options: Option<Variant>) -> Result<Self> {
+impl<T: CodecConfiguration> EncoderContext<T> {
+    pub fn from_codec_id(codec_id: CodecID, parameters: T::Parameters, options: Option<Variant>) -> Result<Self> {
         let builder = find_encoder(codec_id)?;
-        let encoder = builder.new_encoder(codec_id, parameters.clone(), options.clone())?;
+        let encoder = builder.new_encoder(codec_id, &parameters, options.clone())?;
+        let config = T::from_parameters(&parameters)?;
 
         Ok(Self {
-            parameters,
-            options,
+            configurations: config,
             encoder,
         })
     }
 
-    pub fn from_codec_name(name: &str, parameters: Option<CodecParameters>, options: Option<Variant>) -> Result<Self> {
+    pub fn from_codec_name(name: &str, parameters: T::Parameters, options: Option<Variant>) -> Result<Self> {
         let builder = find_encoder_by_name(name)?;
-        let encoder = builder.new_encoder(builder.id(), parameters.clone(), options.clone())?;
+        let encoder = builder.new_encoder(builder.id(), &parameters, options.clone())?;
+        let config = T::from_parameters(&parameters)?;
 
         Ok(Self {
-            parameters,
-            options,
+            configurations: config,
             encoder,
         })
+    }
+
+    pub fn configure(&mut self, parameters: Option<T::Parameters>, options: Option<Variant>) -> Result<()> {
+        if let Some(ref params) = parameters {
+            self.configurations.configure(params)?;
+        }
+        self.encoder.configure(parameters, options)
+    }
+
+    pub fn set_option(&mut self, key: &str, value: Variant) -> Result<()> {
+        self.encoder.set_option(key, value)
     }
 
     pub fn send_frame(&mut self, frame: &Frame) -> Result<()> {
-        let params = self.parameters.as_ref();
-        self.encoder.send_frame(params, frame)
+        self.encoder.send_frame(&self.configurations, frame)
     }
 
     pub fn receive_packet(&mut self) -> Result<Packet<'static>> {
-        let params = self.parameters.as_ref();
-        self.encoder.receive_packet(params)
+        self.encoder.receive_packet(&self.configurations)
     }
 
     pub fn receive_packet_borrowed(&mut self) -> Result<Packet<'_>> {
-        let params = self.parameters.as_ref();
-        self.encoder.receive_packet_borrowed(params)
+        self.encoder.receive_packet_borrowed(&self.configurations)
     }
 }

@@ -178,7 +178,7 @@ pub(crate) enum PlaneInformation {
     #[cfg(feature = "audio")]
     Audio(usize, usize), // stride, actual_bytes
     #[cfg(feature = "video")]
-    Video(usize, u32),   // stride, height
+    Video(usize, u32), // stride, height
 }
 
 pub(crate) type PlaneInformationVec = SmallVec<[PlaneInformation; DEFAULT_MAX_PLANES]>;
@@ -218,7 +218,6 @@ impl MemoryData<'_> {
     }
 }
 
-
 #[cfg(feature = "video")]
 pub(crate) type PlaneDataVec<'a> = SmallVec<[(&'a [u8], usize, u32); DEFAULT_MAX_PLANES]>;
 
@@ -252,7 +251,7 @@ pub(crate) enum FrameData<'a> {
     Memory(MemoryData<'a>),
     #[cfg(feature = "video")]
     SeparateMemory(SeparateMemoryData<'a>),
-     #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
+    #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
     PixelBuffer(PixelBuffer),
     Variant(Variant),
 }
@@ -466,7 +465,7 @@ impl DataMappable for FrameData<'_> {
             FrameData::Memory(data) => data.map_mut(),
             #[cfg(feature = "video")]
             FrameData::SeparateMemory(data) => data.map_mut(),
-             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
+            #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(data) => data.map_mut(),
             FrameData::Variant(_) => Err(unsupported_error!(Variant)),
         }
@@ -477,7 +476,7 @@ impl DataMappable for FrameData<'_> {
             FrameData::Memory(data) => data.unmap(),
             #[cfg(feature = "video")]
             FrameData::SeparateMemory(data) => data.unmap(),
-             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
+            #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(data) => data.unmap(),
             FrameData::Variant(_) => Err(unsupported_error!(Variant)),
         }
@@ -488,7 +487,7 @@ impl DataMappable for FrameData<'_> {
             FrameData::Memory(data) => data.unmap_mut(),
             #[cfg(feature = "video")]
             FrameData::SeparateMemory(data) => data.unmap_mut(),
-             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
+            #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(data) => data.unmap_mut(),
             FrameData::Variant(_) => Err(unsupported_error!(Variant)),
         }
@@ -499,7 +498,7 @@ impl DataMappable for FrameData<'_> {
             FrameData::Memory(data) => data.planes(),
             #[cfg(feature = "video")]
             FrameData::SeparateMemory(data) => data.planes(),
-             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
+            #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(data) => data.planes(),
             FrameData::Variant(_) => None,
         }
@@ -510,7 +509,7 @@ impl DataMappable for FrameData<'_> {
             FrameData::Memory(data) => data.planes_mut(),
             #[cfg(feature = "video")]
             FrameData::SeparateMemory(_) => None,
-             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
+            #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(data) => data.planes_mut(),
             FrameData::Variant(_) => None,
         }
