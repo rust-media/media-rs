@@ -1,88 +1,241 @@
 use std::{
+    any::TypeId,
     collections::HashMap,
     sync::{Arc, LazyLock, RwLock},
 };
 
-use media_core::{frame::Frame, variant::Variant, Result};
+use media_core::{error::Error, frame::Frame, variant::Variant, MediaType, Result};
 
+#[cfg(feature = "audio")]
+use crate::AudioParameters;
+#[cfg(feature = "video")]
+use crate::VideoParameters;
 use crate::{
-    codec::{find_codec, find_codec_by_name, register_codec, Codec, CodecBuilder, CodecID, CodecList, CodecParameters, LazyCodecList},
-    packet::Packet,
+    convert_codec_builder, find_codec, find_codec_by_name, packet::Packet, register_codec, Codec, CodecBuilder, CodecConfiguration, CodecID,
+    CodecList, CodecParameters, CodecType, LazyCodecList,
 };
 
-pub trait Decoder: Codec + Send + Sync {
-    fn send_packet(&mut self, parameters: Option<&CodecParameters>, packet: &Packet) -> Result<()>;
-    fn receive_frame(&mut self, parameters: Option<&CodecParameters>) -> Result<Frame<'static>> {
-        self.receive_frame_borrowed(parameters).map(|frame| frame.into_owned())
+#[derive(Clone, Debug, Default)]
+pub struct DecoderParameters {
+    pub extra_data: Option<Vec<u8>>,
+}
+
+impl DecoderParameters {
+    fn update(&mut self, other: &DecoderParameters) {
+        if let Some(ref extra_data) = other.extra_data {
+            self.extra_data = Some(extra_data.clone());
+        }
     }
-    fn receive_frame_borrowed(&mut self, parameters: Option<&CodecParameters>) -> Result<Frame<'_>>;
 }
 
-pub trait DecoderBuilder: CodecBuilder {
-    fn new_decoder(&self, codec_id: CodecID, parameters: Option<CodecParameters>, options: Option<Variant>) -> Result<Box<dyn Decoder>>;
+#[cfg(feature = "audio")]
+#[derive(Clone, Debug, Default)]
+pub struct AudioDecoderParameters {
+    pub audio: AudioParameters,
+    pub decoder: DecoderParameters,
 }
 
-type DecoderBuilderList = CodecList<Arc<dyn DecoderBuilder>>;
+#[cfg(feature = "audio")]
+impl CodecParameters for AudioDecoderParameters {
+    fn media_type() -> MediaType {
+        MediaType::Audio
+    }
 
-pub struct DecoderContext {
-    pub parameters: Option<CodecParameters>,
-    pub options: Option<Variant>,
-    decoder: Box<dyn Decoder>,
+    fn codec_type() -> crate::CodecType {
+        CodecType::Decoder
+    }
 }
 
-static CODEC_LIST: LazyCodecList<dyn DecoderBuilder> = LazyLock::new(|| {
-    RwLock::new(DecoderBuilderList {
+#[cfg(feature = "audio")]
+#[derive(Clone, Debug)]
+pub struct AudioDecoderConfiguration {
+    pub audio: AudioParameters,
+    pub decoder: DecoderParameters,
+}
+
+#[cfg(feature = "audio")]
+impl CodecConfiguration for AudioDecoderConfiguration {
+    type Parameters = AudioDecoderParameters;
+
+    fn from_parameters(parameters: &Self::Parameters) -> Result<Self> {
+        Ok(Self {
+            audio: parameters.audio.clone(),
+            decoder: parameters.decoder.clone(),
+        })
+    }
+
+    fn configure(&mut self, parameters: &Self::Parameters) -> Result<()> {
+        self.audio.update(&parameters.audio);
+        self.decoder.update(&parameters.decoder);
+        Ok(())
+    }
+}
+
+#[cfg(feature = "video")]
+#[derive(Clone, Debug, Default)]
+pub struct VideoDecoderParameters {
+    pub video: VideoParameters,
+    pub decoder: DecoderParameters,
+}
+
+#[cfg(feature = "video")]
+impl CodecParameters for VideoDecoderParameters {
+    fn media_type() -> MediaType {
+        MediaType::Video
+    }
+
+    fn codec_type() -> crate::CodecType {
+        crate::CodecType::Decoder
+    }
+}
+
+#[cfg(feature = "video")]
+#[derive(Clone, Debug)]
+pub struct VideoDecoderConfiguration {
+    pub video: VideoParameters,
+    pub decoder: DecoderParameters,
+}
+
+#[cfg(feature = "video")]
+impl CodecConfiguration for VideoDecoderConfiguration {
+    type Parameters = VideoDecoderParameters;
+
+    fn from_parameters(parameters: &Self::Parameters) -> Result<Self> {
+        Ok(Self {
+            video: parameters.video.clone(),
+            decoder: parameters.decoder.clone(),
+        })
+    }
+
+    fn configure(&mut self, parameters: &Self::Parameters) -> Result<()> {
+        self.video.update(&parameters.video);
+        self.decoder.update(&parameters.decoder);
+        Ok(())
+    }
+}
+
+pub trait Decoder<T: CodecConfiguration>: Codec<T> + Send + Sync {
+    fn send_packet(&mut self, config: &T, packet: &Packet) -> Result<()>;
+    fn receive_frame(&mut self, config: &T) -> Result<Frame<'static>> {
+        self.receive_frame_borrowed(config).map(|frame| frame.into_owned())
+    }
+    fn receive_frame_borrowed(&mut self, config: &T) -> Result<Frame<'_>>;
+}
+
+pub trait DecoderBuilder<T: CodecConfiguration>: CodecBuilder<T> {
+    fn new_decoder(&self, codec_id: CodecID, parameters: &T::Parameters, options: Option<Variant>) -> Result<Box<dyn Decoder<T>>>;
+}
+
+pub struct DecoderContext<T: CodecConfiguration> {
+    pub configurations: T,
+    decoder: Box<dyn Decoder<T>>,
+}
+
+#[cfg(feature = "audio")]
+static AUDIO_DECODER_LIST: LazyCodecList<AudioDecoderConfiguration> = LazyLock::new(|| {
+    RwLock::new(CodecList::<AudioDecoderConfiguration> {
         codecs: HashMap::new(),
     })
 });
 
-pub fn register_decoder(builder: Arc<dyn DecoderBuilder>, default: bool) -> Result<()> {
-    register_codec(&CODEC_LIST, builder, default)
+#[cfg(feature = "video")]
+static VIDEO_DECODER_LIST: LazyCodecList<VideoDecoderConfiguration> = LazyLock::new(|| {
+    RwLock::new(CodecList::<VideoDecoderConfiguration> {
+        codecs: HashMap::new(),
+    })
+});
+
+pub fn register_decoder<T: CodecConfiguration>(builder: Arc<dyn DecoderBuilder<T>>, default: bool) -> Result<()> {
+    match TypeId::of::<T>() {
+        #[cfg(feature = "audio")]
+        id if id == TypeId::of::<AudioDecoderConfiguration>() => {
+            let builder = convert_codec_builder::<dyn CodecBuilder<AudioDecoderConfiguration>>(builder)?;
+            register_codec(&AUDIO_DECODER_LIST, builder, default)
+        }
+        #[cfg(feature = "video")]
+        id if id == TypeId::of::<VideoDecoderConfiguration>() => {
+            let builder = convert_codec_builder::<dyn CodecBuilder<VideoDecoderConfiguration>>(builder)?;
+            register_codec(&VIDEO_DECODER_LIST, builder, default)
+        }
+        _ => Err(Error::Unsupported("codec parameters type".to_string())),
+    }
 }
 
-pub(crate) fn find_decoder(codec_id: CodecID) -> Result<Arc<dyn DecoderBuilder>> {
-    find_codec(&CODEC_LIST, codec_id)
+pub(crate) fn find_decoder<T: CodecConfiguration>(codec_id: CodecID) -> Result<Arc<dyn DecoderBuilder<T>>> {
+    match TypeId::of::<T>() {
+        #[cfg(feature = "audio")]
+        id if id == TypeId::of::<AudioDecoderConfiguration>() => {
+            let builder = find_codec(&AUDIO_DECODER_LIST, codec_id)?;
+            convert_codec_builder::<dyn DecoderBuilder<T>>(builder)
+        }
+        #[cfg(feature = "video")]
+        id if id == TypeId::of::<VideoDecoderConfiguration>() => {
+            let builder = find_codec(&VIDEO_DECODER_LIST, codec_id)?;
+            convert_codec_builder::<dyn DecoderBuilder<T>>(builder)
+        }
+        _ => Err(Error::Unsupported("codec parameters type".to_string())),
+    }
 }
 
-pub(crate) fn find_decoder_by_name(name: &str) -> Result<Arc<dyn DecoderBuilder>> {
-    find_codec_by_name(&CODEC_LIST, name)
+pub(crate) fn find_decoder_by_name<T: CodecConfiguration>(name: &str) -> Result<Arc<dyn DecoderBuilder<T>>> {
+    match TypeId::of::<T>() {
+        #[cfg(feature = "audio")]
+        id if id == TypeId::of::<AudioDecoderConfiguration>() => {
+            let builder = find_codec_by_name(&AUDIO_DECODER_LIST, name)?;
+            convert_codec_builder::<dyn DecoderBuilder<T>>(builder)
+        }
+        #[cfg(feature = "video")]
+        id if id == TypeId::of::<VideoDecoderConfiguration>() => {
+            let builder = find_codec_by_name(&VIDEO_DECODER_LIST, name)?;
+            convert_codec_builder::<dyn DecoderBuilder<T>>(builder)
+        }
+        _ => Err(Error::Unsupported("codec parameters type".to_string())),
+    }
 }
 
-impl DecoderContext {
-    pub fn from_codec_id(codec_id: CodecID, parameters: Option<CodecParameters>, options: Option<Variant>) -> Result<Self> {
+impl<T: CodecConfiguration> DecoderContext<T> {
+    pub fn from_codec_id(codec_id: CodecID, parameters: T::Parameters, options: Option<Variant>) -> Result<Self> {
         let builder = find_decoder(codec_id)?;
-        let decoder = builder.new_decoder(codec_id, parameters.clone(), options.clone())?;
+        let decoder = builder.new_decoder(codec_id, &parameters, options.clone())?;
+        let config = T::from_parameters(&parameters)?;
 
         Ok(Self {
-            parameters,
-            options,
+            configurations: config,
             decoder,
         })
     }
 
-    pub fn from_codec_name(name: &str, parameters: Option<CodecParameters>, options: Option<Variant>) -> Result<Self> {
+    pub fn from_codec_name(name: &str, parameters: T::Parameters, options: Option<Variant>) -> Result<Self> {
         let builder = find_decoder_by_name(name)?;
-        let decoder = builder.new_decoder(builder.id(), parameters.clone(), options.clone())?;
+        let decoder = builder.new_decoder(builder.id(), &parameters, options.clone())?;
+        let config = T::from_parameters(&parameters)?;
 
         Ok(Self {
-            parameters,
-            options,
+            configurations: config,
             decoder,
         })
+    }
+
+    pub fn configure(&mut self, parameters: Option<T::Parameters>, options: Option<Variant>) -> Result<()> {
+        if let Some(ref params) = parameters {
+            self.configurations.configure(params)?;
+        }
+        self.decoder.configure(parameters, options)
+    }
+
+    pub fn set_option(&mut self, key: &str, value: Variant) -> Result<()> {
+        self.decoder.set_option(key, value)
     }
 
     pub fn send_packet(&mut self, packet: &Packet) -> Result<()> {
-        let params = self.parameters.as_ref();
-        self.decoder.send_packet(params, packet)
+        self.decoder.send_packet(&self.configurations, packet)
     }
 
     pub fn receive_frame(&mut self) -> Result<Frame<'static>> {
-        let params = self.parameters.as_ref();
-        self.decoder.receive_frame(params)
+        self.decoder.receive_frame(&self.configurations)
     }
 
     pub fn receive_frame_borrowed(&mut self) -> Result<Frame<'_>> {
-        let params = self.parameters.as_ref();
-        self.decoder.receive_frame_borrowed(params)
+        self.decoder.receive_frame_borrowed(&self.configurations)
     }
 }
