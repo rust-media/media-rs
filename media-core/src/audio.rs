@@ -1,5 +1,5 @@
 use std::{
-    iter,
+    iter, mem,
     num::{NonZeroU32, NonZeroU8},
     sync::LazyLock,
 };
@@ -37,167 +37,22 @@ pub enum SampleFormat {
     MAX,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ChannelFormat {
-    FrontLeft,
-    FrontRight,
-    FrontCenter,
-    LowFrequency,
-    BackLeft,
-    BackRight,
-    FrontLeftOfCenter,
-    FrontRightOfCenter,
-    BackCenter,
-    SideLeft,
-    SideRight,
-    TopCenter,
-    TopFrontLeft,
-    TopFrontCenter,
-    TopFrontRight,
-    TopBackLeft,
-    TopBackCenter,
-    TopBackRight,
-}
-
-macro_rules! chn_fmt_masks {
-    ($($mask:ident)|+) => {
-        0 $(| ChannelFormatMasks::$mask.bits())+
-    };
-    ($mask:ident) => {
-        ChannelFormatMasks::$mask.bits()
-    };
-}
-
-bitflags! {
-    #[repr(transparent)]
-    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    pub struct ChannelFormatMasks: u32 {
-        const FrontLeft             = 1u32 << ChannelFormat::FrontLeft as u32;
-        const FrontRight            = 1u32 << ChannelFormat::FrontRight as u32;
-        const FrontCenter           = 1u32 << ChannelFormat::FrontCenter as u32;
-        const LowFrequency          = 1u32 << ChannelFormat::LowFrequency as u32;
-        const BackLeft              = 1u32 << ChannelFormat::BackLeft as u32;
-        const BackRight             = 1u32 << ChannelFormat::BackRight as u32;
-        const FrontLeftOfCenter     = 1u32 << ChannelFormat::FrontLeftOfCenter as u32;
-        const FrontRightOfCenter    = 1u32 << ChannelFormat::FrontRightOfCenter as u32;
-        const BackCenter            = 1u32 << ChannelFormat::BackCenter as u32;
-        const SideLeft              = 1u32 << ChannelFormat::SideLeft as u32;
-        const SideRight             = 1u32 << ChannelFormat::SideRight as u32;
-        const TopCenter             = 1u32 << ChannelFormat::TopCenter as u32;
-        const TopFrontLeft          = 1u32 << ChannelFormat::TopFrontLeft as u32;
-        const TopFrontCenter        = 1u32 << ChannelFormat::TopFrontCenter as u32;
-        const TopFrontRight         = 1u32 << ChannelFormat::TopFrontRight as u32;
-        const TopBackLeft           = 1u32 << ChannelFormat::TopBackLeft as u32;
-        const TopBackCenter         = 1u32 << ChannelFormat::TopBackCenter as u32;
-        const TopBackRight          = 1u32 << ChannelFormat::TopBackRight as u32;
-
-        const Mono                      = chn_fmt_masks!(FrontCenter);
-        const Stereo                    = chn_fmt_masks!(FrontLeft | FrontRight);
-        const Surround_2_1              = chn_fmt_masks!(Stereo | LowFrequency);
-        const Surround                  = chn_fmt_masks!(Stereo | FrontCenter);
-        const Surround_3_0              = chn_fmt_masks!(Surround);
-        const Surround_3_0_FRONT        = chn_fmt_masks!(Surround);
-        const Surround_3_0_BACK         = chn_fmt_masks!(Stereo | BackCenter);
-        const Surround_3_1              = chn_fmt_masks!(Surround_3_0 | LowFrequency);
-        const Surround_3_1_2            = chn_fmt_masks!(Surround_3_1 | TopFrontLeft | TopFrontRight);
-        const Surround_4_0              = chn_fmt_masks!(Surround_3_0 | BackCenter);
-        const Surround_4_1              = chn_fmt_masks!(Surround_4_0 | LowFrequency);
-        const Surround_2_2              = chn_fmt_masks!(Stereo | SideLeft | SideRight);
-        const Quad                      = chn_fmt_masks!(Stereo | BackLeft | BackRight);
-        const Surround_5_0              = chn_fmt_masks!(Surround_3_0 | SideLeft | SideRight);
-        const Surround_5_1              = chn_fmt_masks!(Surround_5_0 | LowFrequency);
-        const Surround_5_0_BACK         = chn_fmt_masks!(Surround_3_0 | BackLeft | BackRight);
-        const Surround_5_1_BACK         = chn_fmt_masks!(Surround_5_0_BACK | LowFrequency);
-        const Surround_6_0              = chn_fmt_masks!(Surround_5_0 | BackCenter);
-        const Hexagonal                 = chn_fmt_masks!(Surround_5_0_BACK | BackCenter);
-        const Surround_6_1              = chn_fmt_masks!(Surround_6_0 | LowFrequency);
-        const Surround_6_0_FRONT        = chn_fmt_masks!(Surround_2_2 | FrontLeftOfCenter | FrontRightOfCenter);
-        const Surround_6_1_FRONT        = chn_fmt_masks!(Surround_6_0_FRONT | LowFrequency);
-        const Surround_6_1_BACK         = chn_fmt_masks!(Surround_5_1_BACK | BackCenter);
-        const Surround_7_0              = chn_fmt_masks!(Surround_5_0 | BackLeft | BackRight);
-        const Surround_7_1              = chn_fmt_masks!(Surround_7_0 | LowFrequency);
-        const Surround_7_0_FRONT        = chn_fmt_masks!(Surround_5_0 | FrontLeftOfCenter | FrontRightOfCenter);
-        const Surround_7_1_WIDE         = chn_fmt_masks!(Surround_5_1 | FrontLeftOfCenter | FrontRightOfCenter);
-        const Surround_7_1_WIDE_BACK    = chn_fmt_masks!(Surround_5_1_BACK | FrontLeftOfCenter | FrontRightOfCenter);
-        const Surround_5_1_2            = chn_fmt_masks!(Surround_5_1 | TopFrontLeft | TopFrontRight);
-        const Surround_5_1_2_BACK       = chn_fmt_masks!(Surround_5_1_BACK | TopFrontLeft | TopFrontRight);
-        const Octagonal                 = chn_fmt_masks!(Surround_5_0 | BackLeft | BackCenter | BackRight);
-        const Cube                      = chn_fmt_masks!(Quad | TopFrontLeft | TopFrontRight | TopBackLeft | TopBackRight);
-        const Surround_5_1_4_BACK       = chn_fmt_masks!(Surround_5_1_2 | TopBackLeft | TopBackRight);
-        const Surround_7_1_2            = chn_fmt_masks!(Surround_7_1 | TopFrontLeft | TopFrontRight);
-        const Surround_7_1_4_BACK       = chn_fmt_masks!(Surround_7_1_2 | TopBackLeft | TopBackRight);
-        const Surround_9_1_4_BACK       = chn_fmt_masks!(Surround_7_1_4_BACK | FrontLeftOfCenter | FrontRightOfCenter);
+impl From<SampleFormat> for usize {
+    fn from(value: SampleFormat) -> Self {
+        value as usize
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ChannelOrder {
-    Unspecified,
-    Native,
-    Custom,
-    MAX,
-}
+impl TryFrom<usize> for SampleFormat {
+    type Error = Error;
 
-const DEFAULT_MAX_CHANNELS: usize = 16;
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ChannelLayoutSpec {
-    Mask(ChannelFormatMasks),
-    Map(Option<SmallVec<[ChannelFormat; DEFAULT_MAX_CHANNELS]>>),
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ChannelLayout {
-    pub order: ChannelOrder,
-    pub channels: NonZeroU8,
-    pub spec: ChannelLayoutSpec,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AudioFrameDescriptor {
-    pub format: SampleFormat,
-    pub samples: NonZeroU32,
-    pub sample_rate: NonZeroU32,
-    pub channel_layout: ChannelLayout,
-}
-
-struct ChannelLayoutMap {
-    map: Vec<Option<Vec<ChannelLayout>>>,
-}
-
-macro_rules! define_channel_layout_map {
-    ( $($channel_count:literal => [$($mask:ident),*]),* $(,)? ) => {
-        static CHANNEL_LAYOUT_MAP: LazyLock<ChannelLayoutMap> = LazyLock::new(|| {
-            let mut map = vec![None; DEFAULT_MAX_CHANNELS];
-            $(
-                let channels = NonZeroU8::new($channel_count).unwrap();
-                map[($channel_count - 1) as usize] = Some(vec![
-                    $(
-                        ChannelLayout {
-                            order: ChannelOrder::Native,
-                            channels,
-                            spec: ChannelLayoutSpec::Mask(ChannelFormatMasks::$mask),
-                        }
-                    ),*
-                ]);
-            )*
-            ChannelLayoutMap { map }
-        });
-    };
-}
-
-define_channel_layout_map! {
-    1 => [Mono],
-    2 => [Stereo],
-    3 => [Surround_2_1, Surround_3_0, Surround_3_0_BACK],
-    4 => [Surround_3_1, Surround_4_0, Surround_2_2, Quad],
-    5 => [Surround_4_1, Surround_5_0, Surround_5_0_BACK],
-    6 => [Surround_5_1, Surround_5_1_BACK, Surround_6_0, Surround_6_0_FRONT, Surround_3_1_2, Hexagonal],
-    7 => [Surround_6_1, Surround_6_1_FRONT, Surround_6_1_BACK, Surround_7_0, Surround_7_0_FRONT],
-    8 => [Surround_7_1, Surround_7_1_WIDE, Surround_7_1_WIDE_BACK, Surround_5_1_2, Surround_5_1_2_BACK, Octagonal, Cube],
-   10 => [Surround_5_1_4_BACK, Surround_7_1_2],
-   12 => [Surround_7_1_4_BACK],
-   14 => [Surround_9_1_4_BACK],
+    fn try_from(value: usize) -> Result<Self> {
+        if value <= SampleFormat::MAX as usize {
+            Ok(unsafe { mem::transmute::<u8, SampleFormat>(value as u8) })
+        } else {
+            Err(invalid_param_error!(value))
+        }
+    }
 }
 
 struct SampleFormatDescriptor {
@@ -305,6 +160,28 @@ impl SampleFormat {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ChannelFormat {
+    FrontLeft,
+    FrontRight,
+    FrontCenter,
+    LowFrequency,
+    BackLeft,
+    BackRight,
+    FrontLeftOfCenter,
+    FrontRightOfCenter,
+    BackCenter,
+    SideLeft,
+    SideRight,
+    TopCenter,
+    TopFrontLeft,
+    TopFrontCenter,
+    TopFrontRight,
+    TopBackLeft,
+    TopBackCenter,
+    TopBackRight,
+}
+
 impl From<ChannelFormat> for u32 {
     fn from(format: ChannelFormat) -> Self {
         format as u32
@@ -315,6 +192,139 @@ impl From<ChannelFormat> for ChannelFormatMasks {
     fn from(format: ChannelFormat) -> Self {
         ChannelFormatMasks::from_bits_truncate(1u32 << format as u32)
     }
+}
+
+macro_rules! chn_fmt_masks {
+    ($($mask:ident)|+) => {
+        0 $(| ChannelFormatMasks::$mask.bits())+
+    };
+    ($mask:ident) => {
+        ChannelFormatMasks::$mask.bits()
+    };
+}
+
+bitflags! {
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub struct ChannelFormatMasks: u32 {
+        const FrontLeft             = 1u32 << ChannelFormat::FrontLeft as u32;
+        const FrontRight            = 1u32 << ChannelFormat::FrontRight as u32;
+        const FrontCenter           = 1u32 << ChannelFormat::FrontCenter as u32;
+        const LowFrequency          = 1u32 << ChannelFormat::LowFrequency as u32;
+        const BackLeft              = 1u32 << ChannelFormat::BackLeft as u32;
+        const BackRight             = 1u32 << ChannelFormat::BackRight as u32;
+        const FrontLeftOfCenter     = 1u32 << ChannelFormat::FrontLeftOfCenter as u32;
+        const FrontRightOfCenter    = 1u32 << ChannelFormat::FrontRightOfCenter as u32;
+        const BackCenter            = 1u32 << ChannelFormat::BackCenter as u32;
+        const SideLeft              = 1u32 << ChannelFormat::SideLeft as u32;
+        const SideRight             = 1u32 << ChannelFormat::SideRight as u32;
+        const TopCenter             = 1u32 << ChannelFormat::TopCenter as u32;
+        const TopFrontLeft          = 1u32 << ChannelFormat::TopFrontLeft as u32;
+        const TopFrontCenter        = 1u32 << ChannelFormat::TopFrontCenter as u32;
+        const TopFrontRight         = 1u32 << ChannelFormat::TopFrontRight as u32;
+        const TopBackLeft           = 1u32 << ChannelFormat::TopBackLeft as u32;
+        const TopBackCenter         = 1u32 << ChannelFormat::TopBackCenter as u32;
+        const TopBackRight          = 1u32 << ChannelFormat::TopBackRight as u32;
+
+        const Mono                      = chn_fmt_masks!(FrontCenter);
+        const Stereo                    = chn_fmt_masks!(FrontLeft | FrontRight);
+        const Surround_2_1              = chn_fmt_masks!(Stereo | LowFrequency);
+        const Surround                  = chn_fmt_masks!(Stereo | FrontCenter);
+        const Surround_3_0              = chn_fmt_masks!(Surround);
+        const Surround_3_0_FRONT        = chn_fmt_masks!(Surround);
+        const Surround_3_0_BACK         = chn_fmt_masks!(Stereo | BackCenter);
+        const Surround_3_1              = chn_fmt_masks!(Surround_3_0 | LowFrequency);
+        const Surround_3_1_2            = chn_fmt_masks!(Surround_3_1 | TopFrontLeft | TopFrontRight);
+        const Surround_4_0              = chn_fmt_masks!(Surround_3_0 | BackCenter);
+        const Surround_4_1              = chn_fmt_masks!(Surround_4_0 | LowFrequency);
+        const Surround_2_2              = chn_fmt_masks!(Stereo | SideLeft | SideRight);
+        const Quad                      = chn_fmt_masks!(Stereo | BackLeft | BackRight);
+        const Surround_5_0              = chn_fmt_masks!(Surround_3_0 | SideLeft | SideRight);
+        const Surround_5_1              = chn_fmt_masks!(Surround_5_0 | LowFrequency);
+        const Surround_5_0_BACK         = chn_fmt_masks!(Surround_3_0 | BackLeft | BackRight);
+        const Surround_5_1_BACK         = chn_fmt_masks!(Surround_5_0_BACK | LowFrequency);
+        const Surround_6_0              = chn_fmt_masks!(Surround_5_0 | BackCenter);
+        const Hexagonal                 = chn_fmt_masks!(Surround_5_0_BACK | BackCenter);
+        const Surround_6_1              = chn_fmt_masks!(Surround_6_0 | LowFrequency);
+        const Surround_6_0_FRONT        = chn_fmt_masks!(Surround_2_2 | FrontLeftOfCenter | FrontRightOfCenter);
+        const Surround_6_1_FRONT        = chn_fmt_masks!(Surround_6_0_FRONT | LowFrequency);
+        const Surround_6_1_BACK         = chn_fmt_masks!(Surround_5_1_BACK | BackCenter);
+        const Surround_7_0              = chn_fmt_masks!(Surround_5_0 | BackLeft | BackRight);
+        const Surround_7_1              = chn_fmt_masks!(Surround_7_0 | LowFrequency);
+        const Surround_7_0_FRONT        = chn_fmt_masks!(Surround_5_0 | FrontLeftOfCenter | FrontRightOfCenter);
+        const Surround_7_1_WIDE         = chn_fmt_masks!(Surround_5_1 | FrontLeftOfCenter | FrontRightOfCenter);
+        const Surround_7_1_WIDE_BACK    = chn_fmt_masks!(Surround_5_1_BACK | FrontLeftOfCenter | FrontRightOfCenter);
+        const Surround_5_1_2            = chn_fmt_masks!(Surround_5_1 | TopFrontLeft | TopFrontRight);
+        const Surround_5_1_2_BACK       = chn_fmt_masks!(Surround_5_1_BACK | TopFrontLeft | TopFrontRight);
+        const Octagonal                 = chn_fmt_masks!(Surround_5_0 | BackLeft | BackCenter | BackRight);
+        const Cube                      = chn_fmt_masks!(Quad | TopFrontLeft | TopFrontRight | TopBackLeft | TopBackRight);
+        const Surround_5_1_4_BACK       = chn_fmt_masks!(Surround_5_1_2 | TopBackLeft | TopBackRight);
+        const Surround_7_1_2            = chn_fmt_masks!(Surround_7_1 | TopFrontLeft | TopFrontRight);
+        const Surround_7_1_4_BACK       = chn_fmt_masks!(Surround_7_1_2 | TopBackLeft | TopBackRight);
+        const Surround_9_1_4_BACK       = chn_fmt_masks!(Surround_7_1_4_BACK | FrontLeftOfCenter | FrontRightOfCenter);
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ChannelOrder {
+    Unspecified,
+    Native,
+    Custom,
+    MAX,
+}
+
+struct ChannelLayoutMap {
+    map: Vec<Option<Vec<ChannelLayout>>>,
+}
+
+macro_rules! define_channel_layout_map {
+    ( $($channel_count:literal => [$($mask:ident),*]),* $(,)? ) => {
+        static CHANNEL_LAYOUT_MAP: LazyLock<ChannelLayoutMap> = LazyLock::new(|| {
+            let mut map = vec![None; DEFAULT_MAX_CHANNELS];
+            $(
+                let channels = NonZeroU8::new($channel_count).unwrap();
+                map[($channel_count - 1) as usize] = Some(vec![
+                    $(
+                        ChannelLayout {
+                            order: ChannelOrder::Native,
+                            channels,
+                            spec: ChannelLayoutSpec::Mask(ChannelFormatMasks::$mask),
+                        }
+                    ),*
+                ]);
+            )*
+            ChannelLayoutMap { map }
+        });
+    };
+}
+
+define_channel_layout_map! {
+    1 => [Mono],
+    2 => [Stereo],
+    3 => [Surround_2_1, Surround_3_0, Surround_3_0_BACK],
+    4 => [Surround_3_1, Surround_4_0, Surround_2_2, Quad],
+    5 => [Surround_4_1, Surround_5_0, Surround_5_0_BACK],
+    6 => [Surround_5_1, Surround_5_1_BACK, Surround_6_0, Surround_6_0_FRONT, Surround_3_1_2, Hexagonal],
+    7 => [Surround_6_1, Surround_6_1_FRONT, Surround_6_1_BACK, Surround_7_0, Surround_7_0_FRONT],
+    8 => [Surround_7_1, Surround_7_1_WIDE, Surround_7_1_WIDE_BACK, Surround_5_1_2, Surround_5_1_2_BACK, Octagonal, Cube],
+   10 => [Surround_5_1_4_BACK, Surround_7_1_2],
+   12 => [Surround_7_1_4_BACK],
+   14 => [Surround_9_1_4_BACK],
+}
+
+const DEFAULT_MAX_CHANNELS: usize = 16;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ChannelLayoutSpec {
+    Mask(ChannelFormatMasks),
+    Map(Option<SmallVec<[ChannelFormat; DEFAULT_MAX_CHANNELS]>>),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ChannelLayout {
+    pub order: ChannelOrder,
+    pub channels: NonZeroU8,
+    pub spec: ChannelLayoutSpec,
 }
 
 impl Default for ChannelLayout {
@@ -372,6 +382,14 @@ impl ChannelLayout {
                 spec: ChannelLayoutSpec::Mask(ChannelFormatMasks::from_bits_truncate(0)),
             }))
     }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AudioFrameDescriptor {
+    pub format: SampleFormat,
+    pub samples: NonZeroU32,
+    pub sample_rate: NonZeroU32,
+    pub channel_layout: ChannelLayout,
 }
 
 impl AudioFrameDescriptor {

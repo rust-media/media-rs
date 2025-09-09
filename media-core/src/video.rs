@@ -60,6 +60,23 @@ pub enum ColorRange {
     MAX,
 }
 
+impl From<ColorRange> for usize {
+    fn from(value: ColorRange) -> Self {
+        value as usize
+    }
+}
+
+impl From<usize> for ColorRange {
+    fn from(value: usize) -> Self {
+        match value {
+            0 => ColorRange::Unspecified,
+            1 => ColorRange::Video,
+            2 => ColorRange::Full,
+            _ => ColorRange::Unspecified,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[repr(u8)]
 pub enum ColorMatrix {
@@ -82,6 +99,36 @@ pub enum ColorMatrix {
     SMPTE2128,        // SMPTE ST 2128
 }
 
+impl From<ColorMatrix> for usize {
+    fn from(value: ColorMatrix) -> Self {
+        value as usize
+    }
+}
+
+impl TryFrom<usize> for ColorMatrix {
+    type Error = Error;
+
+    fn try_from(value: usize) -> Result<Self> {
+        match value {
+            0 => Ok(ColorMatrix::Identity),
+            1 => Ok(ColorMatrix::BT709),
+            2 => Ok(ColorMatrix::Unspecified),
+            4 => Ok(ColorMatrix::FCC),
+            5 => Ok(ColorMatrix::BT470BG),
+            6 => Ok(ColorMatrix::SMPTE170M),
+            7 => Ok(ColorMatrix::SMPTE240M),
+            8 => Ok(ColorMatrix::YCgCo),
+            9 => Ok(ColorMatrix::BT2020NCL),
+            10 => Ok(ColorMatrix::BT2020CL),
+            11 => Ok(ColorMatrix::SMPTE2085),
+            12 => Ok(ColorMatrix::ChromaDerivedNCL),
+            13 => Ok(ColorMatrix::ChromaDerivedCL),
+            14 => Ok(ColorMatrix::ICtCp),
+            _ => Err(invalid_param_error!(value)),
+        }
+    }
+}
+
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[repr(u8)]
@@ -100,6 +147,34 @@ pub enum ColorPrimaries {
     SMPTE431,       // SMPTE ST 431-2 (DCI P3)
     SMPTE432,       // SMPTE ST 432-1 (P3 D65 / Display P3)
     JEDEC_P22 = 22, // JEDEC P22 phosphors
+}
+
+impl From<ColorPrimaries> for usize {
+    fn from(value: ColorPrimaries) -> Self {
+        value as usize
+    }
+}
+
+impl TryFrom<usize> for ColorPrimaries {
+    type Error = Error;
+
+    fn try_from(value: usize) -> Result<Self> {
+        match value {
+            0 => Ok(ColorPrimaries::Reserved),
+            1 => Ok(ColorPrimaries::BT709),
+            2 => Ok(ColorPrimaries::Unspecified),
+            4 => Ok(ColorPrimaries::BT470M),
+            5 => Ok(ColorPrimaries::BT470BG),
+            6 => Ok(ColorPrimaries::SMPTE170M),
+            7 => Ok(ColorPrimaries::SMPTE240M),
+            8 => Ok(ColorPrimaries::Film),
+            9 => Ok(ColorPrimaries::BT2020),
+            10 => Ok(ColorPrimaries::SMPTE428),
+            11 => Ok(ColorPrimaries::SMPTE431),
+            12 => Ok(ColorPrimaries::SMPTE432),
+            _ => Err(invalid_param_error!(value)),
+        }
+    }
 }
 
 #[allow(non_camel_case_types)]
@@ -125,6 +200,40 @@ pub enum ColorTransferCharacteristics {
     SMPTE2084,    // SMPTE ST 2084 / BT.2100 perceptual quantization (PQ) system
     SMPTE428,     // SMPTE ST 428-1
     ARIB_STD_B67, // ARIB STD-B67 / BT.2100 hybrid log-gamma (HLG) system
+}
+
+impl From<ColorTransferCharacteristics> for usize {
+    fn from(value: ColorTransferCharacteristics) -> Self {
+        value as usize
+    }
+}
+
+impl TryFrom<usize> for ColorTransferCharacteristics {
+    type Error = Error;
+
+    fn try_from(value: usize) -> Result<Self> {
+        match value {
+            0 => Ok(ColorTransferCharacteristics::Reserved),
+            1 => Ok(ColorTransferCharacteristics::BT709),
+            2 => Ok(ColorTransferCharacteristics::Unspecified),
+            4 => Ok(ColorTransferCharacteristics::BT470M),
+            5 => Ok(ColorTransferCharacteristics::BT470BG),
+            6 => Ok(ColorTransferCharacteristics::SMPTE170M),
+            7 => Ok(ColorTransferCharacteristics::SMPTE240M),
+            8 => Ok(ColorTransferCharacteristics::Linear),
+            9 => Ok(ColorTransferCharacteristics::Log),
+            10 => Ok(ColorTransferCharacteristics::LogSqrt),
+            11 => Ok(ColorTransferCharacteristics::IEC61966_2_4),
+            12 => Ok(ColorTransferCharacteristics::BT1361E),
+            13 => Ok(ColorTransferCharacteristics::IEC61966_2_1),
+            14 => Ok(ColorTransferCharacteristics::BT2020_10),
+            15 => Ok(ColorTransferCharacteristics::BT2020_12),
+            16 => Ok(ColorTransferCharacteristics::SMPTE2084),
+            17 => Ok(ColorTransferCharacteristics::SMPTE428),
+            18 => Ok(ColorTransferCharacteristics::ARIB_STD_B67),
+            _ => Err(invalid_param_error!(value)),
+        }
+    }
 }
 
 #[repr(u8)]
@@ -187,115 +296,21 @@ pub enum PixelFormat {
     MAX,
 }
 
-#[repr(u8)]
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, TryFromPrimitive)]
-pub enum CompressionFormat {
-    #[default]
-    MJPEG,
+impl From<PixelFormat> for usize {
+    fn from(value: PixelFormat) -> Self {
+        value as usize
+    }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum VideoFormat {
-    Pixel(PixelFormat),
-    Compression(CompressionFormat),
-}
+impl TryFrom<usize> for PixelFormat {
+    type Error = Error;
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum ChromaLocation {
-    #[default]
-    Unspecified,
-    Left,
-    Center,
-    TopLeft,
-    Top,
-    BottomLeft,
-    Bottom,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ChromaSubsampling {
-    YUV420,
-    YUV422,
-    YUV444,
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum Rotation {
-    #[default]
-    None,
-    Rotation90,
-    Rotation180,
-    Rotation270,
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum Origin {
-    #[default]
-    TopDown,
-    BottomUp,
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum ScaleFilter {
-    Nearest,
-    #[default]
-    Bilinear,
-    Bicubic,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct VideoFrameDescriptor {
-    pub format: PixelFormat,
-    pub width: NonZeroU32,
-    pub height: NonZeroU32,
-    pub color_range: ColorRange,
-    pub color_matrix: ColorMatrix,
-    pub color_primaries: ColorPrimaries,
-    pub color_transfer_characteristics: ColorTransferCharacteristics,
-    pub chroma_location: ChromaLocation,
-    pub rotation: Rotation,
-    pub origin: Origin,
-    pub transparent: bool,
-    pub extra_alpha: bool,
-    pub crop_left: u32,
-    pub crop_top: u32,
-    pub crop_right: u32,
-    pub crop_bottom: u32,
-}
-
-impl VideoFrameDescriptor {
-    pub fn new(format: PixelFormat, width: NonZeroU32, height: NonZeroU32) -> Self {
-        Self {
-            format,
-            width,
-            height,
-            color_range: ColorRange::default(),
-            color_matrix: ColorMatrix::default(),
-            color_primaries: ColorPrimaries::default(),
-            color_transfer_characteristics: ColorTransferCharacteristics::default(),
-            chroma_location: ChromaLocation::default(),
-            rotation: Rotation::default(),
-            origin: Origin::default(),
-            transparent: false,
-            extra_alpha: false,
-            crop_left: 0,
-            crop_top: 0,
-            crop_right: 0,
-            crop_bottom: 0,
+    fn try_from(value: usize) -> Result<Self> {
+        if value <= PixelFormat::MAX as usize {
+            Ok(unsafe { mem::transmute::<u8, PixelFormat>(value as u8) })
+        } else {
+            Err(invalid_param_error!(value))
         }
-    }
-
-    pub fn try_new(format: PixelFormat, width: u32, height: u32) -> Result<Self> {
-        let width = NonZeroU32::new(width).ok_or(invalid_param_error!(width))?;
-        let height = NonZeroU32::new(height).ok_or(invalid_param_error!(height))?;
-
-        Ok(Self::new(format, width, height))
-    }
-}
-
-impl From<VideoFrameDescriptor> for FrameDescriptor {
-    fn from(desc: VideoFrameDescriptor) -> Self {
-        FrameDescriptor::Video(desc)
     }
 }
 
@@ -939,131 +954,17 @@ impl PixelFormat {
     }
 }
 
-impl From<PixelFormat> for usize {
-    fn from(value: PixelFormat) -> Self {
-        value as usize
-    }
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, TryFromPrimitive)]
+pub enum CompressionFormat {
+    #[default]
+    MJPEG,
 }
 
-impl TryFrom<usize> for PixelFormat {
-    type Error = Error;
-
-    fn try_from(value: usize) -> Result<Self> {
-        if value <= PixelFormat::MAX as usize {
-            Ok(unsafe { mem::transmute::<u8, PixelFormat>(value as u8) })
-        } else {
-            Err(invalid_param_error!(value))
-        }
-    }
-}
-
-impl From<ColorRange> for usize {
-    fn from(value: ColorRange) -> Self {
-        value as usize
-    }
-}
-
-impl From<usize> for ColorRange {
-    fn from(value: usize) -> Self {
-        match value {
-            0 => ColorRange::Unspecified,
-            1 => ColorRange::Video,
-            2 => ColorRange::Full,
-            _ => ColorRange::Unspecified,
-        }
-    }
-}
-
-impl From<ColorMatrix> for usize {
-    fn from(value: ColorMatrix) -> Self {
-        value as usize
-    }
-}
-
-impl TryFrom<usize> for ColorMatrix {
-    type Error = Error;
-
-    fn try_from(value: usize) -> Result<Self> {
-        match value {
-            0 => Ok(ColorMatrix::Identity),
-            1 => Ok(ColorMatrix::BT709),
-            2 => Ok(ColorMatrix::Unspecified),
-            4 => Ok(ColorMatrix::FCC),
-            5 => Ok(ColorMatrix::BT470BG),
-            6 => Ok(ColorMatrix::SMPTE170M),
-            7 => Ok(ColorMatrix::SMPTE240M),
-            8 => Ok(ColorMatrix::YCgCo),
-            9 => Ok(ColorMatrix::BT2020NCL),
-            10 => Ok(ColorMatrix::BT2020CL),
-            11 => Ok(ColorMatrix::SMPTE2085),
-            12 => Ok(ColorMatrix::ChromaDerivedNCL),
-            13 => Ok(ColorMatrix::ChromaDerivedCL),
-            14 => Ok(ColorMatrix::ICtCp),
-            _ => Err(invalid_param_error!(value)),
-        }
-    }
-}
-
-impl From<ColorPrimaries> for usize {
-    fn from(value: ColorPrimaries) -> Self {
-        value as usize
-    }
-}
-
-impl TryFrom<usize> for ColorPrimaries {
-    type Error = Error;
-
-    fn try_from(value: usize) -> Result<Self> {
-        match value {
-            0 => Ok(ColorPrimaries::Reserved),
-            1 => Ok(ColorPrimaries::BT709),
-            2 => Ok(ColorPrimaries::Unspecified),
-            4 => Ok(ColorPrimaries::BT470M),
-            5 => Ok(ColorPrimaries::BT470BG),
-            6 => Ok(ColorPrimaries::SMPTE170M),
-            7 => Ok(ColorPrimaries::SMPTE240M),
-            8 => Ok(ColorPrimaries::Film),
-            9 => Ok(ColorPrimaries::BT2020),
-            10 => Ok(ColorPrimaries::SMPTE428),
-            11 => Ok(ColorPrimaries::SMPTE431),
-            12 => Ok(ColorPrimaries::SMPTE432),
-            _ => Err(invalid_param_error!(value)),
-        }
-    }
-}
-
-impl From<ColorTransferCharacteristics> for usize {
-    fn from(value: ColorTransferCharacteristics) -> Self {
-        value as usize
-    }
-}
-
-impl TryFrom<usize> for ColorTransferCharacteristics {
-    type Error = Error;
-
-    fn try_from(value: usize) -> Result<Self> {
-        match value {
-            0 => Ok(ColorTransferCharacteristics::Reserved),
-            1 => Ok(ColorTransferCharacteristics::BT709),
-            2 => Ok(ColorTransferCharacteristics::Unspecified),
-            4 => Ok(ColorTransferCharacteristics::BT470M),
-            5 => Ok(ColorTransferCharacteristics::BT470BG),
-            6 => Ok(ColorTransferCharacteristics::SMPTE170M),
-            7 => Ok(ColorTransferCharacteristics::SMPTE240M),
-            8 => Ok(ColorTransferCharacteristics::Linear),
-            9 => Ok(ColorTransferCharacteristics::Log),
-            10 => Ok(ColorTransferCharacteristics::LogSqrt),
-            11 => Ok(ColorTransferCharacteristics::IEC61966_2_4),
-            12 => Ok(ColorTransferCharacteristics::BT1361E),
-            13 => Ok(ColorTransferCharacteristics::IEC61966_2_1),
-            14 => Ok(ColorTransferCharacteristics::BT2020_10),
-            15 => Ok(ColorTransferCharacteristics::BT2020_12),
-            16 => Ok(ColorTransferCharacteristics::SMPTE2084),
-            17 => Ok(ColorTransferCharacteristics::SMPTE428),
-            18 => Ok(ColorTransferCharacteristics::ARIB_STD_B67),
-            _ => Err(invalid_param_error!(value)),
-        }
-    }
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum VideoFormat {
+    Pixel(PixelFormat),
+    Compression(CompressionFormat),
 }
 
 impl Display for VideoFormat {
@@ -1109,5 +1010,104 @@ impl TryFrom<u32> for VideoFormat {
         } else {
             PixelFormat::try_from(value as u8).map(VideoFormat::Pixel).map_err(|e| Error::Invalid(e.to_string()))
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum ChromaLocation {
+    #[default]
+    Unspecified,
+    Left,
+    Center,
+    TopLeft,
+    Top,
+    BottomLeft,
+    Bottom,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ChromaSubsampling {
+    YUV420,
+    YUV422,
+    YUV444,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum Rotation {
+    #[default]
+    None,
+    Rotation90,
+    Rotation180,
+    Rotation270,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum Origin {
+    #[default]
+    TopDown,
+    BottomUp,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum ScaleFilter {
+    Nearest,
+    #[default]
+    Bilinear,
+    Bicubic,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VideoFrameDescriptor {
+    pub format: PixelFormat,
+    pub width: NonZeroU32,
+    pub height: NonZeroU32,
+    pub color_range: ColorRange,
+    pub color_matrix: ColorMatrix,
+    pub color_primaries: ColorPrimaries,
+    pub color_transfer_characteristics: ColorTransferCharacteristics,
+    pub chroma_location: ChromaLocation,
+    pub rotation: Rotation,
+    pub origin: Origin,
+    pub transparent: bool,
+    pub extra_alpha: bool,
+    pub crop_left: u32,
+    pub crop_top: u32,
+    pub crop_right: u32,
+    pub crop_bottom: u32,
+}
+
+impl VideoFrameDescriptor {
+    pub fn new(format: PixelFormat, width: NonZeroU32, height: NonZeroU32) -> Self {
+        Self {
+            format,
+            width,
+            height,
+            color_range: ColorRange::default(),
+            color_matrix: ColorMatrix::default(),
+            color_primaries: ColorPrimaries::default(),
+            color_transfer_characteristics: ColorTransferCharacteristics::default(),
+            chroma_location: ChromaLocation::default(),
+            rotation: Rotation::default(),
+            origin: Origin::default(),
+            transparent: false,
+            extra_alpha: false,
+            crop_left: 0,
+            crop_top: 0,
+            crop_right: 0,
+            crop_bottom: 0,
+        }
+    }
+
+    pub fn try_new(format: PixelFormat, width: u32, height: u32) -> Result<Self> {
+        let width = NonZeroU32::new(width).ok_or(invalid_param_error!(width))?;
+        let height = NonZeroU32::new(height).ok_or(invalid_param_error!(height))?;
+
+        Ok(Self::new(format, width, height))
+    }
+}
+
+impl From<VideoFrameDescriptor> for FrameDescriptor {
+    fn from(desc: VideoFrameDescriptor) -> Self {
+        FrameDescriptor::Video(desc)
     }
 }
