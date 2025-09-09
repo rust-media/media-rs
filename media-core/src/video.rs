@@ -124,6 +124,7 @@ impl TryFrom<usize> for ColorMatrix {
             12 => Ok(ColorMatrix::ChromaDerivedNCL),
             13 => Ok(ColorMatrix::ChromaDerivedCL),
             14 => Ok(ColorMatrix::ICtCp),
+            15 => Ok(ColorMatrix::SMPTE2128),
             _ => Err(invalid_param_error!(value)),
         }
     }
@@ -172,6 +173,7 @@ impl TryFrom<usize> for ColorPrimaries {
             10 => Ok(ColorPrimaries::SMPTE428),
             11 => Ok(ColorPrimaries::SMPTE431),
             12 => Ok(ColorPrimaries::SMPTE432),
+            22 => Ok(ColorPrimaries::JEDEC_P22),
             _ => Err(invalid_param_error!(value)),
         }
     }
@@ -992,8 +994,8 @@ impl VideoFormat {
 const COMPRESSION_MASK: u32 = 0x8000;
 
 impl From<VideoFormat> for u32 {
-    fn from(val: VideoFormat) -> Self {
-        match val {
+    fn from(value: VideoFormat) -> Self {
+        match value {
             VideoFormat::Pixel(format) => format as u32,
             VideoFormat::Compression(format) => format as u32 | COMPRESSION_MASK,
         }
@@ -1023,6 +1025,27 @@ pub enum ChromaLocation {
     Top,
     BottomLeft,
     Bottom,
+}
+
+impl From<ChromaLocation> for usize {
+    fn from(value: ChromaLocation) -> Self {
+        value as usize
+    }
+}
+
+impl From<usize> for ChromaLocation {
+    fn from(value: usize) -> Self {
+        match value {
+            0 => ChromaLocation::Unspecified,
+            1 => ChromaLocation::Left,
+            2 => ChromaLocation::Center,
+            3 => ChromaLocation::TopLeft,
+            4 => ChromaLocation::Top,
+            5 => ChromaLocation::BottomLeft,
+            6 => ChromaLocation::Bottom,
+            _ => ChromaLocation::Unspecified,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
