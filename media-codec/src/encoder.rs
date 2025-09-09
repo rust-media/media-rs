@@ -133,6 +133,7 @@ pub trait Encoder<T: CodecConfiguration>: Codec<T> + Send + Sync {
         self.receive_packet_borrowed(config).map(|packet| packet.into_owned())
     }
     fn receive_packet_borrowed(&mut self, config: &T) -> Result<Packet<'_>>;
+    fn flush(&mut self, config: &T) -> Result<()>;
 }
 
 pub trait EncoderBuilder<T: CodecConfiguration>: CodecBuilder<T> {

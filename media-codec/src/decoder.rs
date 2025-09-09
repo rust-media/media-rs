@@ -120,6 +120,7 @@ pub trait Decoder<T: CodecConfiguration>: Codec<T> + Send + Sync {
         self.receive_frame_borrowed(config).map(|frame| frame.into_owned())
     }
     fn receive_frame_borrowed(&mut self, config: &T) -> Result<Frame<'_>>;
+    fn flush(&mut self, config: &T) -> Result<()>;
 }
 
 pub trait DecoderBuilder<T: CodecConfiguration>: CodecBuilder<T> {
