@@ -26,6 +26,14 @@ impl DecoderParameters {
             self.extra_data = Some(extra_data.clone());
         }
     }
+
+    fn update_with_option(&mut self, key: &str, value: &Variant) {
+        #[allow(clippy::single_match)]
+        match key {
+            "extra_data" => self.extra_data = value.get_buffer(),
+            _ => {}
+        }
+    }
 }
 
 #[cfg(feature = "audio")]
@@ -69,6 +77,12 @@ impl CodecConfiguration for AudioDecoderConfiguration {
         self.decoder.update(&parameters.decoder);
         Ok(())
     }
+
+    fn configure_with_option(&mut self, key: &str, value: &Variant) -> Result<()> {
+        self.audio.update_with_option(key, value);
+        self.decoder.update_with_option(key, value);
+        Ok(())
+    }
 }
 
 #[cfg(feature = "video")]
@@ -110,6 +124,12 @@ impl CodecConfiguration for VideoDecoderConfiguration {
     fn configure(&mut self, parameters: &Self::Parameters) -> Result<()> {
         self.video.update(&parameters.video);
         self.decoder.update(&parameters.decoder);
+        Ok(())
+    }
+
+    fn configure_with_option(&mut self, key: &str, value: &Variant) -> Result<()> {
+        self.video.update_with_option(key, value);
+        self.decoder.update_with_option(key, value);
         Ok(())
     }
 }

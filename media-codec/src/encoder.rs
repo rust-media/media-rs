@@ -23,7 +23,7 @@ pub struct EncoderParameters {
 }
 
 impl EncoderParameters {
-    pub fn update(&mut self, other: &EncoderParameters) {
+    fn update(&mut self, other: &EncoderParameters) {
         if other.bit_rate.is_some() {
             self.bit_rate = other.bit_rate;
         }
@@ -32,6 +32,15 @@ impl EncoderParameters {
         }
         if other.level.is_some() {
             self.level = other.level;
+        }
+    }
+
+    fn update_with_option(&mut self, key: &str, value: &Variant) {
+        match key {
+            "bit_rate" => self.bit_rate = value.get_uint64(),
+            "profile" => self.profile = value.get_int32(),
+            "level" => self.level = value.get_int32(),
+            _ => {}
         }
     }
 }
@@ -82,6 +91,19 @@ impl CodecConfiguration for AudioEncoderConfiguration {
         self.encoder.update(&parameters.encoder);
         Ok(())
     }
+
+    fn configure_with_option(&mut self, key: &str, value: &Variant) -> Result<()> {
+        self.audio.update_with_option(key, value);
+        self.encoder.update_with_option(key, value);
+
+        match key {
+            "frame_size" => self.frame_size = value.get_uint32(),
+            "delay" => self.delay = value.get_uint32(),
+            _ => {}
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(feature = "video")]
@@ -123,6 +145,12 @@ impl CodecConfiguration for VideoEncoderConfiguration {
     fn configure(&mut self, parameters: &Self::Parameters) -> Result<()> {
         self.video.update(&parameters.video);
         self.encoder.update(&parameters.encoder);
+        Ok(())
+    }
+
+    fn configure_with_option(&mut self, key: &str, value: &Variant) -> Result<()> {
+        self.video.update_with_option(key, value);
+        self.encoder.update_with_option(key, value);
         Ok(())
     }
 }
