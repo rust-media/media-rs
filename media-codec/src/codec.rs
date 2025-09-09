@@ -93,6 +93,7 @@ pub trait CodecConfiguration: Clone + Send + Sync + 'static {
     }
     fn from_parameters(parameters: &Self::Parameters) -> Result<Self>;
     fn configure(&mut self, parameters: &Self::Parameters) -> Result<()>;
+    fn configure_with_option(&mut self, key: &str, value: &Variant) -> Result<()>;
 }
 
 #[cfg(feature = "audio")]
@@ -120,6 +121,16 @@ impl AudioParameters {
             self.channel_layout = other.channel_layout.clone();
         }
     }
+
+    pub(crate) fn update_with_option(&mut self, key: &str, value: &Variant) {
+        match key {
+            "sample_format" => self.format = value.get_uint32().and_then(|fmt| SampleFormat::try_from(fmt as usize).ok()),
+            "samples" => self.samples = value.get_uint32().and_then(NonZeroU32::new),
+            "sample_rate" => self.sample_rate = value.get_uint32().and_then(NonZeroU32::new),
+            "channels" => self.channel_layout = value.get_uint8().and_then(|c| ChannelLayout::default_from_channels(c).ok()),
+            _ => {}
+        }
+    }
 }
 
 #[cfg(feature = "video")]
@@ -138,7 +149,7 @@ pub struct VideoParameters {
 
 #[cfg(feature = "video")]
 impl VideoParameters {
-    pub fn update(&mut self, other: &VideoParameters) {
+    pub(crate) fn update(&mut self, other: &VideoParameters) {
         if other.format.is_some() {
             self.format = other.format;
         }
@@ -165,6 +176,22 @@ impl VideoParameters {
         }
         if other.frame_rate.is_some() {
             self.frame_rate = other.frame_rate;
+        }
+    }
+
+    pub(crate) fn update_with_option(&mut self, key: &str, value: &Variant) {
+        match key {
+            "pixel_format" => self.format = value.get_uint32().and_then(|f| PixelFormat::try_from(f as usize).ok()),
+            "width" => self.width = value.get_uint32().and_then(NonZeroU32::new),
+            "height" => self.height = value.get_uint32().and_then(NonZeroU32::new),
+            "color_range" => self.color_range = value.get_uint32().map(|v| ColorRange::from(v as usize)),
+            "color_matrix" => self.color_matrix = value.get_uint32().and_then(|v| ColorMatrix::try_from(v as usize).ok()),
+            "color_primaries" => self.color_primaries = value.get_uint32().and_then(|v| ColorPrimaries::try_from(v as usize).ok()),
+            "color_transfer_characteristics" => {
+                self.color_transfer_characteristics = value.get_uint32().and_then(|v| ColorTransferCharacteristics::try_from(v as usize).ok())
+            }
+            "chroma_location" => self.chroma_location = value.get_uint32().map(|v| ChromaLocation::from(v as usize)),
+            _ => {}
         }
     }
 }
