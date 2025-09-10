@@ -11,7 +11,6 @@ use crate::pixel_buffer::video_frame::PixelBuffer;
 use crate::{
     error::Error,
     media::{FrameDescriptor, MediaType},
-    unsupported_error,
     variant::Variant,
     Result,
 };
@@ -456,7 +455,7 @@ impl DataMappable for FrameData<'_> {
             FrameData::SeparateMemory(data) => data.map(),
             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(data) => data.map(),
-            FrameData::Variant(_) => Err(unsupported_error!(Variant)),
+            FrameData::Variant(_) => Err(Error::Unsupported(stringify!(Variant).to_string())),
         }
     }
 
@@ -467,7 +466,7 @@ impl DataMappable for FrameData<'_> {
             FrameData::SeparateMemory(data) => data.map_mut(),
             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(data) => data.map_mut(),
-            FrameData::Variant(_) => Err(unsupported_error!(Variant)),
+            FrameData::Variant(_) => Err(Error::Unsupported(stringify!(Variant).to_string())),
         }
     }
 
@@ -478,7 +477,7 @@ impl DataMappable for FrameData<'_> {
             FrameData::SeparateMemory(data) => data.unmap(),
             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(data) => data.unmap(),
-            FrameData::Variant(_) => Err(unsupported_error!(Variant)),
+            FrameData::Variant(_) => Err(Error::Unsupported(stringify!(Variant).to_string())),
         }
     }
 
@@ -489,7 +488,7 @@ impl DataMappable for FrameData<'_> {
             FrameData::SeparateMemory(data) => data.unmap_mut(),
             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(data) => data.unmap_mut(),
-            FrameData::Variant(_) => Err(unsupported_error!(Variant)),
+            FrameData::Variant(_) => Err(Error::Unsupported(stringify!(Variant).to_string())),
         }
     }
 

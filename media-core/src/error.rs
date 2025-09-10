@@ -69,6 +69,6 @@ macro_rules! not_found_error {
 #[macro_export]
 macro_rules! unsupported_error {
     ($param:expr) => {
-        Error::Unsupported(stringify!($param).to_string())
+        Error::Unsupported(format!("{:?}", $param).to_string())
     };
 }
