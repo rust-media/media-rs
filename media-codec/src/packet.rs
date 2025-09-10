@@ -4,6 +4,7 @@ use std::{
 };
 
 use bitflags::bitflags;
+use media_core::{error::Error, invalid_param_error, Result};
 use num_rational::Rational64;
 
 bitflags! {
@@ -24,7 +25,7 @@ pub struct Packet<'a> {
     pub flags: PacketFlags,
     pub pos: Option<usize>,
     pub stream_index: Option<usize>,
-    pub data: Cow<'a, [u8]>,
+    data: Cow<'a, [u8]>,
 }
 
 impl<'a> Packet<'a> {
@@ -67,6 +68,32 @@ impl<'a> Packet<'a> {
             stream_index: self.stream_index,
             data: Cow::Owned(self.data.into_owned()),
         }
+    }
+
+    pub fn data(&self) -> &[u8] {
+        &self.data
+    }
+
+    pub fn data_mut(&mut self) -> Option<&mut [u8]> {
+        match &mut self.data {
+            Cow::Borrowed(_) => None,
+            Cow::Owned(ref mut vec) => Some(vec),
+        }
+    }
+
+    pub fn truncate(&mut self, len: usize) -> Result<()> {
+        let current_len = self.data.len();
+        if len > current_len {
+            return Err(invalid_param_error!(len));
+        }
+
+        match &mut self.data {
+            Cow::Owned(ref mut vec) => vec.truncate(len),
+            Cow::Borrowed(slice) => {
+                self.data = Cow::Borrowed(&slice[..len]);
+            }
+        }
+        Ok(())
     }
 }
 
