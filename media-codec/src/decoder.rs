@@ -49,7 +49,7 @@ impl CodecParameters for AudioDecoderParameters {
         MediaType::Audio
     }
 
-    fn codec_type() -> crate::CodecType {
+    fn codec_type() -> CodecType {
         CodecType::Decoder
     }
 }
@@ -98,8 +98,8 @@ impl CodecParameters for VideoDecoderParameters {
         MediaType::Video
     }
 
-    fn codec_type() -> crate::CodecType {
-        crate::CodecType::Decoder
+    fn codec_type() -> CodecType {
+        CodecType::Decoder
     }
 }
 

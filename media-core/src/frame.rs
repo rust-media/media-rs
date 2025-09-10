@@ -10,6 +10,7 @@ use smallvec::SmallVec;
 use crate::pixel_buffer::video_frame::PixelBuffer;
 use crate::{
     error::Error,
+    invalid_param_error,
     media::{FrameDescriptor, MediaType},
     variant::Variant,
     Result,
@@ -198,16 +199,16 @@ impl MemoryData<'_> {
 
     #[cfg(feature = "audio")]
     #[allow(unreachable_patterns)]
-    pub(crate) fn truncate(&mut self, size: usize) -> Result<()> {
+    pub(crate) fn truncate(&mut self, len: usize) -> Result<()> {
         for plane in &mut self.planes {
             match plane {
                 PlaneInformation::Audio(stride, actual_bytes) => {
                     let plane_size = *stride;
-                    if size > plane_size || size == 0 {
-                        return Err(crate::invalid_param_error!(size));
+                    if len > plane_size || len == 0 {
+                        return Err(invalid_param_error!(len));
                     }
 
-                    *actual_bytes = size;
+                    *actual_bytes = len;
                 }
                 _ => return Err(Error::Unsupported("truncate for video planes".to_string())),
             }
