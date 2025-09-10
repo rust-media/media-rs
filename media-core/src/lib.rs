@@ -27,6 +27,10 @@ pub mod frame;
 pub mod media;
 pub mod time;
 
+pub mod rational {
+    pub use num_rational::Rational64;
+}
+
 mod utils;
 
 pub use media::*;
