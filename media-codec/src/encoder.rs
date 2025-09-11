@@ -1,6 +1,7 @@
 use std::{
     any::TypeId,
     collections::HashMap,
+    mem,
     sync::{Arc, LazyLock, RwLock},
 };
 
@@ -11,8 +12,8 @@ use crate::AudioParameters;
 #[cfg(feature = "video")]
 use crate::VideoParameters;
 use crate::{
-    convert_codec_builder, find_codec, find_codec_by_name, packet::Packet, register_codec, Codec, CodecBuilder, CodecConfiguration, CodecID,
-    CodecList, CodecParameters, CodecType, LazyCodecList,
+    find_codec, find_codec_by_name, packet::Packet, register_codec, Codec, CodecBuilder, CodecConfiguration, CodecID, CodecList, CodecParameters,
+    CodecType, LazyCodecList,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -191,12 +192,12 @@ pub fn register_encoder<T: CodecConfiguration>(builder: Arc<dyn EncoderBuilder<T
     match TypeId::of::<T>() {
         #[cfg(feature = "audio")]
         id if id == TypeId::of::<AudioEncoderConfiguration>() => {
-            let builder = convert_codec_builder::<dyn CodecBuilder<AudioEncoderConfiguration>>(builder)?;
+            let builder = unsafe { mem::transmute::<Arc<dyn EncoderBuilder<T>>, Arc<dyn CodecBuilder<AudioEncoderConfiguration>>>(builder) };
             register_codec(&AUDIO_ENCODER_LIST, builder, default)
         }
         #[cfg(feature = "video")]
         id if id == TypeId::of::<VideoEncoderConfiguration>() => {
-            let builder = convert_codec_builder::<dyn CodecBuilder<VideoEncoderConfiguration>>(builder)?;
+            let builder = unsafe { mem::transmute::<Arc<dyn EncoderBuilder<T>>, Arc<dyn CodecBuilder<VideoEncoderConfiguration>>>(builder) };
             register_codec(&VIDEO_ENCODER_LIST, builder, default)
         }
         _ => Err(Error::Unsupported("codec parameters type".to_string())),
@@ -208,12 +209,12 @@ pub(crate) fn find_encoder<T: CodecConfiguration>(id: CodecID) -> Result<Arc<dyn
         #[cfg(feature = "audio")]
         type_id if type_id == TypeId::of::<AudioEncoderConfiguration>() => {
             let builder = find_codec(&AUDIO_ENCODER_LIST, id)?;
-            convert_codec_builder::<dyn EncoderBuilder<T>>(builder)
+            unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<AudioEncoderConfiguration>>, Arc<dyn EncoderBuilder<T>>>(builder)) }
         }
         #[cfg(feature = "video")]
         type_id if type_id == TypeId::of::<VideoEncoderConfiguration>() => {
             let builder = find_codec(&VIDEO_ENCODER_LIST, id)?;
-            convert_codec_builder::<dyn EncoderBuilder<T>>(builder)
+            unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<VideoEncoderConfiguration>>, Arc<dyn EncoderBuilder<T>>>(builder)) }
         }
         _ => Err(Error::Unsupported("codec parameters type".to_string())),
     }
@@ -224,12 +225,12 @@ pub(crate) fn find_encoder_by_name<T: CodecConfiguration>(name: &str) -> Result<
         #[cfg(feature = "audio")]
         id if id == TypeId::of::<AudioEncoderConfiguration>() => {
             let builder = find_codec_by_name(&AUDIO_ENCODER_LIST, name)?;
-            convert_codec_builder::<dyn EncoderBuilder<T>>(builder)
+            unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<AudioEncoderConfiguration>>, Arc<dyn EncoderBuilder<T>>>(builder)) }
         }
         #[cfg(feature = "video")]
         id if id == TypeId::of::<VideoEncoderConfiguration>() => {
             let builder = find_codec_by_name(&VIDEO_ENCODER_LIST, name)?;
-            convert_codec_builder::<dyn EncoderBuilder<T>>(builder)
+            unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<VideoEncoderConfiguration>>, Arc<dyn EncoderBuilder<T>>>(builder)) }
         }
         _ => Err(Error::Unsupported("codec parameters type".to_string())),
     }

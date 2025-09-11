@@ -217,13 +217,6 @@ pub(crate) struct CodecList<T: CodecConfiguration> {
 
 pub(crate) type LazyCodecList<T> = LazyLock<RwLock<CodecList<T>>>;
 
-pub(crate) fn convert_codec_builder<T>(builder: Arc<dyn Any>) -> Result<Arc<T>>
-where
-    T: ?Sized + 'static,
-{
-    builder.downcast_ref::<Arc<T>>().cloned().ok_or_else(|| Error::Unsupported("codec builder conversion".to_string()))
-}
-
 pub(crate) fn register_codec<T>(codec_list: &LazyCodecList<T>, builder: Arc<dyn CodecBuilder<T>>, default: bool) -> Result<()>
 where
     T: CodecConfiguration,
