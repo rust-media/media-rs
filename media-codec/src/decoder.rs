@@ -144,7 +144,7 @@ pub trait Decoder<T: CodecConfiguration>: Codec<T> + Send + Sync {
 }
 
 pub trait DecoderBuilder<T: CodecConfiguration>: CodecBuilder<T> {
-    fn new_decoder(&self, codec_id: CodecID, parameters: &T::Parameters, options: Option<Variant>) -> Result<Box<dyn Decoder<T>>>;
+    fn new_decoder(&self, codec_id: CodecID, parameters: &T::Parameters, options: Option<&Variant>) -> Result<Box<dyn Decoder<T>>>;
 }
 
 pub struct DecoderContext<T: CodecConfiguration> {
@@ -215,10 +215,10 @@ pub(crate) fn find_decoder_by_name<T: CodecConfiguration>(name: &str) -> Result<
 }
 
 impl<T: CodecConfiguration> DecoderContext<T> {
-    pub fn from_codec_id(codec_id: CodecID, parameters: T::Parameters, options: Option<Variant>) -> Result<Self> {
+    pub fn from_codec_id(codec_id: CodecID, parameters: &T::Parameters, options: Option<&Variant>) -> Result<Self> {
         let builder = find_decoder(codec_id)?;
-        let decoder = builder.new_decoder(codec_id, &parameters, options.clone())?;
-        let config = T::from_parameters(&parameters)?;
+        let decoder = builder.new_decoder(codec_id, parameters, options)?;
+        let config = T::from_parameters(parameters)?;
 
         Ok(Self {
             configurations: config,
@@ -226,10 +226,10 @@ impl<T: CodecConfiguration> DecoderContext<T> {
         })
     }
 
-    pub fn from_codec_name(name: &str, parameters: T::Parameters, options: Option<Variant>) -> Result<Self> {
+    pub fn from_codec_name(name: &str, parameters: &T::Parameters, options: Option<&Variant>) -> Result<Self> {
         let builder = find_decoder_by_name(name)?;
-        let decoder = builder.new_decoder(builder.id(), &parameters, options.clone())?;
-        let config = T::from_parameters(&parameters)?;
+        let decoder = builder.new_decoder(builder.id(), parameters, options)?;
+        let config = T::from_parameters(parameters)?;
 
         Ok(Self {
             configurations: config,
@@ -237,14 +237,14 @@ impl<T: CodecConfiguration> DecoderContext<T> {
         })
     }
 
-    pub fn configure(&mut self, parameters: Option<T::Parameters>, options: Option<Variant>) -> Result<()> {
-        if let Some(ref params) = parameters {
+    pub fn configure(&mut self, parameters: Option<&T::Parameters>, options: Option<&Variant>) -> Result<()> {
+        if let Some(params) = parameters {
             self.configurations.configure(params)?;
         }
         self.decoder.configure(parameters, options)
     }
 
-    pub fn set_option(&mut self, key: &str, value: Variant) -> Result<()> {
+    pub fn set_option(&mut self, key: &str, value: &Variant) -> Result<()> {
         self.decoder.set_option(key, value)
     }
 

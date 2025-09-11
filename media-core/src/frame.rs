@@ -10,7 +10,6 @@ use smallvec::SmallVec;
 use crate::pixel_buffer::video_frame::PixelBuffer;
 use crate::{
     error::Error,
-    invalid_param_error,
     media::{FrameDescriptor, MediaType},
     variant::Variant,
     Result,
@@ -205,7 +204,7 @@ impl MemoryData<'_> {
                 PlaneInformation::Audio(stride, actual_bytes) => {
                     let plane_size = *stride;
                     if len > plane_size || len == 0 {
-                        return Err(invalid_param_error!(len));
+                        return Err(crate::invalid_param_error!(len));
                     }
 
                     *actual_bytes = len;

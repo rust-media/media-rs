@@ -197,8 +197,8 @@ impl VideoParameters {
 }
 
 pub trait Codec<T: CodecConfiguration> {
-    fn configure(&mut self, parameters: Option<T::Parameters>, options: Option<Variant>) -> Result<()>;
-    fn set_option(&mut self, key: &str, value: Variant) -> Result<()>;
+    fn configure(&mut self, parameters: Option<&T::Parameters>, options: Option<&Variant>) -> Result<()>;
+    fn set_option(&mut self, key: &str, value: &Variant) -> Result<()>;
 }
 
 pub trait CodecBuilder<T: CodecConfiguration>: Any + Send + Sync {
