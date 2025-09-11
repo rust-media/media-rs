@@ -196,7 +196,12 @@ impl VideoParameters {
     }
 }
 
-pub trait Codec<T: CodecConfiguration> {
+pub trait CodecInfomation {
+    fn id(&self) -> CodecID;
+    fn name(&self) -> &'static str;
+}
+
+pub trait Codec<T: CodecConfiguration>: CodecInfomation {
     fn configure(&mut self, parameters: Option<&T::Parameters>, options: Option<&Variant>) -> Result<()>;
     fn set_option(&mut self, key: &str, value: &Variant) -> Result<()>;
 }
@@ -235,19 +240,19 @@ where
     Ok(())
 }
 
-pub(crate) fn find_codec<T>(codec_list: &LazyCodecList<T>, codec_id: CodecID) -> Result<Arc<dyn CodecBuilder<T>>>
+pub(crate) fn find_codec<T>(codec_list: &LazyCodecList<T>, id: CodecID) -> Result<Arc<dyn CodecBuilder<T>>>
 where
     T: CodecConfiguration,
 {
     let codec_list = codec_list.read().map_err(|err| Error::Invalid(err.to_string()))?;
 
-    if let Some(builders) = codec_list.codecs.get(&codec_id) {
+    if let Some(builders) = codec_list.codecs.get(&id) {
         if let Some(builder) = builders.first() {
             return Ok(builder.clone());
         }
     }
 
-    Err(Error::NotFound(format!("codec: {:?}", codec_id)))
+    Err(Error::NotFound(format!("codec: {:?}", id)))
 }
 
 pub(crate) fn find_codec_by_name<T>(codec_list: &LazyCodecList<T>, name: &str) -> Result<Arc<dyn CodecBuilder<T>>>
