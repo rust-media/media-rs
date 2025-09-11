@@ -165,7 +165,7 @@ pub trait Encoder<T: CodecConfiguration>: Codec<T> + Send + Sync {
 }
 
 pub trait EncoderBuilder<T: CodecConfiguration>: CodecBuilder<T> {
-    fn new_encoder(&self, codec_id: CodecID, parameters: &T::Parameters, options: Option<&Variant>) -> Result<Box<dyn Encoder<T>>>;
+    fn new_encoder(&self, id: CodecID, parameters: &T::Parameters, options: Option<&Variant>) -> Result<Box<dyn Encoder<T>>>;
 }
 
 pub struct EncoderContext<T: CodecConfiguration> {
@@ -203,16 +203,16 @@ pub fn register_encoder<T: CodecConfiguration>(builder: Arc<dyn EncoderBuilder<T
     }
 }
 
-pub(crate) fn find_encoder<T: CodecConfiguration>(codec_id: CodecID) -> Result<Arc<dyn EncoderBuilder<T>>> {
+pub(crate) fn find_encoder<T: CodecConfiguration>(id: CodecID) -> Result<Arc<dyn EncoderBuilder<T>>> {
     match TypeId::of::<T>() {
         #[cfg(feature = "audio")]
-        id if id == TypeId::of::<AudioEncoderConfiguration>() => {
-            let builder = find_codec(&AUDIO_ENCODER_LIST, codec_id)?;
+        type_id if type_id == TypeId::of::<AudioEncoderConfiguration>() => {
+            let builder = find_codec(&AUDIO_ENCODER_LIST, id)?;
             convert_codec_builder::<dyn EncoderBuilder<T>>(builder)
         }
         #[cfg(feature = "video")]
-        id if id == TypeId::of::<VideoEncoderConfiguration>() => {
-            let builder = find_codec(&VIDEO_ENCODER_LIST, codec_id)?;
+        type_id if type_id == TypeId::of::<VideoEncoderConfiguration>() => {
+            let builder = find_codec(&VIDEO_ENCODER_LIST, id)?;
             convert_codec_builder::<dyn EncoderBuilder<T>>(builder)
         }
         _ => Err(Error::Unsupported("codec parameters type".to_string())),
@@ -236,9 +236,9 @@ pub(crate) fn find_encoder_by_name<T: CodecConfiguration>(name: &str) -> Result<
 }
 
 impl<T: CodecConfiguration> EncoderContext<T> {
-    pub fn from_codec_id(codec_id: CodecID, parameters: &T::Parameters, options: Option<&Variant>) -> Result<Self> {
-        let builder = find_encoder(codec_id)?;
-        let encoder = builder.new_encoder(codec_id, parameters, options)?;
+    pub fn from_codec_id(id: CodecID, parameters: &T::Parameters, options: Option<&Variant>) -> Result<Self> {
+        let builder = find_encoder(id)?;
+        let encoder = builder.new_encoder(id, parameters, options)?;
         let config = T::from_parameters(parameters)?;
 
         Ok(Self {

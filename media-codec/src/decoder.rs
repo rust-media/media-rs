@@ -144,7 +144,7 @@ pub trait Decoder<T: CodecConfiguration>: Codec<T> + Send + Sync {
 }
 
 pub trait DecoderBuilder<T: CodecConfiguration>: CodecBuilder<T> {
-    fn new_decoder(&self, codec_id: CodecID, parameters: &T::Parameters, options: Option<&Variant>) -> Result<Box<dyn Decoder<T>>>;
+    fn new_decoder(&self, id: CodecID, parameters: &T::Parameters, options: Option<&Variant>) -> Result<Box<dyn Decoder<T>>>;
 }
 
 pub struct DecoderContext<T: CodecConfiguration> {
@@ -182,16 +182,16 @@ pub fn register_decoder<T: CodecConfiguration>(builder: Arc<dyn DecoderBuilder<T
     }
 }
 
-pub(crate) fn find_decoder<T: CodecConfiguration>(codec_id: CodecID) -> Result<Arc<dyn DecoderBuilder<T>>> {
+pub(crate) fn find_decoder<T: CodecConfiguration>(id: CodecID) -> Result<Arc<dyn DecoderBuilder<T>>> {
     match TypeId::of::<T>() {
         #[cfg(feature = "audio")]
-        id if id == TypeId::of::<AudioDecoderConfiguration>() => {
-            let builder = find_codec(&AUDIO_DECODER_LIST, codec_id)?;
+        type_id if type_id == TypeId::of::<AudioDecoderConfiguration>() => {
+            let builder = find_codec(&AUDIO_DECODER_LIST, id)?;
             convert_codec_builder::<dyn DecoderBuilder<T>>(builder)
         }
         #[cfg(feature = "video")]
-        id if id == TypeId::of::<VideoDecoderConfiguration>() => {
-            let builder = find_codec(&VIDEO_DECODER_LIST, codec_id)?;
+        type_id if type_id == TypeId::of::<VideoDecoderConfiguration>() => {
+            let builder = find_codec(&VIDEO_DECODER_LIST, id)?;
             convert_codec_builder::<dyn DecoderBuilder<T>>(builder)
         }
         _ => Err(Error::Unsupported("codec parameters type".to_string())),
@@ -215,9 +215,9 @@ pub(crate) fn find_decoder_by_name<T: CodecConfiguration>(name: &str) -> Result<
 }
 
 impl<T: CodecConfiguration> DecoderContext<T> {
-    pub fn from_codec_id(codec_id: CodecID, parameters: &T::Parameters, options: Option<&Variant>) -> Result<Self> {
-        let builder = find_decoder(codec_id)?;
-        let decoder = builder.new_decoder(codec_id, parameters, options)?;
+    pub fn from_codec_id(id: CodecID, parameters: &T::Parameters, options: Option<&Variant>) -> Result<Self> {
+        let builder = find_decoder(id)?;
+        let decoder = builder.new_decoder(id, parameters, options)?;
         let config = T::from_parameters(parameters)?;
 
         Ok(Self {
@@ -235,6 +235,14 @@ impl<T: CodecConfiguration> DecoderContext<T> {
             configurations: config,
             decoder,
         })
+    }
+
+    pub fn codec_id(&self) -> CodecID {
+        self.decoder.id()
+    }
+
+    pub fn codec_name(&self) -> &'static str {
+        self.decoder.name()
     }
 
     pub fn configure(&mut self, parameters: Option<&T::Parameters>, options: Option<&Variant>) -> Result<()> {
