@@ -524,7 +524,7 @@ impl Device for AVFoundationCaptureDevice {
         Ok(())
     }
 
-    fn configure(&mut self, options: Variant) -> Result<()> {
+    fn configure(&mut self, options: &Variant) -> Result<()> {
         let width = options["width"].get_uint32();
         let height = options["height"].get_uint32();
         let video_format = options["format"].get_uint32();
@@ -562,7 +562,7 @@ impl Device for AVFoundationCaptureDevice {
         Ok(())
     }
 
-    fn control(&mut self, _action: Variant) -> Result<()> {
+    fn control(&mut self, _action: &Variant) -> Result<()> {
         Err(Error::NotImplemented)
     }
 

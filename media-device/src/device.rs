@@ -22,8 +22,8 @@ pub trait Device {
     fn id(&self) -> &str;
     fn start(&mut self) -> Result<()>;
     fn stop(&mut self) -> Result<()>;
-    fn configure(&mut self, options: Variant) -> Result<()>;
-    fn control(&mut self, action: Variant) -> Result<()>;
+    fn configure(&mut self, options: &Variant) -> Result<()>;
+    fn control(&mut self, action: &Variant) -> Result<()>;
     fn running(&self) -> bool;
     fn formats(&self) -> Result<Variant>;
 }

@@ -63,7 +63,7 @@ fn main() {
     option["width"] = 1280.into();
     option["height"] = 720.into();
     option["frame-rate"] = 30.0.into();
-    if let Err(e) = device.configure(option) {
+    if let Err(e) = device.configure(&option) {
         error!("{:?}", e.to_string());
     }
 
