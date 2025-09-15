@@ -31,13 +31,13 @@ optional = true
 default = ["audio", "video", "codec", "device"]
 audio = [
     "media-core/audio",
-    "media-codec/audio",
-    "media-device/audio"
+    "media-codec?/audio",
+    "media-device?/audio"
 ]
 video = [
     "media-core/video",
-    "media-codec/video",
-    "media-device/video"
+    "media-codec?/video",
+    "media-device?/video"
 ]
 codec = ["dep:media-codec"]
 device = ["dep:media-device"]
