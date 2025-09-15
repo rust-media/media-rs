@@ -57,13 +57,17 @@ impl CodecParameters for AudioDecoderParameters {
 
 #[cfg(feature = "audio")]
 #[derive(Clone, Debug)]
-pub struct AudioDecoderConfiguration {
+pub struct AudioDecoder {
     pub audio: AudioParameters,
     pub decoder: DecoderParameters,
 }
 
 #[cfg(feature = "audio")]
-impl CodecConfiguration for AudioDecoderConfiguration {
+#[deprecated = "Use 'AudioDecoder' instead"]
+pub type AudioDecoderConfiguration = AudioDecoder;
+
+#[cfg(feature = "audio")]
+impl CodecConfiguration for AudioDecoder {
     type Parameters = AudioDecoderParameters;
 
     fn from_parameters(parameters: &Self::Parameters) -> Result<Self> {
@@ -106,13 +110,17 @@ impl CodecParameters for VideoDecoderParameters {
 
 #[cfg(feature = "video")]
 #[derive(Clone, Debug)]
-pub struct VideoDecoderConfiguration {
+pub struct VideoDecoder {
     pub video: VideoParameters,
     pub decoder: DecoderParameters,
 }
 
 #[cfg(feature = "video")]
-impl CodecConfiguration for VideoDecoderConfiguration {
+#[deprecated = "Use 'VideoDecoder' instead"]
+pub type VideoDecoderConfiguration = VideoDecoder;
+
+#[cfg(feature = "video")]
+impl CodecConfiguration for VideoDecoder {
     type Parameters = VideoDecoderParameters;
 
     fn from_parameters(parameters: &Self::Parameters) -> Result<Self> {
@@ -154,15 +162,15 @@ pub struct DecoderContext<T: CodecConfiguration> {
 }
 
 #[cfg(feature = "audio")]
-static AUDIO_DECODER_LIST: LazyCodecList<AudioDecoderConfiguration> = LazyLock::new(|| {
-    RwLock::new(CodecList::<AudioDecoderConfiguration> {
+static AUDIO_DECODER_LIST: LazyCodecList<AudioDecoder> = LazyLock::new(|| {
+    RwLock::new(CodecList::<AudioDecoder> {
         codecs: HashMap::new(),
     })
 });
 
 #[cfg(feature = "video")]
-static VIDEO_DECODER_LIST: LazyCodecList<VideoDecoderConfiguration> = LazyLock::new(|| {
-    RwLock::new(CodecList::<VideoDecoderConfiguration> {
+static VIDEO_DECODER_LIST: LazyCodecList<VideoDecoder> = LazyLock::new(|| {
+    RwLock::new(CodecList::<VideoDecoder> {
         codecs: HashMap::new(),
     })
 });
@@ -170,13 +178,13 @@ static VIDEO_DECODER_LIST: LazyCodecList<VideoDecoderConfiguration> = LazyLock::
 pub fn register_decoder<T: CodecConfiguration>(builder: Arc<dyn DecoderBuilder<T>>, default: bool) -> Result<()> {
     match TypeId::of::<T>() {
         #[cfg(feature = "audio")]
-        id if id == TypeId::of::<AudioDecoderConfiguration>() => {
-            let builder = unsafe { mem::transmute::<Arc<dyn DecoderBuilder<T>>, Arc<dyn CodecBuilder<AudioDecoderConfiguration>>>(builder) };
+        id if id == TypeId::of::<AudioDecoder>() => {
+            let builder = unsafe { mem::transmute::<Arc<dyn DecoderBuilder<T>>, Arc<dyn CodecBuilder<AudioDecoder>>>(builder) };
             register_codec(&AUDIO_DECODER_LIST, builder, default)
         }
         #[cfg(feature = "video")]
-        id if id == TypeId::of::<VideoDecoderConfiguration>() => {
-            let builder = unsafe { mem::transmute::<Arc<dyn DecoderBuilder<T>>, Arc<dyn CodecBuilder<VideoDecoderConfiguration>>>(builder) };
+        id if id == TypeId::of::<VideoDecoder>() => {
+            let builder = unsafe { mem::transmute::<Arc<dyn DecoderBuilder<T>>, Arc<dyn CodecBuilder<VideoDecoder>>>(builder) };
             register_codec(&VIDEO_DECODER_LIST, builder, default)
         }
         _ => Err(Error::Unsupported("codec parameters type".to_string())),
@@ -186,14 +194,14 @@ pub fn register_decoder<T: CodecConfiguration>(builder: Arc<dyn DecoderBuilder<T
 pub(crate) fn find_decoder<T: CodecConfiguration>(id: CodecID) -> Result<Arc<dyn DecoderBuilder<T>>> {
     match TypeId::of::<T>() {
         #[cfg(feature = "audio")]
-        type_id if type_id == TypeId::of::<AudioDecoderConfiguration>() => {
+        type_id if type_id == TypeId::of::<AudioDecoder>() => {
             let builder = find_codec(&AUDIO_DECODER_LIST, id)?;
-            unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<AudioDecoderConfiguration>>, Arc<dyn DecoderBuilder<T>>>(builder)) }
+            unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<AudioDecoder>>, Arc<dyn DecoderBuilder<T>>>(builder)) }
         }
         #[cfg(feature = "video")]
-        type_id if type_id == TypeId::of::<VideoDecoderConfiguration>() => {
+        type_id if type_id == TypeId::of::<VideoDecoder>() => {
             let builder = find_codec(&VIDEO_DECODER_LIST, id)?;
-            unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<VideoDecoderConfiguration>>, Arc<dyn DecoderBuilder<T>>>(builder)) }
+            unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<VideoDecoder>>, Arc<dyn DecoderBuilder<T>>>(builder)) }
         }
         _ => Err(Error::Unsupported("codec parameters type".to_string())),
     }
@@ -202,14 +210,14 @@ pub(crate) fn find_decoder<T: CodecConfiguration>(id: CodecID) -> Result<Arc<dyn
 pub(crate) fn find_decoder_by_name<T: CodecConfiguration>(name: &str) -> Result<Arc<dyn DecoderBuilder<T>>> {
     match TypeId::of::<T>() {
         #[cfg(feature = "audio")]
-        id if id == TypeId::of::<AudioDecoderConfiguration>() => {
+        id if id == TypeId::of::<AudioDecoder>() => {
             let builder = find_codec_by_name(&AUDIO_DECODER_LIST, name)?;
-            unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<AudioDecoderConfiguration>>, Arc<dyn DecoderBuilder<T>>>(builder)) }
+            unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<AudioDecoder>>, Arc<dyn DecoderBuilder<T>>>(builder)) }
         }
         #[cfg(feature = "video")]
-        id if id == TypeId::of::<VideoDecoderConfiguration>() => {
+        id if id == TypeId::of::<VideoDecoder>() => {
             let builder = find_codec_by_name(&VIDEO_DECODER_LIST, name)?;
-            unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<VideoDecoderConfiguration>>, Arc<dyn DecoderBuilder<T>>>(builder)) }
+            unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<VideoDecoder>>, Arc<dyn DecoderBuilder<T>>>(builder)) }
         }
         _ => Err(Error::Unsupported("codec parameters type".to_string())),
     }
