@@ -66,7 +66,7 @@ impl CodecParameters for AudioEncoderParameters {
 
 #[cfg(feature = "audio")]
 #[derive(Clone, Debug)]
-pub struct AudioEncoderConfiguration {
+pub struct AudioEncoder {
     pub audio: AudioParameters,
     pub encoder: EncoderParameters,
     // audio encoder specific configuration
@@ -75,7 +75,11 @@ pub struct AudioEncoderConfiguration {
 }
 
 #[cfg(feature = "audio")]
-impl CodecConfiguration for AudioEncoderConfiguration {
+#[deprecated = "Use 'AudioEncoder' instead"]
+pub type AudioEncoderConfiguration = AudioEncoder;
+
+#[cfg(feature = "audio")]
+impl CodecConfiguration for AudioEncoder {
     type Parameters = AudioEncoderParameters;
 
     fn from_parameters(parameters: &Self::Parameters) -> Result<Self> {
@@ -127,13 +131,17 @@ impl CodecParameters for VideoEncoderParameters {
 
 #[cfg(feature = "video")]
 #[derive(Clone, Debug)]
-pub struct VideoEncoderConfiguration {
+pub struct VideoEncoder {
     pub video: VideoParameters,
     pub encoder: EncoderParameters,
 }
 
 #[cfg(feature = "video")]
-impl CodecConfiguration for VideoEncoderConfiguration {
+#[deprecated = "Use 'VideoEncoder' instead"]
+pub type VideoEncoderConfiguration = VideoEncoder;
+
+#[cfg(feature = "video")]
+impl CodecConfiguration for VideoEncoder {
     type Parameters = VideoEncoderParameters;
 
     fn from_parameters(parameters: &Self::Parameters) -> Result<Self> {
@@ -175,15 +183,15 @@ pub struct EncoderContext<T: CodecConfiguration> {
 }
 
 #[cfg(feature = "audio")]
-static AUDIO_ENCODER_LIST: LazyCodecList<AudioEncoderConfiguration> = LazyLock::new(|| {
-    RwLock::new(CodecList::<AudioEncoderConfiguration> {
+static AUDIO_ENCODER_LIST: LazyCodecList<AudioEncoder> = LazyLock::new(|| {
+    RwLock::new(CodecList::<AudioEncoder> {
         codecs: HashMap::new(),
     })
 });
 
 #[cfg(feature = "video")]
-static VIDEO_ENCODER_LIST: LazyCodecList<VideoEncoderConfiguration> = LazyLock::new(|| {
-    RwLock::new(CodecList::<VideoEncoderConfiguration> {
+static VIDEO_ENCODER_LIST: LazyCodecList<VideoEncoder> = LazyLock::new(|| {
+    RwLock::new(CodecList::<VideoEncoder> {
         codecs: HashMap::new(),
     })
 });
@@ -191,13 +199,13 @@ static VIDEO_ENCODER_LIST: LazyCodecList<VideoEncoderConfiguration> = LazyLock::
 pub fn register_encoder<T: CodecConfiguration>(builder: Arc<dyn EncoderBuilder<T>>, default: bool) -> Result<()> {
     match TypeId::of::<T>() {
         #[cfg(feature = "audio")]
-        id if id == TypeId::of::<AudioEncoderConfiguration>() => {
-            let builder = unsafe { mem::transmute::<Arc<dyn EncoderBuilder<T>>, Arc<dyn CodecBuilder<AudioEncoderConfiguration>>>(builder) };
+        id if id == TypeId::of::<AudioEncoder>() => {
+            let builder = unsafe { mem::transmute::<Arc<dyn EncoderBuilder<T>>, Arc<dyn CodecBuilder<AudioEncoder>>>(builder) };
             register_codec(&AUDIO_ENCODER_LIST, builder, default)
         }
         #[cfg(feature = "video")]
-        id if id == TypeId::of::<VideoEncoderConfiguration>() => {
-            let builder = unsafe { mem::transmute::<Arc<dyn EncoderBuilder<T>>, Arc<dyn CodecBuilder<VideoEncoderConfiguration>>>(builder) };
+        id if id == TypeId::of::<VideoEncoder>() => {
+            let builder = unsafe { mem::transmute::<Arc<dyn EncoderBuilder<T>>, Arc<dyn CodecBuilder<VideoEncoder>>>(builder) };
             register_codec(&VIDEO_ENCODER_LIST, builder, default)
         }
         _ => Err(Error::Unsupported("codec parameters type".to_string())),
@@ -207,14 +215,14 @@ pub fn register_encoder<T: CodecConfiguration>(builder: Arc<dyn EncoderBuilder<T
 pub(crate) fn find_encoder<T: CodecConfiguration>(id: CodecID) -> Result<Arc<dyn EncoderBuilder<T>>> {
     match TypeId::of::<T>() {
         #[cfg(feature = "audio")]
-        type_id if type_id == TypeId::of::<AudioEncoderConfiguration>() => {
+        type_id if type_id == TypeId::of::<AudioEncoder>() => {
             let builder = find_codec(&AUDIO_ENCODER_LIST, id)?;
-            unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<AudioEncoderConfiguration>>, Arc<dyn EncoderBuilder<T>>>(builder)) }
+            unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<AudioEncoder>>, Arc<dyn EncoderBuilder<T>>>(builder)) }
         }
         #[cfg(feature = "video")]
-        type_id if type_id == TypeId::of::<VideoEncoderConfiguration>() => {
+        type_id if type_id == TypeId::of::<VideoEncoder>() => {
             let builder = find_codec(&VIDEO_ENCODER_LIST, id)?;
-            unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<VideoEncoderConfiguration>>, Arc<dyn EncoderBuilder<T>>>(builder)) }
+            unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<VideoEncoder>>, Arc<dyn EncoderBuilder<T>>>(builder)) }
         }
         _ => Err(Error::Unsupported("codec parameters type".to_string())),
     }
@@ -223,14 +231,14 @@ pub(crate) fn find_encoder<T: CodecConfiguration>(id: CodecID) -> Result<Arc<dyn
 pub(crate) fn find_encoder_by_name<T: CodecConfiguration>(name: &str) -> Result<Arc<dyn EncoderBuilder<T>>> {
     match TypeId::of::<T>() {
         #[cfg(feature = "audio")]
-        id if id == TypeId::of::<AudioEncoderConfiguration>() => {
+        id if id == TypeId::of::<AudioEncoder>() => {
             let builder = find_codec_by_name(&AUDIO_ENCODER_LIST, name)?;
-            unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<AudioEncoderConfiguration>>, Arc<dyn EncoderBuilder<T>>>(builder)) }
+            unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<AudioEncoder>>, Arc<dyn EncoderBuilder<T>>>(builder)) }
         }
         #[cfg(feature = "video")]
-        id if id == TypeId::of::<VideoEncoderConfiguration>() => {
+        id if id == TypeId::of::<VideoEncoder>() => {
             let builder = find_codec_by_name(&VIDEO_ENCODER_LIST, name)?;
-            unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<VideoEncoderConfiguration>>, Arc<dyn EncoderBuilder<T>>>(builder)) }
+            unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<VideoEncoder>>, Arc<dyn EncoderBuilder<T>>>(builder)) }
         }
         _ => Err(Error::Unsupported("codec parameters type".to_string())),
     }
