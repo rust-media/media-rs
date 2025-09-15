@@ -108,15 +108,9 @@ pub struct AudioParameters {
 #[cfg(feature = "audio")]
 impl AudioParameters {
     pub(crate) fn update(&mut self, other: &AudioParameters) {
-        if other.format.is_some() {
-            self.format = other.format;
-        }
-        if other.samples.is_some() {
-            self.samples = other.samples;
-        }
-        if other.sample_rate.is_some() {
-            self.sample_rate = other.sample_rate;
-        }
+        self.format = other.format.or(self.format);
+        self.samples = other.samples.or(self.samples);
+        self.sample_rate = other.sample_rate.or(self.sample_rate);
         if other.channel_layout.is_some() {
             self.channel_layout = other.channel_layout.clone();
         }
@@ -150,33 +144,15 @@ pub struct VideoParameters {
 #[cfg(feature = "video")]
 impl VideoParameters {
     pub(crate) fn update(&mut self, other: &VideoParameters) {
-        if other.format.is_some() {
-            self.format = other.format;
-        }
-        if other.width.is_some() {
-            self.width = other.width;
-        }
-        if other.height.is_some() {
-            self.height = other.height;
-        }
-        if other.color_range.is_some() {
-            self.color_range = other.color_range;
-        }
-        if other.color_matrix.is_some() {
-            self.color_matrix = other.color_matrix;
-        }
-        if other.color_primaries.is_some() {
-            self.color_primaries = other.color_primaries;
-        }
-        if other.color_transfer_characteristics.is_some() {
-            self.color_transfer_characteristics = other.color_transfer_characteristics;
-        }
-        if other.chroma_location.is_some() {
-            self.chroma_location = other.chroma_location;
-        }
-        if other.frame_rate.is_some() {
-            self.frame_rate = other.frame_rate;
-        }
+        self.format = other.format.or(self.format);
+        self.width = other.width.or(self.width);
+        self.height = other.height.or(self.height);
+        self.color_range = other.color_range.or(self.color_range);
+        self.color_matrix = other.color_matrix.or(self.color_matrix);
+        self.color_primaries = other.color_primaries.or(self.color_primaries);
+        self.color_transfer_characteristics = other.color_transfer_characteristics.or(self.color_transfer_characteristics);
+        self.chroma_location = other.chroma_location.or(self.chroma_location);
+        self.frame_rate = other.frame_rate.or(self.frame_rate);
     }
 
     pub(crate) fn update_with_option(&mut self, key: &str, value: &Variant) {
