@@ -63,7 +63,7 @@ impl DeviceManager for AVFoundationCaptureDeviceManager {
         })
     }
 
-    fn uninit(&mut self) {}
+    fn deinit(&mut self) {}
 
     fn list(&self) -> Vec<&Self::DeviceType> {
         self.devices.as_ref().map(|devices| devices.iter().collect()).unwrap_or_default()

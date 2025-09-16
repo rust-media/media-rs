@@ -43,7 +43,7 @@ pub trait DeviceManager {
     fn init() -> Result<Self>
     where
         Self: Sized;
-    fn uninit(&mut self);
+    fn deinit(&mut self);
     fn list(&self) -> Vec<&Self::DeviceType>;
     fn index(&self, index: usize) -> Option<&Self::DeviceType>;
     fn index_mut(&mut self, index: usize) -> Option<&mut Self::DeviceType>;

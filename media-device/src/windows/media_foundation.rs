@@ -61,7 +61,7 @@ impl DeviceManager for MediaFoundationDeviceManager {
         })
     }
 
-    fn uninit(&mut self) {
+    fn deinit(&mut self) {
         unsafe {
             MFShutdown().ok();
             CoUninitialize();
