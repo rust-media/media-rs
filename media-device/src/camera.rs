@@ -72,7 +72,7 @@ impl<T: DeviceManager> CameraManager<T> {
 
 impl<T: DeviceManager> Drop for CameraManager<T> {
     fn drop(&mut self) {
-        self.backend.uninit();
+        self.backend.deinit();
     }
 }
 
