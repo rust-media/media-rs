@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, LazyLock, RwLock},
 };
 
-use media_core::{error::Error, frame::Frame, variant::Variant, MediaType, Result};
+use media_core::{error::Error, frame::Frame, invalid_param_error, variant::Variant, MediaType, Result};
 
 #[cfg(feature = "audio")]
 use crate::AudioParameters;
@@ -13,7 +13,7 @@ use crate::AudioParameters;
 use crate::VideoParameters;
 use crate::{
     find_codec, find_codec_by_name, packet::Packet, register_codec, Codec, CodecBuilder, CodecConfiguration, CodecID, CodecList, CodecParameters,
-    CodecType, LazyCodecList,
+    CodecParametersType, CodecType, LazyCodecList, MediaParametersType,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -37,6 +37,17 @@ impl DecoderParameters {
     }
 }
 
+impl TryFrom<&CodecParametersType> for DecoderParameters {
+    type Error = Error;
+
+    fn try_from(params: &CodecParametersType) -> Result<Self> {
+        match params {
+            CodecParametersType::Decoder(params) => Ok(params.clone()),
+            _ => Err(invalid_param_error!(params)),
+        }
+    }
+}
+
 #[cfg(feature = "audio")]
 #[derive(Clone, Debug, Default)]
 pub struct AudioDecoderParameters {
@@ -45,13 +56,21 @@ pub struct AudioDecoderParameters {
 }
 
 #[cfg(feature = "audio")]
-impl CodecParameters for AudioDecoderParameters {
-    fn media_type() -> MediaType {
-        MediaType::Audio
-    }
+#[allow(unreachable_patterns)]
+impl TryFrom<&CodecParameters> for AudioDecoderParameters {
+    type Error = Error;
 
-    fn codec_type() -> CodecType {
-        CodecType::Decoder
+    fn try_from(params: &CodecParameters) -> Result<Self> {
+        Ok(Self {
+            audio: match &params.media {
+                MediaParametersType::Audio(params) => params.clone(),
+                _ => return Err(invalid_param_error!(params)),
+            },
+            decoder: match &params.codec {
+                CodecParametersType::Decoder(params) => params.clone(),
+                _ => return Err(invalid_param_error!(params)),
+            },
+        })
     }
 }
 
@@ -68,18 +87,26 @@ pub type AudioDecoderConfiguration = AudioDecoder;
 
 #[cfg(feature = "audio")]
 impl CodecConfiguration for AudioDecoder {
-    type Parameters = AudioDecoderParameters;
+    fn media_type() -> MediaType {
+        MediaType::Audio
+    }
 
-    fn from_parameters(parameters: &Self::Parameters) -> Result<Self> {
+    fn codec_type() -> CodecType {
+        CodecType::Decoder
+    }
+
+    fn from_parameters(params: &CodecParameters) -> Result<Self> {
         Ok(Self {
-            audio: parameters.audio.clone(),
-            decoder: parameters.decoder.clone(),
+            audio: (&params.media).try_into()?,
+            decoder: (&params.codec).try_into()?,
         })
     }
 
-    fn configure(&mut self, parameters: &Self::Parameters) -> Result<()> {
-        self.audio.update(&parameters.audio);
-        self.decoder.update(&parameters.decoder);
+    fn configure(&mut self, params: &CodecParameters) -> Result<()> {
+        let audio_params = (&params.media).try_into()?;
+        let decoder_params = (&params.codec).try_into()?;
+        self.audio.update(&audio_params);
+        self.decoder.update(&decoder_params);
         Ok(())
     }
 
@@ -98,13 +125,21 @@ pub struct VideoDecoderParameters {
 }
 
 #[cfg(feature = "video")]
-impl CodecParameters for VideoDecoderParameters {
-    fn media_type() -> MediaType {
-        MediaType::Video
-    }
+#[allow(unreachable_patterns)]
+impl TryFrom<&CodecParameters> for VideoDecoderParameters {
+    type Error = Error;
 
-    fn codec_type() -> CodecType {
-        CodecType::Decoder
+    fn try_from(params: &CodecParameters) -> Result<Self> {
+        Ok(Self {
+            video: match &params.media {
+                MediaParametersType::Video(params) => params.clone(),
+                _ => return Err(invalid_param_error!(params)),
+            },
+            decoder: match &params.codec {
+                CodecParametersType::Decoder(params) => params.clone(),
+                _ => return Err(invalid_param_error!(params)),
+            },
+        })
     }
 }
 
@@ -121,18 +156,42 @@ pub type VideoDecoderConfiguration = VideoDecoder;
 
 #[cfg(feature = "video")]
 impl CodecConfiguration for VideoDecoder {
-    type Parameters = VideoDecoderParameters;
+    fn media_type() -> MediaType {
+        MediaType::Video
+    }
 
-    fn from_parameters(parameters: &Self::Parameters) -> Result<Self> {
+    fn codec_type() -> CodecType {
+        CodecType::Decoder
+    }
+
+    #[allow(unreachable_patterns)]
+    fn from_parameters(params: &CodecParameters) -> Result<Self> {
         Ok(Self {
-            video: parameters.video.clone(),
-            decoder: parameters.decoder.clone(),
+            video: match &params.media {
+                MediaParametersType::Video(params) => params.clone(),
+                _ => return Err(invalid_param_error!(params)),
+            },
+            decoder: match &params.codec {
+                CodecParametersType::Decoder(params) => params.clone(),
+                _ => return Err(invalid_param_error!(params)),
+            },
         })
     }
 
-    fn configure(&mut self, parameters: &Self::Parameters) -> Result<()> {
-        self.video.update(&parameters.video);
-        self.decoder.update(&parameters.decoder);
+    #[allow(unreachable_patterns)]
+    fn configure(&mut self, params: &CodecParameters) -> Result<()> {
+        let video_params = match &params.media {
+            MediaParametersType::Video(params) => params,
+            _ => return Err(invalid_param_error!(params)),
+        };
+
+        let decoder_params = match &params.codec {
+            CodecParametersType::Decoder(params) => params,
+            _ => return Err(invalid_param_error!(params)),
+        };
+
+        self.video.update(&video_params);
+        self.decoder.update(&decoder_params);
         Ok(())
     }
 
@@ -153,7 +212,7 @@ pub trait Decoder<T: CodecConfiguration>: Codec<T> + Send + Sync {
 }
 
 pub trait DecoderBuilder<T: CodecConfiguration>: CodecBuilder<T> {
-    fn new_decoder(&self, id: CodecID, parameters: &T::Parameters, options: Option<&Variant>) -> Result<Box<dyn Decoder<T>>>;
+    fn new_decoder(&self, id: CodecID, params: &CodecParameters, options: Option<&Variant>) -> Result<Box<dyn Decoder<T>>>;
 }
 
 pub struct DecoderContext<T: CodecConfiguration> {
@@ -224,10 +283,10 @@ pub(crate) fn find_decoder_by_name<T: CodecConfiguration>(name: &str) -> Result<
 }
 
 impl<T: CodecConfiguration> DecoderContext<T> {
-    pub fn from_codec_id(id: CodecID, parameters: &T::Parameters, options: Option<&Variant>) -> Result<Self> {
+    pub fn from_codec_id(id: CodecID, params: &CodecParameters, options: Option<&Variant>) -> Result<Self> {
         let builder = find_decoder(id)?;
-        let decoder = builder.new_decoder(id, parameters, options)?;
-        let config = T::from_parameters(parameters)?;
+        let decoder = builder.new_decoder(id, params, options)?;
+        let config = T::from_parameters(params)?;
 
         Ok(Self {
             configurations: config,
@@ -235,10 +294,10 @@ impl<T: CodecConfiguration> DecoderContext<T> {
         })
     }
 
-    pub fn from_codec_name(name: &str, parameters: &T::Parameters, options: Option<&Variant>) -> Result<Self> {
+    pub fn from_codec_name(name: &str, params: &CodecParameters, options: Option<&Variant>) -> Result<Self> {
         let builder = find_decoder_by_name(name)?;
-        let decoder = builder.new_decoder(builder.id(), parameters, options)?;
-        let config = T::from_parameters(parameters)?;
+        let decoder = builder.new_decoder(builder.id(), params, options)?;
+        let config = T::from_parameters(params)?;
 
         Ok(Self {
             configurations: config,
@@ -254,11 +313,11 @@ impl<T: CodecConfiguration> DecoderContext<T> {
         self.decoder.name()
     }
 
-    pub fn configure(&mut self, parameters: Option<&T::Parameters>, options: Option<&Variant>) -> Result<()> {
-        if let Some(params) = parameters {
+    pub fn configure(&mut self, params: Option<&CodecParameters>, options: Option<&Variant>) -> Result<()> {
+        if let Some(params) = params {
             self.configurations.configure(params)?;
         }
-        self.decoder.configure(parameters, options)
+        self.decoder.configure(params, options)
     }
 
     pub fn set_option(&mut self, key: &str, value: &Variant) -> Result<()> {
