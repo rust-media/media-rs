@@ -1,11 +1,11 @@
 use std::{borrow::Cow, num::NonZeroU32};
 
+use super::video::{PixelFormat, VideoFrameDescriptor};
 use crate::{
     error::Error,
     frame::{Frame, FrameData, MemoryData, PlaneDataVec, PlaneInformation, PlaneInformationVec, SeparateMemoryData},
     invalid_param_error,
     media::FrameDescriptor,
-    video::{PixelFormat, VideoFrameDescriptor},
     Result, DEFAULT_ALIGNMENT,
 };
 

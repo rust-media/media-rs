@@ -6,11 +6,11 @@ use yuv::{
     YuvPackedImageMut, YuvPlanarImage, YuvPlanarImageMut, YuvRange, YuvStandardMatrix,
 };
 
+use super::video::{ColorMatrix, ColorRange, PixelFormat};
 use crate::{
     error::Error,
     frame::{Frame, MappedPlanes},
     media::FrameDescriptor,
-    video::{ColorMatrix, ColorRange, PixelFormat},
     Result,
 };
 

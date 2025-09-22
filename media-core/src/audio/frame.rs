@@ -3,8 +3,8 @@ use std::{
     num::{NonZeroU32, NonZeroU8},
 };
 
+use super::audio::{AudioFrameDescriptor, SampleFormat};
 use crate::{
-    audio::{AudioFrameDescriptor, SampleFormat},
     error::Error,
     frame::{Frame, FrameData, MemoryData},
     invalid_param_error,
