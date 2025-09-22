@@ -3,11 +3,11 @@ use std::{borrow::Cow, fmt::Debug};
 use bytemuck::{self, Pod};
 use pic_scale::{BufferStore, ImageStore, ImageStoreMut, LinearScaler, ResamplingFunction, Scaling, ScalingU16};
 
+use super::video::{PixelFormat, ScaleFilter};
 use crate::{
     error::Error,
     frame::{Frame, MappedPlane},
     media::FrameDescriptor,
-    video::{PixelFormat, ScaleFilter},
     Result,
 };
 

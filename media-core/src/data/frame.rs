@@ -1,5 +1,5 @@
+use super::data::{DataFormat, DataFrameDescriptor};
 use crate::{
-    data::{DataFormat, DataFrameDescriptor},
     frame::{Frame, FrameData},
     media::FrameDescriptor,
     variant::Variant,

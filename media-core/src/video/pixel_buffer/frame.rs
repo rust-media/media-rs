@@ -15,6 +15,7 @@ use core_video::{
 use os_ver::if_greater_than;
 use smallvec::SmallVec;
 
+use super::super::frame::VideoFrameCreator;
 use crate::{
     error::Error,
     frame::*,
@@ -22,7 +23,6 @@ use crate::{
     media::FrameDescriptor,
     none_param_error,
     video::{ColorMatrix, ColorPrimaries, ColorRange, ColorTransferCharacteristics, PixelFormat, VideoFrameDescriptor},
-    video_frame::VideoFrameCreator,
     Result,
 };
 

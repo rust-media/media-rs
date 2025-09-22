@@ -7,7 +7,7 @@ use num_rational::Rational64;
 use smallvec::SmallVec;
 
 #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
-use crate::pixel_buffer::video_frame::PixelBuffer;
+use crate::video::pixel_buffer::frame::PixelBuffer;
 use crate::{
     error::Error,
     media::{FrameDescriptor, MediaType},
