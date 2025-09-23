@@ -14,6 +14,7 @@ use core_video::{
 };
 use os_ver::if_greater_than;
 use smallvec::SmallVec;
+use strum::EnumCount;
 
 use super::super::frame::VideoFrameCreator;
 use crate::{
@@ -42,8 +43,8 @@ const EBU_3213: &str = "EBU_3213";
 const P22: &str = "P22";
 const LINEAR: &str = "Linear";
 
-static PIXEL_FORMATS: LazyLock<[[u32; ColorRange::MAX as usize]; PixelFormat::MAX as usize]> = LazyLock::new(|| {
-    let mut formats = [[0; ColorRange::MAX as usize]; PixelFormat::MAX as usize];
+static PIXEL_FORMATS: LazyLock<[[u32; ColorRange::COUNT]; PixelFormat::COUNT]> = LazyLock::new(|| {
+    let mut formats = [[0; ColorRange::COUNT]; PixelFormat::COUNT];
     formats[PixelFormat::ARGB32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32ARGB;
     formats[PixelFormat::BGRA32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32BGRA;
     formats[PixelFormat::ABGR32 as usize][ColorRange::Unspecified as usize] = kCVPixelFormatType_32ABGR;

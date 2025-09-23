@@ -7,6 +7,7 @@ use std::{
 
 use bitflags::bitflags;
 use num_enum::TryFromPrimitive;
+use strum::EnumCount;
 
 use crate::{
     align_to, ceil_rshift,
@@ -50,14 +51,13 @@ impl Resolution {
     pub const UHD_8K: Self = Self::new(7680, 4320);
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, EnumCount, Eq, PartialEq)]
 #[repr(u8)]
 pub enum ColorRange {
     #[default]
     Unspecified,
     Video,
     Full,
-    MAX,
 }
 
 impl From<ColorRange> for usize {
@@ -239,7 +239,7 @@ impl TryFrom<usize> for ColorTransferCharacteristics {
 }
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, Default, EnumCount, Eq, PartialEq, TryFromPrimitive)]
 pub enum PixelFormat {
     #[default]
     ARGB32 = 0, // packed ARGB, 32 bits
@@ -295,7 +295,6 @@ pub enum PixelFormat {
     P016,   // biplanar YUV 4:2:0, 16 bits per channel
     P216,   // biplanar YUV 4:2:2, 16 bits per channel
     P416,   // biplanar YUV 4:4:4, 16 bits per channel
-    MAX,
 }
 
 impl From<PixelFormat> for usize {
@@ -308,7 +307,7 @@ impl TryFrom<usize> for PixelFormat {
     type Error = Error;
 
     fn try_from(value: usize) -> Result<Self> {
-        if value <= PixelFormat::MAX as usize {
+        if value <= PixelFormat::COUNT as usize {
             Ok(unsafe { mem::transmute::<u8, PixelFormat>(value as u8) })
         } else {
             Err(invalid_param_error!(value))
@@ -346,7 +345,7 @@ macro_rules! pix_fmt_flags {
     };
 }
 
-static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::MAX as usize] = [
+static PIXEL_FORMAT_DESC: [PixelFormatDescriptor; PixelFormat::COUNT] = [
     // ARGB32
     PixelFormatDescriptor {
         components: 1,

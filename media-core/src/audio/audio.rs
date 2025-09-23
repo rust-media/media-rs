@@ -6,6 +6,7 @@ use std::{
 
 use bitflags::bitflags;
 use smallvec::SmallVec;
+use strum::EnumCount;
 
 use crate::{
     error::Error,
@@ -22,19 +23,20 @@ pub const SAMPLE_RATE_DVD: u32 = 48000;
 pub const SAMPLE_RATE_HIGH: u32 = 96000;
 pub const SAMPLE_RATE_ULTRA_HIGH: u32 = 192000;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, EnumCount, Eq, PartialEq)]
 pub enum SampleFormat {
     U8 = 0, // unsigned 8 bits
     S16,    // signed 16 bits
     S32,    // signed 32 bits
+    S64,    // signed 64 bits
     F32,    // float 32 bits
     F64,    // float 64 bits
     U8P,    // unsigned 8 bits, planar
     S16P,   // signed 16 bits, planar
     S32P,   // signed 32 bits, planar
+    S64P,   // signed 64 bits, planar
     F32P,   // float 32 bits, planar
     F64P,   // float 64 bits, planar
-    MAX,
 }
 
 impl From<SampleFormat> for usize {
@@ -47,7 +49,7 @@ impl TryFrom<usize> for SampleFormat {
     type Error = Error;
 
     fn try_from(value: usize) -> Result<Self> {
-        if value <= SampleFormat::MAX as usize {
+        if value <= SampleFormat::COUNT as usize {
             Ok(unsafe { mem::transmute::<u8, SampleFormat>(value as u8) })
         } else {
             Err(invalid_param_error!(value))
@@ -57,59 +59,69 @@ impl TryFrom<usize> for SampleFormat {
 
 struct SampleFormatDescriptor {
     pub bits: u8,
-    pub is_planar: bool,
+    pub planar: bool,
 }
 
-static SAMPLE_FORMAT_DESC: [SampleFormatDescriptor; SampleFormat::MAX as usize] = [
+static SAMPLE_FORMAT_DESC: [SampleFormatDescriptor; SampleFormat::COUNT] = [
     // U8
     SampleFormatDescriptor {
         bits: 8,
-        is_planar: false,
+        planar: false,
     },
     // S16
     SampleFormatDescriptor {
         bits: 16,
-        is_planar: false,
+        planar: false,
     },
     // S32
     SampleFormatDescriptor {
         bits: 32,
-        is_planar: false,
+        planar: false,
+    },
+    // S64
+    SampleFormatDescriptor {
+        bits: 64,
+        planar: false,
     },
     // F32
     SampleFormatDescriptor {
         bits: 32,
-        is_planar: false,
+        planar: false,
     },
     // F64
     SampleFormatDescriptor {
         bits: 64,
-        is_planar: false,
+        planar: false,
     },
     // U8P
     SampleFormatDescriptor {
         bits: 8,
-        is_planar: true,
+        planar: true,
     },
     // S16P
     SampleFormatDescriptor {
         bits: 16,
-        is_planar: true,
+        planar: true,
     },
     // S32P
     SampleFormatDescriptor {
         bits: 32,
-        is_planar: true,
+        planar: true,
+    },
+    // S64P
+    SampleFormatDescriptor {
+        bits: 64,
+        planar: true,
     },
     // F32P
     SampleFormatDescriptor {
         bits: 32,
-        is_planar: true,
+        planar: true,
     },
     // F64P
     SampleFormatDescriptor {
         bits: 64,
-        is_planar: true,
+        planar: true,
     },
 ];
 
@@ -123,7 +135,33 @@ impl SampleFormat {
     }
 
     pub fn is_planar(&self) -> bool {
-        SAMPLE_FORMAT_DESC[*self as usize].is_planar
+        SAMPLE_FORMAT_DESC[*self as usize].planar
+    }
+
+    pub fn is_packed(&self) -> bool {
+        !SAMPLE_FORMAT_DESC[*self as usize].planar
+    }
+
+    pub fn planar_sample_format(&self) -> SampleFormat {
+        match *self {
+            SampleFormat::U8 | SampleFormat::U8P => SampleFormat::U8P,
+            SampleFormat::S16 | SampleFormat::S16P => SampleFormat::S16P,
+            SampleFormat::S32 | SampleFormat::S32P => SampleFormat::S32P,
+            SampleFormat::S64 | SampleFormat::S64P => SampleFormat::S64P,
+            SampleFormat::F32 | SampleFormat::F32P => SampleFormat::F32P,
+            SampleFormat::F64 | SampleFormat::F64P => SampleFormat::F64P,
+        }
+    }
+
+    pub fn packed_sample_format(&self) -> SampleFormat {
+        match *self {
+            SampleFormat::U8 | SampleFormat::U8P => SampleFormat::U8,
+            SampleFormat::S16 | SampleFormat::S16P => SampleFormat::S16,
+            SampleFormat::S32 | SampleFormat::S32P => SampleFormat::S32,
+            SampleFormat::S64 | SampleFormat::S64P => SampleFormat::S64,
+            SampleFormat::F32 | SampleFormat::F32P => SampleFormat::F32,
+            SampleFormat::F64 | SampleFormat::F64P => SampleFormat::F64,
+        }
     }
 
     pub fn stride(&self, channels: u8, samples: u32) -> usize {

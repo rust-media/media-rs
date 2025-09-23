@@ -1,6 +1,7 @@
 use std::{fmt::Debug, num::NonZeroU32, sync::LazyLock};
 
 use bytemuck::{self, Pod};
+use strum::EnumCount;
 use yuv::{
     self, BufferStoreMut, Rgb30ByteOrder::Network, YuvBiPlanarImage, YuvBiPlanarImageMut, YuvConversionMode, YuvConversionMode::Fast, YuvPackedImage,
     YuvPackedImageMut, YuvPlanarImage, YuvPlanarImageMut, YuvRange, YuvStandardMatrix,
@@ -444,7 +445,7 @@ impl_yuv_to_rgb_with_byte_order!(p210_to_rgb30, p210_to_ra30, into_yuv_bi_planar
 
 type VideoFormatConvertFunc = fn(&MappedPlanes, &mut MappedPlanes, ColorRange, ColorMatrix, NonZeroU32, NonZeroU32) -> Result<()>;
 
-const PIXEL_FORMAT_MAX: usize = PixelFormat::MAX as usize;
+const PIXEL_FORMAT_MAX: usize = PixelFormat::COUNT;
 
 static VIDEO_FORMAT_CONVERT_FUNCS: LazyLock<[[Option<VideoFormatConvertFunc>; PIXEL_FORMAT_MAX]; PIXEL_FORMAT_MAX]> = LazyLock::new(|| {
     let mut funcs: [[Option<VideoFormatConvertFunc>; PIXEL_FORMAT_MAX]; PIXEL_FORMAT_MAX] = [[None; PIXEL_FORMAT_MAX]; PIXEL_FORMAT_MAX];
