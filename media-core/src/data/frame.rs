@@ -41,4 +41,20 @@ impl Frame<'_> {
     pub fn is_data(&self) -> bool {
         self.desc.is_data()
     }
+
+    pub fn data(&self) -> Option<&Variant> {
+        if let FrameData::Variant(v) = &self.data {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn data_mut(&mut self) -> Option<&mut Variant> {
+        if let FrameData::Variant(v) = &mut self.data {
+            Some(v)
+        } else {
+            None
+        }
+    }
 }
