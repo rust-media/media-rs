@@ -307,7 +307,7 @@ impl TryFrom<usize> for PixelFormat {
     type Error = Error;
 
     fn try_from(value: usize) -> Result<Self> {
-        if value <= PixelFormat::COUNT as usize {
+        if value < PixelFormat::COUNT {
             Ok(unsafe { mem::transmute::<u8, PixelFormat>(value as u8) })
         } else {
             Err(invalid_param_error!(value))

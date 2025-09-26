@@ -49,7 +49,7 @@ impl TryFrom<usize> for SampleFormat {
     type Error = Error;
 
     fn try_from(value: usize) -> Result<Self> {
-        if value <= SampleFormat::COUNT as usize {
+        if value < SampleFormat::COUNT {
             Ok(unsafe { mem::transmute::<u8, SampleFormat>(value as u8) })
         } else {
             Err(invalid_param_error!(value))

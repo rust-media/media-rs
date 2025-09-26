@@ -10,6 +10,7 @@ use crate::{
 
 macro_rules! impl_convert {
     ($func_name:ident, $src_type:ty, $dst_type:ty, $convert_expr:expr) => {
+        #[allow(clippy::too_many_arguments)]
         fn $func_name(
             src_planes: &MappedPlanes,
             dst_planes: &mut MappedPlanes,
@@ -85,6 +86,7 @@ static AUDIO_SAMPLE_CONVERT_FUNCS: [[SampleFormatConvertFunc; AUDIO_SAMPLE_FORMA
     [f64_to_u8, f64_to_s16, f64_to_s32, f64_to_s64, f64_to_f32, f64_to_f64],
 ];
 
+#[allow(clippy::too_many_arguments)]
 fn convert_samples<S: Copy + Pod, D: Copy + Pod>(
     src_planes: &MappedPlanes,
     dst_planes: &mut MappedPlanes,
