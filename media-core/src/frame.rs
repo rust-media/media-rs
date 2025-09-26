@@ -1,3 +1,5 @@
+#[cfg(any(feature = "audio", feature = "video"))]
+use std::slice::{Iter, IterMut};
 use std::{
     borrow::Cow,
     sync::{Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard},
@@ -162,7 +164,7 @@ impl<'a> IntoIterator for MappedPlanes<'a> {
 }
 
 #[cfg(any(feature = "audio", feature = "video"))]
-impl MappedPlanes<'_> {
+impl<'a> MappedPlanes<'a> {
     pub fn plane_data(&self, index: usize) -> Option<&[u8]> {
         self.planes.get(index).and_then(|plane| plane.data())
     }
@@ -187,6 +189,14 @@ impl MappedPlanes<'_> {
 
     pub fn len(&self) -> usize {
         self.planes.len()
+    }
+
+    pub fn iter(&self) -> Iter<'_, MappedPlane<'_>> {
+        self.planes.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> IterMut<'_, MappedPlane<'a>> {
+        self.planes.iter_mut()
     }
 }
 
