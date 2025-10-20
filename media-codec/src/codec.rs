@@ -9,9 +9,11 @@ use std::{
 use media_core::audio::{ChannelLayout, SampleFormat};
 #[cfg(feature = "video")]
 use media_core::video::{ChromaLocation, ColorMatrix, ColorPrimaries, ColorRange, ColorTransferCharacteristics, PixelFormat};
-use media_core::{error::Error, variant::Variant, MediaType, Result};
+use media_core::{error::Error, invalid_param_error, variant::Variant, MediaType, Result};
 #[cfg(feature = "video")]
 use num_rational::Rational64;
+
+use crate::{decoder::DecoderParameters, encoder::EncoderParameters};
 
 #[cfg(feature = "audio")]
 #[allow(non_camel_case_types, clippy::upper_case_acronyms)]
@@ -77,22 +79,30 @@ pub enum CodecType {
     Encoder,
 }
 
-pub trait CodecParameters: Clone + Send + Sync + 'static {
-    fn media_type() -> MediaType;
-    fn codec_type() -> CodecType;
+#[derive(Clone, Debug)]
+pub struct CodecParameters {
+    pub media: MediaParametersType,
+    pub codec: CodecParametersType,
+}
+
+impl CodecParameters {
+    pub fn new<M, C>(media_params: M, codec_params: C) -> Self
+    where
+        M: Into<MediaParametersType>,
+        C: Into<CodecParametersType>,
+    {
+        Self {
+            media: media_params.into(),
+            codec: codec_params.into(),
+        }
+    }
 }
 
 pub trait CodecConfiguration: Clone + Send + Sync + 'static {
-    type Parameters: CodecParameters;
-
-    fn media_type() -> MediaType {
-        Self::Parameters::media_type()
-    }
-    fn codec_type() -> CodecType {
-        Self::Parameters::codec_type()
-    }
-    fn from_parameters(parameters: &Self::Parameters) -> Result<Self>;
-    fn configure(&mut self, parameters: &Self::Parameters) -> Result<()>;
+    fn media_type() -> MediaType;
+    fn codec_type() -> CodecType;
+    fn from_parameters(params: &CodecParameters) -> Result<Self>;
+    fn configure(&mut self, params: &CodecParameters) -> Result<()>;
     fn configure_with_option(&mut self, key: &str, value: &Variant) -> Result<()>;
 }
 
@@ -123,6 +133,19 @@ impl AudioParameters {
             "sample_rate" => self.sample_rate = value.get_uint32().and_then(NonZeroU32::new),
             "channels" => self.channel_layout = value.get_uint8().and_then(|c| ChannelLayout::default_from_channels(c).ok()),
             _ => {}
+        }
+    }
+}
+
+#[cfg(feature = "audio")]
+#[allow(unreachable_patterns)]
+impl TryFrom<&MediaParametersType> for AudioParameters {
+    type Error = Error;
+
+    fn try_from(params: &MediaParametersType) -> Result<Self> {
+        match params {
+            MediaParametersType::Audio(params) => Ok(params.clone()),
+            _ => Err(invalid_param_error!(params)),
         }
     }
 }
@@ -172,13 +195,66 @@ impl VideoParameters {
     }
 }
 
+#[cfg(feature = "video")]
+#[allow(unreachable_patterns)]
+impl TryFrom<&MediaParametersType> for VideoParameters {
+    type Error = Error;
+
+    fn try_from(params: &MediaParametersType) -> Result<Self> {
+        match params {
+            MediaParametersType::Video(params) => Ok(params.clone()),
+            _ => Err(invalid_param_error!(params)),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum MediaParametersType {
+    #[cfg(feature = "audio")]
+    Audio(AudioParameters),
+    #[cfg(feature = "video")]
+    Video(VideoParameters),
+}
+
+#[cfg(feature = "audio")]
+impl From<AudioParameters> for MediaParametersType {
+    fn from(params: AudioParameters) -> Self {
+        MediaParametersType::Audio(params)
+    }
+}
+
+#[cfg(feature = "video")]
+impl From<VideoParameters> for MediaParametersType {
+    fn from(params: VideoParameters) -> Self {
+        MediaParametersType::Video(params)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum CodecParametersType {
+    Decoder(DecoderParameters),
+    Encoder(EncoderParameters),
+}
+
+impl From<DecoderParameters> for CodecParametersType {
+    fn from(params: DecoderParameters) -> Self {
+        CodecParametersType::Decoder(params)
+    }
+}
+
+impl From<EncoderParameters> for CodecParametersType {
+    fn from(params: EncoderParameters) -> Self {
+        CodecParametersType::Encoder(params)
+    }
+}
+
 pub trait CodecInfomation {
     fn id(&self) -> CodecID;
     fn name(&self) -> &'static str;
 }
 
 pub trait Codec<T: CodecConfiguration>: CodecInfomation {
-    fn configure(&mut self, parameters: Option<&T::Parameters>, options: Option<&Variant>) -> Result<()>;
+    fn configure(&mut self, params: Option<&CodecParameters>, options: Option<&Variant>) -> Result<()>;
     fn set_option(&mut self, key: &str, value: &Variant) -> Result<()>;
 }
 
