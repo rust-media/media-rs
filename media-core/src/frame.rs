@@ -202,22 +202,22 @@ impl<'a> MappedPlanes<'a> {
 }
 
 #[cfg(any(feature = "audio", feature = "video"))]
+pub(crate) type PlaneVec<T> = SmallVec<[T; DEFAULT_MAX_PLANES]>;
+
+#[cfg(any(feature = "audio", feature = "video"))]
 #[derive(Copy, Clone)]
-pub(crate) enum PlaneInformation {
+pub(crate) enum PlaneDescriptor {
     #[cfg(feature = "audio")]
     Audio(usize, usize), // stride, actual_bytes
     #[cfg(feature = "video")]
     Video(usize, u32), // stride, height
 }
 
-#[cfg(any(feature = "audio", feature = "video"))]
-pub(crate) type PlaneInformationVec = SmallVec<[PlaneInformation; DEFAULT_MAX_PLANES]>;
-
 #[derive(Clone)]
 pub(crate) struct MemoryData<'a> {
     pub(crate) data: Cow<'a, [u8]>,
     #[cfg(any(feature = "audio", feature = "video"))]
-    pub(crate) planes: PlaneInformationVec,
+    pub(crate) planes: PlaneVec<PlaneDescriptor>,
 }
 
 impl MemoryData<'_> {
@@ -234,7 +234,7 @@ impl MemoryData<'_> {
     pub(crate) fn truncate(&mut self, len: usize) -> Result<()> {
         for plane in &mut self.planes {
             match plane {
-                PlaneInformation::Audio(stride, actual_bytes) => {
+                PlaneDescriptor::Audio(stride, actual_bytes) => {
                     let plane_size = *stride;
                     if len > plane_size || len == 0 {
                         return Err(crate::invalid_param_error!(len));
@@ -251,23 +251,20 @@ impl MemoryData<'_> {
 }
 
 #[cfg(feature = "video")]
-pub(crate) type PlaneDataVec<'a> = SmallVec<[(&'a [u8], usize, u32); DEFAULT_MAX_PLANES]>;
-
-#[cfg(feature = "video")]
 #[derive(Clone)]
 pub(crate) struct SeparateMemoryData<'a> {
-    pub(crate) planes: PlaneDataVec<'a>,
+    pub(crate) planes: PlaneVec<(&'a [u8], usize, u32)>,
 }
 
 #[cfg(feature = "video")]
 impl SeparateMemoryData<'_> {
     fn into_owned(self) -> MemoryData<'static> {
         let mut data = Vec::new();
-        let mut planes = PlaneInformationVec::new();
+        let mut planes = PlaneVec::<PlaneDescriptor>::new();
 
         for (slice, stride, height) in self.planes {
             data.extend_from_slice(slice);
-            planes.push(PlaneInformation::Video(stride, height));
+            planes.push(PlaneDescriptor::Video(stride, height));
         }
 
         MemoryData {
@@ -281,17 +278,7 @@ impl SeparateMemoryData<'_> {
 pub(crate) struct BufferData {
     pub(crate) data: Arc<Buffer>,
     #[cfg(any(feature = "audio", feature = "video"))]
-    pub(crate) planes: PlaneInformationVec,
-}
-
-impl BufferData {
-    fn into_owned(self) -> MemoryData<'static> {
-        MemoryData {
-            data: Cow::Owned(self.data.data().to_vec()),
-            #[cfg(any(feature = "audio", feature = "video"))]
-            planes: self.planes,
-        }
-    }
+    pub(crate) planes: PlaneVec<(usize, PlaneDescriptor)>,
 }
 
 #[derive(Clone)]
@@ -312,7 +299,7 @@ impl FrameData<'_> {
             FrameData::Memory(data) => FrameData::Memory(data.into_owned()),
             #[cfg(feature = "video")]
             FrameData::SeparateMemory(data) => FrameData::Memory(data.into_owned()),
-            FrameData::Buffer(data) => FrameData::Memory(data.into_owned()),
+            FrameData::Buffer(data) => FrameData::Buffer(data),
             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(pixel_buffer) => FrameData::PixelBuffer(pixel_buffer),
             FrameData::Variant(variant) => FrameData::Variant(variant),
@@ -368,9 +355,9 @@ impl DataMappable for MemoryData<'_> {
         for plane in &self.planes {
             let plane_size = match plane {
                 #[cfg(feature = "audio")]
-                PlaneInformation::Audio(stride, _) => *stride,
+                PlaneDescriptor::Audio(stride, _) => *stride,
                 #[cfg(feature = "video")]
-                PlaneInformation::Video(stride, height) => stride * (*height as usize),
+                PlaneDescriptor::Video(stride, height) => stride * (*height as usize),
             };
 
             if plane_size > data_slice.len() || plane_size == 0 {
@@ -382,12 +369,12 @@ impl DataMappable for MemoryData<'_> {
 
             let mapped_plane = match plane {
                 #[cfg(feature = "audio")]
-                PlaneInformation::Audio(_, actual_bytes) => MappedPlane::Audio {
+                PlaneDescriptor::Audio(_, actual_bytes) => MappedPlane::Audio {
                     data: MappedData::Ref(&plane_data[..*actual_bytes]),
                     actual_bytes: *actual_bytes,
                 },
                 #[cfg(feature = "video")]
-                PlaneInformation::Video(stride, height) => MappedPlane::Video {
+                PlaneDescriptor::Video(stride, height) => MappedPlane::Video {
                     data: MappedData::Ref(plane_data),
                     stride: *stride,
                     height: *height,
@@ -414,9 +401,9 @@ impl DataMappable for MemoryData<'_> {
             #[allow(unreachable_patterns)]
             let plane_size = match plane {
                 #[cfg(feature = "audio")]
-                PlaneInformation::Audio(stride, _) => *stride,
+                PlaneDescriptor::Audio(stride, _) => *stride,
                 #[cfg(feature = "video")]
-                PlaneInformation::Video(stride, height) => stride * (*height as usize),
+                PlaneDescriptor::Video(stride, height) => stride * (*height as usize),
             };
 
             if plane_size > data_slice.len() {
@@ -428,12 +415,12 @@ impl DataMappable for MemoryData<'_> {
 
             let mapped_plane = match plane {
                 #[cfg(feature = "audio")]
-                PlaneInformation::Audio(_, actual_bytes) => MappedPlane::Audio {
+                PlaneDescriptor::Audio(_, actual_bytes) => MappedPlane::Audio {
                     data: MappedData::RefMut(&mut plane_data[..*actual_bytes]),
                     actual_bytes: *actual_bytes,
                 },
                 #[cfg(feature = "video")]
-                PlaneInformation::Video(stride, height) => MappedPlane::Video {
+                PlaneDescriptor::Video(stride, height) => MappedPlane::Video {
                     data: MappedData::RefMut(plane_data),
                     stride: *stride,
                     height: *height,
@@ -512,40 +499,39 @@ impl DataMappable for BufferData {
     }
 
     fn planes(&self) -> Option<MappedPlanes<'_>> {
-        let mut data_slice = self.data.data();
+        let data = self.data.data();
         let mut planes = SmallVec::new();
 
         for plane in &self.planes {
-            let plane_size = match plane {
+            let (offset, plane_size) = match plane.1 {
                 #[cfg(feature = "audio")]
-                PlaneInformation::Audio(stride, _) => *stride,
+                PlaneDescriptor::Audio(stride, _) => (plane.0, stride),
                 #[cfg(feature = "video")]
-                PlaneInformation::Video(stride, height) => stride * (*height as usize),
+                PlaneDescriptor::Video(stride, height) => (plane.0, stride * (height as usize)),
             };
 
-            if plane_size > data_slice.len() || plane_size == 0 {
+            if plane_size > data.len() || plane_size == 0 {
                 return None;
             }
 
             #[allow(unused_variables)]
-            let (plane_data, rest) = data_slice.split_at(plane_size);
+            let plane_data = &data[offset..offset + plane_size];
 
-            let mapped_plane = match plane {
+            let mapped_plane = match plane.1 {
                 #[cfg(feature = "audio")]
-                PlaneInformation::Audio(_, actual_bytes) => MappedPlane::Audio {
-                    data: MappedData::Ref(&plane_data[..*actual_bytes]),
-                    actual_bytes: *actual_bytes,
+                PlaneDescriptor::Audio(_, actual_bytes) => MappedPlane::Audio {
+                    data: MappedData::Ref(&plane_data[..actual_bytes]),
+                    actual_bytes,
                 },
                 #[cfg(feature = "video")]
-                PlaneInformation::Video(stride, height) => MappedPlane::Video {
+                PlaneDescriptor::Video(stride, height) => MappedPlane::Video {
                     data: MappedData::Ref(plane_data),
-                    stride: *stride,
-                    height: *height,
+                    stride,
+                    height,
                 },
             };
 
             planes.push(mapped_plane);
-            data_slice = rest;
         }
 
         Some(MappedPlanes {

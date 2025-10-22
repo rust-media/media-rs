@@ -53,7 +53,7 @@ impl BufferPool {
 
     pub fn reset(&self, buffer_size: usize) {
         self.buffer_size.store(buffer_size, Ordering::Relaxed);
-        while let Some(_) = self.queue.pop() {}
+        while self.queue.pop().is_some() {}
     }
 
     pub fn get(self: &Arc<Self>) -> Arc<Buffer> {
