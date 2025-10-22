@@ -202,16 +202,8 @@ impl CodecConfiguration for VideoEncoder {
 
     #[allow(unreachable_patterns)]
     fn configure(&mut self, params: &CodecParameters) -> Result<()> {
-        let video_params = match &params.media {
-            MediaParametersType::Video(params) => params,
-            _ => return Err(invalid_param_error!(params)),
-        };
-
-        let encoder_params = match &params.codec {
-            CodecParametersType::Encoder(params) => params,
-            _ => return Err(invalid_param_error!(params)),
-        };
-
+        let video_params = (&params.media).try_into()?;
+        let encoder_params = (&params.codec).try_into()?;
         self.video.update(&video_params);
         self.encoder.update(&encoder_params);
         Ok(())

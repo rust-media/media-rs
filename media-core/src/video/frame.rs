@@ -1,9 +1,10 @@
-use std::{borrow::Cow, num::NonZeroU32};
+use std::{borrow::Cow, num::NonZeroU32, sync::Arc};
 
 use super::video::{PixelFormat, VideoFrameDescriptor};
 use crate::{
+    buffer::Buffer,
     error::Error,
-    frame::{Frame, FrameData, MemoryData, PlaneDataVec, PlaneInformation, PlaneInformationVec, SeparateMemoryData},
+    frame::{BufferData, Frame, FrameData, MemoryData, PlaneDescriptor, PlaneVec, SeparateMemoryData},
     invalid_param_error,
     media::FrameDescriptor,
     Result, DEFAULT_ALIGNMENT,
@@ -71,7 +72,7 @@ impl VideoDataCreator {
             return Err(Error::Invalid("buffer size".to_string()));
         }
 
-        let planes = PlaneInformationVec::from_slice(&[PlaneInformation::Video(stride.get() as usize, height.get())]);
+        let planes = PlaneVec::from_slice(&[PlaneDescriptor::Video(stride.get() as usize, height.get())]);
 
         let data = MemoryData {
             data: buffer,
@@ -79,6 +80,30 @@ impl VideoDataCreator {
         };
 
         Ok(data)
+    }
+
+    fn create_from_shared_buffer(
+        format: PixelFormat,
+        height: NonZeroU32,
+        buffer: Arc<Buffer>,
+        buffer_planes: &[(usize, u32)], // (offset, stride), offset from the start of the Buffer
+    ) -> Result<BufferData> {
+        let mut planes = PlaneVec::with_capacity(buffer_planes.len());
+
+        for (i, (offset, stride)) in buffer_planes.iter().enumerate() {
+            let height = format.calc_plane_height(i, height.get());
+
+            if *offset + (*stride as usize * height as usize) > buffer.size() {
+                return Err(Error::Invalid("buffer size".to_string()));
+            }
+
+            planes.push((*offset, PlaneDescriptor::Video(*stride as usize, height)));
+        }
+
+        Ok(BufferData {
+            data: buffer.clone(),
+            planes,
+        })
     }
 }
 
@@ -165,6 +190,30 @@ impl VideoFrameCreator {
         Ok(Frame::from_data(FrameDescriptor::Video(desc), FrameData::SeparateMemory(data)))
     }
 
+    pub fn create_from_shared_buffer(
+        &self,
+        format: PixelFormat,
+        width: u32,
+        height: u32,
+        buffer: Arc<Buffer>,
+        planes: &[(usize, u32)], // (offset, stride), offset from the start of the Buffer
+    ) -> Result<Frame<'static>> {
+        let desc = VideoFrameDescriptor::try_new(format, width, height)?;
+
+        self.create_from_shared_buffer_with_descriptor(desc, buffer, planes)
+    }
+
+    pub fn create_from_shared_buffer_with_descriptor(
+        &self,
+        desc: VideoFrameDescriptor,
+        buffer: Arc<Buffer>,
+        planes: &[(usize, u32)], // (offset, stride), offset from the start of the Buffer
+    ) -> Result<Frame<'static>> {
+        let data = VideoDataCreator::create_from_shared_buffer(desc.format, desc.height, buffer, planes)?;
+
+        Ok(Frame::from_data(FrameDescriptor::Video(desc), FrameData::Buffer(data)))
+    }
+
     fn create_from_data(desc: VideoFrameDescriptor, data: MemoryData<'_>) -> Frame<'_> {
         Frame::from_data(FrameDescriptor::Video(desc), FrameData::Memory(data))
     }
@@ -172,7 +221,7 @@ impl VideoFrameCreator {
 
 impl<'a> SeparateMemoryData<'a> {
     fn from_buffers(format: PixelFormat, height: NonZeroU32, buffers: &[(&'a [u8], u32)]) -> Result<Self> {
-        let mut data_vec = PlaneDataVec::with_capacity(buffers.len());
+        let mut data_vec = PlaneVec::with_capacity(buffers.len());
 
         for (i, (buffer, stride)) in buffers.iter().enumerate() {
             let height = format.calc_plane_height(i, height.get());

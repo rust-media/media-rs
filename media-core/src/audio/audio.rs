@@ -10,7 +10,7 @@ use strum::EnumCount;
 
 use crate::{
     error::Error,
-    frame::{PlaneInformation, PlaneInformationVec},
+    frame::{PlaneDescriptor, PlaneVec},
     invalid_param_error,
     media::FrameDescriptor,
     time, Result,
@@ -172,16 +172,16 @@ impl SampleFormat {
         }
     }
 
-    pub(crate) fn calc_data(&self, channels: u8, samples: u32) -> (usize, PlaneInformationVec) {
+    pub(crate) fn calc_data(&self, channels: u8, samples: u32) -> (usize, PlaneVec<PlaneDescriptor>) {
         let mut size = 0;
-        let mut planes = PlaneInformationVec::new();
+        let mut planes = PlaneVec::new();
         let stride = self.stride(channels, samples);
 
         if self.is_planar() {
-            planes.extend(iter::repeat_n(PlaneInformation::Audio(stride, stride), channels as usize));
+            planes.extend(iter::repeat_n(PlaneDescriptor::Audio(stride, stride), channels as usize));
             size += stride * channels as usize;
         } else {
-            planes.push(PlaneInformation::Audio(stride, stride));
+            planes.push(PlaneDescriptor::Audio(stride, stride));
             size = stride;
         }
 
