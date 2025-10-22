@@ -16,6 +16,7 @@ rust-version.workspace = true
 bitflags = "2.6"
 bytemuck = "1.23"
 cfg-if = "1.0"
+crossbeam-queue = "0.3"
 num_enum = "0.7"
 num-rational = "0.4"
 num-traits = "0.2"
