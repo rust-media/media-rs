@@ -1,6 +1,11 @@
+use std::sync::RwLock;
+
 use env_logger;
 use log::{error, info, warn};
-use media_core::{frame::SharedFrame, variant::Variant};
+use media_core::{
+    frame::{Frame, SharedFrame},
+    variant::Variant,
+};
 use media_device::{camera::CameraManager, Device, OutputDevice};
 
 fn main() {
@@ -51,7 +56,7 @@ fn main() {
         }
 
         // Create a video frame that can be sent across threads
-        let _shared_frame = SharedFrame::new(frame.into_owned());
+        let _shared_frame = SharedFrame::<RwLock<Frame<'static>>>::new(frame.into_owned());
 
         Ok(())
     }) {

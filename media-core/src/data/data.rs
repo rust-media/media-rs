@@ -6,7 +6,7 @@ pub enum DataFormat {
     String,      // String
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DataFrameDescriptor {
     pub format: DataFormat,
 }

@@ -11,7 +11,7 @@ pub enum MediaType {
     Data,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum FrameDescriptor {
     #[cfg(feature = "audio")]
     Audio(AudioFrameDescriptor),

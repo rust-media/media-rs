@@ -5,7 +5,14 @@ use std::{
     sync::{Arc, LazyLock, RwLock},
 };
 
-use media_core::{error::Error, frame::Frame, invalid_param_error, variant::Variant, MediaType, Result};
+use media_core::{
+    error::Error,
+    frame::{Frame, SharedFrame},
+    frame_pool::{FrameCreator, FramePool},
+    invalid_param_error,
+    variant::Variant,
+    MediaType, Result,
+};
 
 #[cfg(feature = "audio")]
 use crate::AudioParameters;
@@ -19,6 +26,7 @@ use crate::{
 #[derive(Clone, Debug, Default)]
 pub struct DecoderParameters {
     pub extra_data: Option<Vec<u8>>,
+    pub use_pool: Option<bool>,
 }
 
 impl DecoderParameters {
@@ -32,6 +40,7 @@ impl DecoderParameters {
         #[allow(clippy::single_match)]
         match key {
             "extra_data" => self.extra_data = value.get_buffer(),
+            "use_pool" => self.use_pool = value.get_bool(),
             _ => {}
         }
     }
@@ -200,6 +209,16 @@ pub trait Decoder<T: CodecConfiguration>: Codec<T> + Send + Sync {
         self.receive_frame_borrowed(config).map(|frame| frame.into_owned())
     }
     fn receive_frame_borrowed(&mut self, config: &T) -> Result<Frame<'_>>;
+    fn receive_shared_frame(&mut self, config: &T) -> Result<SharedFrame<Frame<'static>>> {
+        Ok(SharedFrame::<Frame<'static>>::new(self.receive_frame(config)?))
+    }
+    fn receive_shared_frame_with_pool(&mut self, config: &T, pool: &Arc<FramePool<Frame<'static>>>) -> Result<SharedFrame<Frame<'static>>> {
+        let frame = self.receive_frame_borrowed(config)?;
+        let desc = frame.descriptor().clone();
+        let mut pooled_frame = pool.get_frame_with_descriptor(desc)?;
+        frame.convert_to(pooled_frame.write().unwrap())?;
+        Ok(pooled_frame)
+    }
     fn flush(&mut self, config: &T) -> Result<()>;
 }
 
@@ -210,6 +229,7 @@ pub trait DecoderBuilder<T: CodecConfiguration>: CodecBuilder<T> {
 pub struct DecoderContext<T: CodecConfiguration> {
     pub configurations: T,
     decoder: Box<dyn Decoder<T>>,
+    pool: Option<Arc<FramePool<Frame<'static>>>>,
 }
 
 #[cfg(feature = "audio")]
@@ -280,9 +300,21 @@ impl<T: CodecConfiguration> DecoderContext<T> {
         let decoder = builder.new_decoder(id, params, options)?;
         let config = T::from_parameters(params)?;
 
+        let frame_pool = match &params.codec {
+            CodecParametersType::Decoder(decoder_params) => {
+                if decoder_params.use_pool.unwrap_or(false) {
+                    Some(FramePool::<Frame<'static>>::new(None, None))
+                } else {
+                    None
+                }
+            }
+            _ => return Err(invalid_param_error!(params)),
+        };
+
         Ok(Self {
             configurations: config,
             decoder,
+            pool: frame_pool,
         })
     }
 
@@ -294,7 +326,16 @@ impl<T: CodecConfiguration> DecoderContext<T> {
         Ok(Self {
             configurations: config,
             decoder,
+            pool: None,
         })
+    }
+
+    pub fn with_frame_creator(mut self, creator: Box<dyn FrameCreator>) -> Self {
+        if let Some(pool) = self.pool.as_mut().and_then(Arc::get_mut) {
+            pool.configure(None, Some(creator));
+        }
+
+        self
     }
 
     pub fn codec_id(&self) -> CodecID {
@@ -326,5 +367,13 @@ impl<T: CodecConfiguration> DecoderContext<T> {
 
     pub fn receive_frame_borrowed(&mut self) -> Result<Frame<'_>> {
         self.decoder.receive_frame_borrowed(&self.configurations)
+    }
+
+    pub fn receive_shared_frame(&mut self) -> Result<SharedFrame<Frame<'static>>> {
+        if let Some(pool) = &self.pool {
+            self.decoder.receive_shared_frame_with_pool(&self.configurations, pool)
+        } else {
+            self.decoder.receive_shared_frame(&self.configurations)
+        }
     }
 }
