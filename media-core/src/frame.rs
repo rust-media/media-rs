@@ -2,7 +2,7 @@
 use std::slice::{Iter, IterMut};
 use std::{
     borrow::Cow,
-    sync::{Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    sync::{Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard, Weak},
 };
 
 use num_rational::Rational64;
@@ -15,6 +15,7 @@ use crate::error::Error;
 use crate::video::pixel_buffer::frame::PixelBuffer;
 use crate::{
     buffer::Buffer,
+    frame_pool::FramePool,
     media::{FrameDescriptor, MediaType},
     variant::Variant,
     Result,
@@ -274,10 +275,10 @@ impl SeparateMemoryData<'_> {
     }
 }
 
+#[cfg(any(feature = "audio", feature = "video"))]
 #[derive(Clone)]
 pub(crate) struct BufferData {
     pub(crate) data: Arc<Buffer>,
-    #[cfg(any(feature = "audio", feature = "video"))]
     pub(crate) planes: PlaneVec<(usize, PlaneDescriptor)>,
 }
 
@@ -287,10 +288,13 @@ pub(crate) enum FrameData<'a> {
     Memory(MemoryData<'a>),
     #[cfg(feature = "video")]
     SeparateMemory(SeparateMemoryData<'a>),
+    #[cfg(any(feature = "audio", feature = "video"))]
+    #[allow(dead_code)]
     Buffer(BufferData),
     #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
     PixelBuffer(PixelBuffer),
     Variant(Variant),
+    Empty,
 }
 
 impl FrameData<'_> {
@@ -299,10 +303,12 @@ impl FrameData<'_> {
             FrameData::Memory(data) => FrameData::Memory(data.into_owned()),
             #[cfg(feature = "video")]
             FrameData::SeparateMemory(data) => FrameData::Memory(data.into_owned()),
+            #[cfg(any(feature = "audio", feature = "video"))]
             FrameData::Buffer(data) => FrameData::Buffer(data),
             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(pixel_buffer) => FrameData::PixelBuffer(pixel_buffer),
             FrameData::Variant(variant) => FrameData::Variant(variant),
+            FrameData::Empty => FrameData::Empty,
         }
     }
 
@@ -479,6 +485,7 @@ impl DataMappable for SeparateMemoryData<'_> {
     }
 }
 
+#[cfg(any(feature = "audio", feature = "video"))]
 impl DataMappable for BufferData {
     fn map(&self) -> Result<MappedGuard<'_>> {
         Ok(MappedGuard {
@@ -554,7 +561,7 @@ impl DataMappable for FrameData<'_> {
             FrameData::Buffer(data) => data.map(),
             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(data) => data.map(),
-            FrameData::Variant(_) => Err(Error::Unsupported(stringify!(Variant).to_string())),
+            _ => Err(Error::Unsupported("frame data".to_string())),
         }
     }
 
@@ -566,7 +573,7 @@ impl DataMappable for FrameData<'_> {
             FrameData::Buffer(data) => data.map_mut(),
             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(data) => data.map_mut(),
-            FrameData::Variant(_) => Err(Error::Unsupported(stringify!(Variant).to_string())),
+            _ => Err(Error::Unsupported("frame data".to_string())),
         }
     }
 
@@ -578,7 +585,7 @@ impl DataMappable for FrameData<'_> {
             FrameData::Buffer(data) => data.unmap(),
             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(data) => data.unmap(),
-            FrameData::Variant(_) => Err(Error::Unsupported(stringify!(Variant).to_string())),
+            _ => Err(Error::Unsupported("frame data".to_string())),
         }
     }
 
@@ -590,7 +597,7 @@ impl DataMappable for FrameData<'_> {
             FrameData::Buffer(data) => data.unmap_mut(),
             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(data) => data.unmap_mut(),
-            FrameData::Variant(_) => Err(Error::Unsupported(stringify!(Variant).to_string())),
+            _ => Err(Error::Unsupported("frame data".to_string())),
         }
     }
 
@@ -602,7 +609,7 @@ impl DataMappable for FrameData<'_> {
             FrameData::Buffer(data) => data.planes(),
             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(data) => data.planes(),
-            FrameData::Variant(_) => None,
+            _ => None,
         }
     }
 
@@ -614,7 +621,7 @@ impl DataMappable for FrameData<'_> {
             FrameData::Buffer(_) => None,
             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(data) => data.planes_mut(),
-            FrameData::Variant(_) => None,
+            _ => None,
         }
     }
 }
@@ -649,7 +656,10 @@ impl Frame<'_> {
         }
     }
 
-    pub(crate) fn from_data(desc: FrameDescriptor, data: FrameData<'_>) -> Frame<'_> {
+    pub(crate) fn from_data<'a, T>(desc: FrameDescriptor, data: T) -> Frame<'a>
+    where
+        T: Into<FrameData<'a>>,
+    {
         Frame {
             desc,
             source: None,
@@ -658,7 +668,7 @@ impl Frame<'_> {
             duration: None,
             time_base: None,
             metadata: None,
-            data,
+            data: data.into(),
         }
     }
 
@@ -695,14 +705,16 @@ impl Frame<'_> {
 }
 
 #[derive(Clone)]
-pub struct SharedFrame {
-    inner: Arc<RwLock<Frame<'static>>>,
+pub struct SharedFrame<T = RwLock<Frame<'static>>> {
+    inner: Arc<T>,
+    pub(crate) pool: Option<Weak<FramePool<T>>>,
 }
 
-impl SharedFrame {
+impl SharedFrame<RwLock<Frame<'static>>> {
     pub fn new(frame: Frame<'_>) -> Self {
         Self {
             inner: Arc::new(RwLock::new(frame.into_owned())),
+            pool: None,
         }
     }
 
@@ -712,5 +724,36 @@ impl SharedFrame {
 
     pub fn write(&self) -> LockResult<RwLockWriteGuard<'_, Frame<'static>>> {
         self.inner.write()
+    }
+}
+
+impl SharedFrame<Frame<'static>> {
+    pub fn new(frame: Frame<'_>) -> Self {
+        Self {
+            inner: Arc::new(frame.into_owned()),
+            pool: None,
+        }
+    }
+
+    pub fn read(&self) -> &Frame<'static> {
+        &self.inner
+    }
+
+    pub fn write(&mut self) -> Option<&mut Frame<'static>> {
+        Arc::get_mut(&mut self.inner)
+    }
+}
+
+impl<T> Drop for SharedFrame<T> {
+    fn drop(&mut self) {
+        if let Some(pool) = &self.pool {
+            if let Some(pool) = pool.upgrade() {
+                let cloned = SharedFrame {
+                    inner: Arc::clone(&self.inner),
+                    pool: None,
+                };
+                pool.recycle_frame(cloned);
+            }
+        }
     }
 }

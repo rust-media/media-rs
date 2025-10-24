@@ -1133,3 +1133,14 @@ impl From<VideoFrameDescriptor> for FrameDescriptor {
         FrameDescriptor::Video(desc)
     }
 }
+
+impl TryFrom<FrameDescriptor> for VideoFrameDescriptor {
+    type Error = Error;
+
+    fn try_from(value: FrameDescriptor) -> Result<Self> {
+        match value {
+            FrameDescriptor::Video(desc) => Ok(desc),
+            _ => Err(invalid_param_error!(value)),
+        }
+    }
+}

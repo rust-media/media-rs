@@ -17,6 +17,7 @@ pub mod buffer;
 pub mod data;
 pub mod error;
 pub mod frame;
+pub mod frame_pool;
 pub mod media;
 pub mod time;
 

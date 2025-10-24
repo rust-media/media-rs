@@ -107,6 +107,33 @@ impl VideoDataCreator {
     }
 }
 
+impl BufferData {
+    fn attach_video_buffer(
+        &mut self,
+        format: PixelFormat,
+        height: NonZeroU32,
+        buffer: Arc<Buffer>,
+        buffer_planes: &[(usize, u32)], // (offset, stride), offset from the start of the Buffer
+    ) -> Result<()> {
+        let mut planes = PlaneVec::with_capacity(buffer_planes.len());
+
+        for (i, (offset, stride)) in buffer_planes.iter().enumerate() {
+            let height = format.calc_plane_height(i, height.get());
+
+            if *offset + (*stride as usize * height as usize) > buffer.size() {
+                return Err(Error::Invalid("buffer size".to_string()));
+            }
+
+            planes.push((*offset, PlaneDescriptor::Video(*stride as usize, height)));
+        }
+
+        self.data = buffer;
+        self.planes = planes;
+
+        Ok(())
+    }
+}
+
 pub struct VideoFrameCreator;
 
 impl VideoFrameCreator {
@@ -214,6 +241,18 @@ impl VideoFrameCreator {
         Ok(Frame::from_data(FrameDescriptor::Video(desc), FrameData::Buffer(data)))
     }
 
+    pub fn create_empty(&self, format: PixelFormat, width: u32, height: u32) -> Result<Frame<'static>> {
+        let desc = VideoFrameDescriptor::try_new(format, width, height)?;
+
+        self.create_empty_with_descriptor(desc)
+    }
+
+    pub fn create_empty_with_descriptor(&self, desc: VideoFrameDescriptor) -> Result<Frame<'static>> {
+        let data = FrameData::Empty;
+
+        Ok(Frame::from_data(FrameDescriptor::Video(desc), data))
+    }
+
     fn create_from_data(desc: VideoFrameDescriptor, data: MemoryData<'_>) -> Frame<'_> {
         Frame::from_data(FrameDescriptor::Video(desc), FrameData::Memory(data))
     }
@@ -254,5 +293,42 @@ impl Frame<'_> {
 
     pub fn is_video(&self) -> bool {
         self.desc.is_video()
+    }
+
+    pub fn attach_video_shared_buffer(
+        &mut self,
+        format: PixelFormat,
+        width: u32,
+        height: u32,
+        buffer: Arc<Buffer>,
+        buffer_planes: &[(usize, u32)], // (offset, stride), offset from the start of the Buffer
+    ) -> Result<()> {
+        let desc = VideoFrameDescriptor::try_new(format, width, height)?;
+
+        self.attach_video_shared_buffer_with_descriptor(desc, buffer, buffer_planes)
+    }
+
+    pub fn attach_video_shared_buffer_with_descriptor(
+        &mut self,
+        desc: VideoFrameDescriptor,
+        buffer: Arc<Buffer>,
+        buffer_planes: &[(usize, u32)], // (offset, stride), offset from the start of the Buffer
+    ) -> Result<()> {
+        match &mut self.data {
+            FrameData::Buffer(data) => {
+                data.attach_video_buffer(desc.format, desc.height, buffer, buffer_planes)?;
+            }
+            FrameData::Empty => {
+                let buffer_data = VideoDataCreator::create_from_shared_buffer(desc.format, desc.height, buffer, buffer_planes)?;
+                self.data = FrameData::Buffer(buffer_data);
+            }
+            _ => {
+                return Err(Error::Invalid("frame data type".to_string()));
+            }
+        }
+
+        self.desc = FrameDescriptor::Video(desc);
+
+        Ok(())
     }
 }
