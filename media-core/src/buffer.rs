@@ -30,7 +30,7 @@ impl Buffer {
 impl Drop for Buffer {
     fn drop(&mut self) {
         if let Some(pool) = self.pool.upgrade() {
-            pool.queue.push(Arc::new(Buffer {
+            pool.recycle_buffer(Arc::new(Buffer {
                 data: mem::take(&mut self.data),
                 pool: Arc::downgrade(&pool),
             }));
@@ -51,12 +51,11 @@ impl BufferPool {
         })
     }
 
-    pub fn reset(&self, buffer_size: usize) {
-        self.buffer_size.store(buffer_size, Ordering::Relaxed);
-        while self.queue.pop().is_some() {}
+    pub fn available(&self) -> usize {
+        self.queue.len()
     }
 
-    pub fn get(self: &Arc<Self>) -> Arc<Buffer> {
+    pub fn get_buffer(self: &Arc<Self>) -> Arc<Buffer> {
         let buffer_size = self.buffer_size.load(Ordering::Relaxed);
         if let Some(mut buffer) = self.queue.pop() {
             if buffer_size == buffer.size() {
@@ -73,11 +72,18 @@ impl BufferPool {
         })
     }
 
-    pub fn available(&self) -> usize {
-        self.queue.len()
+    pub fn recycle_buffer(&self, buffer: Arc<Buffer>) {
+        if buffer.size() == self.buffer_size.load(Ordering::Relaxed) {
+            self.queue.push(buffer);
+        }
     }
 
-    pub fn buffer_size(&self) -> usize {
+    pub fn get_buffer_size(&self) -> usize {
         self.buffer_size.load(Ordering::Relaxed)
+    }
+
+    pub fn set_buffer_size(&self, buffer_size: usize) {
+        self.buffer_size.store(buffer_size, Ordering::Relaxed);
+        while self.queue.pop().is_some() {}
     }
 }
