@@ -437,7 +437,7 @@ impl Device for AVFoundationCaptureDevice {
         let (running, formats) = {
             let session = AVCaptureSession::new();
             let id = NSString::from_str(self.info.id.as_str());
-            let device = AVCaptureDevice::device_with_unique_id(&id).ok_or(not_found_error!(id))?;
+            let device = AVCaptureDevice::device_with_unique_id(&id).ok_or_else(|| not_found_error!(id))?;
             let output = AVCaptureVideoDataOutput::new();
             let input = AVCaptureDeviceInput::from_device(&device).map_err(|err| Error::Invalid(err.to_string()))?;
             let mut delegate = OutputDelegate::new();
@@ -575,7 +575,7 @@ impl Device for AVFoundationCaptureDevice {
             return Err(Error::NotRunning(self.info.name.clone()));
         }
 
-        let video_formats = self.formats.as_ref().ok_or(Error::NotFound(String::from("video formats")))?;
+        let video_formats = self.formats.as_ref().ok_or_else(|| Error::NotFound(String::from("video formats")))?;
         let mut formats = Variant::new_array();
         for video_format in video_formats {
             let mut format = Variant::new_dict();

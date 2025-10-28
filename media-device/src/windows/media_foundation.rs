@@ -520,7 +520,7 @@ fn get_formats(source_reader: &IMFSourceReader) -> Result<Vec<CameraFormat>> {
 fn get_current_format(source_reader: &IMFSourceReader) -> Result<CameraFormat> {
     let media_type = unsafe { source_reader.GetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32) };
     let media_type = media_type.map_err(|err| Error::GetFailed(err.message()))?;
-    let camera_format = from_mf_media_type(&media_type).ok_or(Error::Unsupported(stringify!(media_type).to_string()))?;
+    let camera_format = from_mf_media_type(&media_type).ok_or_else(|| Error::Unsupported(stringify!(media_type).to_string()))?;
     Ok(camera_format)
 }
 
@@ -761,7 +761,7 @@ impl Device for MediaFoundationDevice {
             return Err(Error::NotRunning(self.info.name.clone()));
         }
 
-        let video_formats = self.formats.as_ref().ok_or(Error::NotFound("video formats".to_string()))?;
+        let video_formats = self.formats.as_ref().ok_or_else(|| Error::NotFound("video formats".to_string()))?;
         let mut formats = Variant::new_array();
         for video_format in video_formats {
             let mut format = Variant::new_dict();
@@ -802,7 +802,7 @@ impl MediaFoundationDevice {
     fn get_source_reader(&mut self) -> Result<(&Mutex<IMFSourceReader>, &mut SourceReaderCallback)> {
         if self.source_reader.is_none() {
             let device_sources = MediaFoundationDeviceManager::get_device_sources()?;
-            let activate = device_sources.get(self.index).ok_or(not_found_error!(self.index))?;
+            let activate = device_sources.get(self.index).ok_or_else(|| not_found_error!(self.index))?;
             let media_source = unsafe { activate.ActivateObject::<IMFMediaSource>().map_err(|err| Error::OpenFailed(err.message()))? };
 
             let attributes: IMFAttributes = unsafe {
@@ -815,7 +815,7 @@ impl MediaFoundationDevice {
                 attributes.SetUINT32(&MF_READWRITE_DISABLE_CONVERTERS, true as u32).map_err(|err| Error::SetFailed(err.message()))?;
             }
 
-            let handler = self.handler.as_ref().ok_or(none_param_error!(output_handler))?;
+            let handler = self.handler.as_ref().ok_or_else(|| none_param_error!(output_handler))?;
             let callback: IMFSourceReaderCallback = SourceReaderCallback::new(self.info.clone(), handler.clone()).into();
 
             unsafe {

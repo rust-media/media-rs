@@ -172,7 +172,7 @@ impl VideoFrameCreator {
         T: Into<Cow<'a, [u8]>>,
     {
         let desc = VideoFrameDescriptor::try_new(format, width, height)?;
-        let stride = NonZeroU32::new(stride).ok_or(invalid_param_error!(stride))?;
+        let stride = NonZeroU32::new(stride).ok_or_else(|| invalid_param_error!(stride))?;
 
         self.create_from_aligned_buffer_with_descriptor(desc, stride, buffer)
     }
@@ -191,7 +191,7 @@ impl VideoFrameCreator {
         T: Into<Cow<'a, [u8]>>,
     {
         let desc = VideoFrameDescriptor::try_new(format, width, height)?;
-        let stride = NonZeroU32::new(stride).ok_or(invalid_param_error!(stride))?;
+        let stride = NonZeroU32::new(stride).ok_or_else(|| invalid_param_error!(stride))?;
 
         self.create_from_packed_buffer_with_descriptor(desc, stride, buffer)
     }

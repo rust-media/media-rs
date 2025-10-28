@@ -406,7 +406,7 @@ impl ChannelLayout {
     }
 
     pub fn default_from_channels(channels: u8) -> Result<Self> {
-        let channels = NonZeroU8::new(channels).ok_or(invalid_param_error!(channels))?;
+        let channels = NonZeroU8::new(channels).ok_or_else(|| invalid_param_error!(channels))?;
 
         Ok(CHANNEL_LAYOUT_MAP
             .map
@@ -414,7 +414,7 @@ impl ChannelLayout {
             .and_then(|opt| opt.as_ref())
             .and_then(|layouts| layouts.first())
             .cloned()
-            .unwrap_or(Self {
+            .unwrap_or_else(|| Self {
                 order: ChannelOrder::Unspecified,
                 channels,
                 spec: ChannelLayoutSpec::Mask(ChannelFormatMasks::from_bits_truncate(0)),
@@ -441,9 +441,9 @@ impl AudioFrameDescriptor {
     }
 
     pub fn try_new(format: SampleFormat, channels: u8, samples: u32, sample_rate: u32) -> Result<Self> {
-        let channels = NonZeroU8::new(channels).ok_or(invalid_param_error!(channels))?;
-        let samples = NonZeroU32::new(samples).ok_or(invalid_param_error!(samples))?;
-        let sample_rate = NonZeroU32::new(sample_rate).ok_or(invalid_param_error!(sample_rate))?;
+        let channels = NonZeroU8::new(channels).ok_or_else(|| invalid_param_error!(channels))?;
+        let samples = NonZeroU32::new(samples).ok_or_else(|| invalid_param_error!(samples))?;
+        let sample_rate = NonZeroU32::new(sample_rate).ok_or_else(|| invalid_param_error!(sample_rate))?;
 
         Ok(Self::new(format, channels, samples, sample_rate))
     }
@@ -458,8 +458,8 @@ impl AudioFrameDescriptor {
     }
 
     pub fn try_from_channel_layout(format: SampleFormat, samples: u32, sample_rate: u32, channel_layout: ChannelLayout) -> Result<Self> {
-        let samples = NonZeroU32::new(samples).ok_or(invalid_param_error!(samples))?;
-        let sample_rate = NonZeroU32::new(sample_rate).ok_or(invalid_param_error!(sample_rate))?;
+        let samples = NonZeroU32::new(samples).ok_or_else(|| invalid_param_error!(samples))?;
+        let sample_rate = NonZeroU32::new(sample_rate).ok_or_else(|| invalid_param_error!(sample_rate))?;
 
         Ok(Self::from_channel_layout(format, samples, sample_rate, channel_layout))
     }
