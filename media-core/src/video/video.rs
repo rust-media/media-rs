@@ -1121,8 +1121,8 @@ impl VideoFrameDescriptor {
     }
 
     pub fn try_new(format: PixelFormat, width: u32, height: u32) -> Result<Self> {
-        let width = NonZeroU32::new(width).ok_or(invalid_param_error!(width))?;
-        let height = NonZeroU32::new(height).ok_or(invalid_param_error!(height))?;
+        let width = NonZeroU32::new(width).ok_or_else(|| invalid_param_error!(width))?;
+        let height = NonZeroU32::new(height).ok_or_else(|| invalid_param_error!(height))?;
 
         Ok(Self::new(format, width, height))
     }

@@ -447,12 +447,12 @@ impl VideoFrameCreator {
 
     pub fn create_from_pixel_buffer(&self, pixel_buffer: &CVPixelBuffer) -> Result<Frame<'static>> {
         let width = pixel_buffer.get_width() as u32;
-        let width = NonZeroU32::new(width).ok_or(invalid_param_error!(width))?;
+        let width = NonZeroU32::new(width).ok_or_else(|| invalid_param_error!(width))?;
         let height = pixel_buffer.get_height() as u32;
-        let height = NonZeroU32::new(height).ok_or(invalid_param_error!(height))?;
+        let height = NonZeroU32::new(height).ok_or_else(|| invalid_param_error!(height))?;
         let format = pixel_buffer.get_pixel_format();
         let (format, color_range) = from_cv_format(format);
-        let format = format.ok_or(none_param_error!(format))?;
+        let format = format.ok_or_else(|| none_param_error!(format))?;
         let mut desc = VideoFrameDescriptor::new(format, width, height);
         desc.color_range = color_range;
 

@@ -101,8 +101,8 @@ fn convert_samples<S: Copy + Pod, D: Copy + Pod>(
     for ch in 0..channels as usize {
         let src_i = ch * src_plane_index_step;
         let dst_i = ch * dst_plane_index_step;
-        let src_data = src_planes.plane_data(src_i).ok_or(Error::Invalid("out of range: src".to_string()))?;
-        let dst_data = dst_planes.plane_data_mut(dst_i).ok_or(Error::Invalid("out of range: dst".to_string()))?;
+        let src_data = src_planes.plane_data(src_i).ok_or_else(|| Error::Invalid("out of range: src".to_string()))?;
+        let dst_data = dst_planes.plane_data_mut(dst_i).ok_or_else(|| Error::Invalid("out of range: dst".to_string()))?;
 
         let src_data: &[S] = bytemuck::cast_slice(src_data);
         let dst_data: &mut [D] = bytemuck::cast_slice_mut(dst_data);
@@ -160,8 +160,8 @@ impl Frame<'_> {
             return Err(Error::Unsupported("media type mismatch".to_string()));
         }
 
-        let src_desc = self.audio_descriptor().ok_or(Error::Invalid("not audio frame".to_string()))?;
-        let dst_desc = dst.audio_descriptor().cloned().ok_or(Error::Invalid("not audio frame".to_string()))?;
+        let src_desc = self.audio_descriptor().ok_or_else(|| Error::Invalid("not audio frame".to_string()))?;
+        let dst_desc = dst.audio_descriptor().cloned().ok_or_else(|| Error::Invalid("not audio frame".to_string()))?;
 
         if src_desc.samples != dst_desc.samples {
             return Err(Error::Unsupported("samples mismatch".to_string()));
