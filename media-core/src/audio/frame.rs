@@ -79,6 +79,18 @@ impl AudioFrameCreator {
 
         Ok(Frame::from_data(FrameDescriptor::Audio(desc), FrameData::Memory(data)))
     }
+
+    pub fn create_empty(&self, format: SampleFormat, channels: u8, samples: u32, sample_rate: u32) -> Result<Frame<'static>> {
+        let desc = AudioFrameDescriptor::try_new(format, channels, samples, sample_rate)?;
+
+        self.create_empty_with_descriptor(desc)
+    }
+
+    pub fn create_empty_with_descriptor(&self, desc: AudioFrameDescriptor) -> Result<Frame<'static>> {
+        let data = FrameData::Empty;
+
+        Ok(Frame::from_data(FrameDescriptor::Audio(desc), data))
+    }
 }
 
 impl Frame<'_> {

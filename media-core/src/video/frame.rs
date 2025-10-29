@@ -93,8 +93,8 @@ impl VideoDataCreator {
         for (i, (offset, stride)) in buffer_planes.iter().enumerate() {
             let height = format.calc_plane_height(i, height.get());
 
-            if *offset + (*stride as usize * height as usize) > buffer.size() {
-                return Err(Error::Invalid("buffer size".to_string()));
+            if *offset + (*stride as usize * height as usize) > buffer.len() {
+                return Err(Error::Invalid("buffer length".to_string()));
             }
 
             planes.push((*offset, PlaneDescriptor::Video(*stride as usize, height)));
@@ -120,8 +120,8 @@ impl BufferData {
         for (i, (offset, stride)) in buffer_planes.iter().enumerate() {
             let height = format.calc_plane_height(i, height.get());
 
-            if *offset + (*stride as usize * height as usize) > buffer.size() {
-                return Err(Error::Invalid("buffer size".to_string()));
+            if *offset + (*stride as usize * height as usize) > buffer.len() {
+                return Err(Error::Invalid("buffer length".to_string()));
             }
 
             planes.push((*offset, PlaneDescriptor::Video(*stride as usize, height)));

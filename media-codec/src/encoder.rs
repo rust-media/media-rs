@@ -5,14 +5,14 @@ use std::{
     sync::{Arc, LazyLock, RwLock},
 };
 
-use media_core::{error::Error, frame::Frame, invalid_param_error, variant::Variant, MediaType, Result};
+use media_core::{buffer::BufferPool, error::Error, frame::Frame, invalid_param_error, variant::Variant, MediaType, Result};
 
 #[cfg(feature = "audio")]
 use crate::AudioParameters;
 #[cfg(feature = "video")]
 use crate::VideoParameters;
 use crate::{
-    find_codec, find_codec_by_name, packet::Packet, register_codec, Codec, CodecBuilder, CodecConfiguration, CodecID, CodecList, CodecParameters,
+    find_codec, find_codec_by_name, packet::Packet, register_codec, Codec, CodecBuilder, CodecConfig, CodecID, CodecList, CodecParameters,
     CodecParametersType, CodecType, LazyCodecList, MediaParametersType,
 };
 
@@ -21,6 +21,7 @@ pub struct EncoderParameters {
     pub bit_rate: Option<u64>,
     pub profile: Option<i32>,
     pub level: Option<i32>,
+    pub use_pool: Option<bool>,
 }
 
 impl EncoderParameters {
@@ -98,7 +99,7 @@ pub struct AudioEncoder {
 pub type AudioEncoderConfiguration = AudioEncoder;
 
 #[cfg(feature = "audio")]
-impl CodecConfiguration for AudioEncoder {
+impl CodecConfig for AudioEncoder {
     fn media_type() -> MediaType {
         MediaType::Audio
     }
@@ -177,7 +178,7 @@ pub struct VideoEncoder {
 pub type VideoEncoderConfiguration = VideoEncoder;
 
 #[cfg(feature = "video")]
-impl CodecConfiguration for VideoEncoder {
+impl CodecConfig for VideoEncoder {
     fn media_type() -> MediaType {
         MediaType::Video
     }
@@ -216,22 +217,36 @@ impl CodecConfiguration for VideoEncoder {
     }
 }
 
-pub trait Encoder<T: CodecConfiguration>: Codec<T> + Send + Sync {
+pub trait Encoder<T: CodecConfig>: Codec<T> + Send + Sync {
     fn send_frame(&mut self, config: &T, frame: &Frame) -> Result<()>;
-    fn receive_packet(&mut self, config: &T) -> Result<Packet<'static>> {
+    fn receive_packet(&mut self, config: &T, pool: Option<&Arc<BufferPool>>) -> Result<Packet<'static>> {
+        if let Some(pool) = pool {
+            let packet = self.receive_packet_borrowed(config)?;
+            let mut buffer = pool.get_buffer_with_length(packet.len());
+
+            if let Some(buffer_mut) = Arc::get_mut(&mut buffer) {
+                buffer_mut.data_mut().copy_from_slice(packet.data());
+
+                return Ok(Packet::from_buffer(buffer));
+            }
+
+            return Ok(packet.into_owned());
+        }
+
         self.receive_packet_borrowed(config).map(|packet| packet.into_owned())
     }
     fn receive_packet_borrowed(&mut self, config: &T) -> Result<Packet<'_>>;
     fn flush(&mut self, config: &T) -> Result<()>;
 }
 
-pub trait EncoderBuilder<T: CodecConfiguration>: CodecBuilder<T> {
+pub trait EncoderBuilder<T: CodecConfig>: CodecBuilder<T> {
     fn new_encoder(&self, id: CodecID, params: &CodecParameters, options: Option<&Variant>) -> Result<Box<dyn Encoder<T>>>;
 }
 
-pub struct EncoderContext<T: CodecConfiguration> {
-    pub configurations: T,
+pub struct EncoderContext<T: CodecConfig> {
+    pub config: T,
     encoder: Box<dyn Encoder<T>>,
+    pool: Option<Arc<BufferPool>>,
 }
 
 #[cfg(feature = "audio")]
@@ -248,7 +263,7 @@ static VIDEO_ENCODER_LIST: LazyCodecList<VideoEncoder> = LazyLock::new(|| {
     })
 });
 
-pub fn register_encoder<T: CodecConfiguration>(builder: Arc<dyn EncoderBuilder<T>>, default: bool) -> Result<()> {
+pub fn register_encoder<T: CodecConfig>(builder: Arc<dyn EncoderBuilder<T>>, default: bool) -> Result<()> {
     match TypeId::of::<T>() {
         #[cfg(feature = "audio")]
         id if id == TypeId::of::<AudioEncoder>() => {
@@ -264,7 +279,7 @@ pub fn register_encoder<T: CodecConfiguration>(builder: Arc<dyn EncoderBuilder<T
     }
 }
 
-pub(crate) fn find_encoder<T: CodecConfiguration>(id: CodecID) -> Result<Arc<dyn EncoderBuilder<T>>> {
+pub(crate) fn find_encoder<T: CodecConfig>(id: CodecID) -> Result<Arc<dyn EncoderBuilder<T>>> {
     match TypeId::of::<T>() {
         #[cfg(feature = "audio")]
         type_id if type_id == TypeId::of::<AudioEncoder>() => {
@@ -280,7 +295,7 @@ pub(crate) fn find_encoder<T: CodecConfiguration>(id: CodecID) -> Result<Arc<dyn
     }
 }
 
-pub(crate) fn find_encoder_by_name<T: CodecConfiguration>(name: &str) -> Result<Arc<dyn EncoderBuilder<T>>> {
+pub(crate) fn find_encoder_by_name<T: CodecConfig>(name: &str) -> Result<Arc<dyn EncoderBuilder<T>>> {
     match TypeId::of::<T>() {
         #[cfg(feature = "audio")]
         id if id == TypeId::of::<AudioEncoder>() => {
@@ -296,15 +311,27 @@ pub(crate) fn find_encoder_by_name<T: CodecConfiguration>(name: &str) -> Result<
     }
 }
 
-impl<T: CodecConfiguration> EncoderContext<T> {
+impl<T: CodecConfig> EncoderContext<T> {
     pub fn from_codec_id(id: CodecID, params: &CodecParameters, options: Option<&Variant>) -> Result<Self> {
         let builder = find_encoder(id)?;
         let encoder = builder.new_encoder(id, params, options)?;
         let config = T::from_parameters(params)?;
 
+        let buffer_pool = match &params.codec {
+            CodecParametersType::Encoder(encoder_params) => {
+                if encoder_params.use_pool.unwrap_or(false) {
+                    Some(BufferPool::new(0))
+                } else {
+                    None
+                }
+            }
+            _ => return Err(invalid_param_error!(params)),
+        };
+
         Ok(Self {
-            configurations: config,
+            config,
             encoder,
+            pool: buffer_pool,
         })
     }
 
@@ -314,14 +341,15 @@ impl<T: CodecConfiguration> EncoderContext<T> {
         let config = T::from_parameters(params)?;
 
         Ok(Self {
-            configurations: config,
+            config,
             encoder,
+            pool: None,
         })
     }
 
     pub fn configure(&mut self, params: Option<&CodecParameters>, options: Option<&Variant>) -> Result<()> {
         if let Some(params) = params {
-            self.configurations.configure(params)?;
+            self.config.configure(params)?;
         }
         self.encoder.configure(params, options)
     }
@@ -331,14 +359,14 @@ impl<T: CodecConfiguration> EncoderContext<T> {
     }
 
     pub fn send_frame(&mut self, frame: &Frame) -> Result<()> {
-        self.encoder.send_frame(&self.configurations, frame)
+        self.encoder.send_frame(&self.config, frame)
     }
 
     pub fn receive_packet(&mut self) -> Result<Packet<'static>> {
-        self.encoder.receive_packet(&self.configurations)
+        self.encoder.receive_packet(&self.config, self.pool.as_ref())
     }
 
     pub fn receive_packet_borrowed(&mut self) -> Result<Packet<'_>> {
-        self.encoder.receive_packet_borrowed(&self.configurations)
+        self.encoder.receive_packet_borrowed(&self.config)
     }
 }
