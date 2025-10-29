@@ -98,7 +98,7 @@ impl CodecParameters {
     }
 }
 
-pub trait CodecConfiguration: Clone + Send + Sync + 'static {
+pub trait CodecConfig: Clone + Send + Sync + 'static {
     fn media_type() -> MediaType;
     fn codec_type() -> CodecType;
     fn from_parameters(params: &CodecParameters) -> Result<Self>;
@@ -253,17 +253,17 @@ pub trait CodecInfomation {
     fn name(&self) -> &'static str;
 }
 
-pub trait Codec<T: CodecConfiguration>: CodecInfomation {
+pub trait Codec<T: CodecConfig>: CodecInfomation {
     fn configure(&mut self, params: Option<&CodecParameters>, options: Option<&Variant>) -> Result<()>;
     fn set_option(&mut self, key: &str, value: &Variant) -> Result<()>;
 }
 
-pub trait CodecBuilder<T: CodecConfiguration>: Any + Send + Sync {
+pub trait CodecBuilder<T: CodecConfig>: Any + Send + Sync {
     fn id(&self) -> CodecID;
     fn name(&self) -> &'static str;
 }
 
-pub(crate) struct CodecList<T: CodecConfiguration> {
+pub(crate) struct CodecList<T: CodecConfig> {
     pub(crate) codecs: HashMap<CodecID, Vec<Arc<dyn CodecBuilder<T>>>>,
 }
 
@@ -271,7 +271,7 @@ pub(crate) type LazyCodecList<T> = LazyLock<RwLock<CodecList<T>>>;
 
 pub(crate) fn register_codec<T>(codec_list: &LazyCodecList<T>, builder: Arc<dyn CodecBuilder<T>>, default: bool) -> Result<()>
 where
-    T: CodecConfiguration,
+    T: CodecConfig,
 {
     let mut codec_list = codec_list.write().map_err(|err| Error::Invalid(err.to_string()))?;
     let entry = codec_list.codecs.entry(builder.id()).or_default();
@@ -287,7 +287,7 @@ where
 
 pub(crate) fn find_codec<T>(codec_list: &LazyCodecList<T>, id: CodecID) -> Result<Arc<dyn CodecBuilder<T>>>
 where
-    T: CodecConfiguration,
+    T: CodecConfig,
 {
     let codec_list = codec_list.read().map_err(|err| Error::Invalid(err.to_string()))?;
 
@@ -302,7 +302,7 @@ where
 
 pub(crate) fn find_codec_by_name<T>(codec_list: &LazyCodecList<T>, name: &str) -> Result<Arc<dyn CodecBuilder<T>>>
 where
-    T: CodecConfiguration,
+    T: CodecConfig,
 {
     let codec_list = codec_list.read().map_err(|err| Error::Invalid(err.to_string()))?;
 

@@ -1,10 +1,10 @@
 use std::{
-    borrow::Cow,
     io::{self, Read, Write},
+    sync::Arc,
 };
 
 use bitflags::bitflags;
-use media_core::{error::Error, invalid_param_error, Result};
+use media_core::{buffer::Buffer, error::Error, invalid_param_error, Result};
 use num_rational::Rational64;
 
 bitflags! {
@@ -17,6 +17,74 @@ bitflags! {
 }
 
 #[derive(Clone)]
+enum PacketData<'a> {
+    Borrowed(&'a [u8]),
+    Owned(Vec<u8>),
+    Buffer(Arc<Buffer>),
+}
+
+impl PacketData<'_> {
+    fn from_slice<'a>(slice: &'a [u8]) -> PacketData<'a> {
+        PacketData::Borrowed(slice)
+    }
+
+    fn from_vec(vec: Vec<u8>) -> PacketData<'static> {
+        PacketData::Owned(vec)
+    }
+
+    fn from_buffer(buffer: Arc<Buffer>) -> PacketData<'static> {
+        PacketData::Buffer(buffer)
+    }
+
+    fn as_slice(&self) -> &[u8] {
+        match self {
+            PacketData::Borrowed(slice) => slice,
+            PacketData::Owned(vec) => vec.as_slice(),
+            PacketData::Buffer(buffer) => buffer.data(),
+        }
+    }
+
+    fn as_mut_slice(&mut self) -> Option<&mut [u8]> {
+        match self {
+            PacketData::Borrowed(_) => None,
+            PacketData::Owned(ref mut vec) => Some(vec.as_mut_slice()),
+            PacketData::Buffer(buffer) => {
+                let mut_buffer = Arc::get_mut(buffer)?;
+                Some(mut_buffer.data_mut())
+            }
+        }
+    }
+
+    fn len(&self) -> usize {
+        match self {
+            PacketData::Borrowed(slice) => slice.len(),
+            PacketData::Owned(vec) => vec.len(),
+            PacketData::Buffer(buffer) => buffer.len(),
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    fn capacity(&self) -> usize {
+        match &self {
+            PacketData::Borrowed(slice) => slice.len(),
+            PacketData::Owned(vec) => vec.capacity(),
+            PacketData::Buffer(buffer) => buffer.capacity(),
+        }
+    }
+
+    fn into_owned(self) -> PacketData<'static> {
+        match self {
+            PacketData::Borrowed(slice) => PacketData::Owned(slice.to_vec()),
+            PacketData::Owned(vec) => PacketData::Owned(vec),
+            PacketData::Buffer(buffer) => PacketData::Owned(buffer.data().to_vec()),
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct Packet<'a> {
     pub pts: Option<i64>,
     pub dts: Option<i64>,
@@ -25,14 +93,11 @@ pub struct Packet<'a> {
     pub flags: PacketFlags,
     pub pos: Option<usize>,
     pub stream_index: Option<usize>,
-    data: Cow<'a, [u8]>,
+    data: PacketData<'a>,
 }
 
 impl<'a> Packet<'a> {
-    fn from_data<T>(data: T) -> Self
-    where
-        T: Into<Cow<'a, [u8]>>,
-    {
+    fn from_data(data: PacketData<'a>) -> Self {
         Self {
             pts: None,
             dts: None,
@@ -41,20 +106,24 @@ impl<'a> Packet<'a> {
             flags: PacketFlags::empty(),
             pos: None,
             stream_index: None,
-            data: data.into(),
+            data,
         }
     }
 
     pub fn new(size: usize) -> Self {
-        Self::from_data(vec![0; size])
+        Self::from_data(PacketData::from_vec(vec![0; size]))
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
-        Self::from_data(Vec::with_capacity(capacity))
+        Self::from_data(PacketData::from_vec(Vec::with_capacity(capacity)))
     }
 
     pub fn from_slice(data: &'a [u8]) -> Self {
-        Self::from_data(data)
+        Self::from_data(PacketData::from_slice(data))
+    }
+
+    pub fn from_buffer(buffer: Arc<Buffer>) -> Self {
+        Self::from_data(PacketData::from_buffer(buffer))
     }
 
     pub fn into_owned(self) -> Packet<'static> {
@@ -66,19 +135,28 @@ impl<'a> Packet<'a> {
             flags: self.flags,
             pos: self.pos,
             stream_index: self.stream_index,
-            data: Cow::Owned(self.data.into_owned()),
+            data: self.data.into_owned(),
         }
+    }
+
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.data.capacity()
     }
 
     pub fn data(&self) -> &[u8] {
-        &self.data
+        self.data.as_slice()
     }
 
     pub fn data_mut(&mut self) -> Option<&mut [u8]> {
-        match &mut self.data {
-            Cow::Borrowed(_) => None,
-            Cow::Owned(ref mut vec) => Some(vec),
-        }
+        self.data.as_mut_slice()
     }
 
     pub fn truncate(&mut self, len: usize) -> Result<()> {
@@ -88,11 +166,18 @@ impl<'a> Packet<'a> {
         }
 
         match &mut self.data {
-            Cow::Owned(ref mut vec) => vec.truncate(len),
-            Cow::Borrowed(slice) => {
-                self.data = Cow::Borrowed(&slice[..len]);
+            PacketData::Borrowed(slice) => {
+                self.data = PacketData::Borrowed(&slice[..len]);
+            }
+            PacketData::Owned(vec) => {
+                vec.truncate(len);
+            }
+            PacketData::Buffer(buffer) => {
+                let buffer = Arc::get_mut(buffer).ok_or_else(|| Error::Invalid("buffer is shared".to_string()))?;
+                buffer.resize(len);
             }
         }
+
         Ok(())
     }
 }
@@ -101,8 +186,8 @@ pub trait ReadPacket: Read {
     fn read_packet(&mut self, size: usize) -> io::Result<Packet<'_>> {
         let mut packet = Packet::new(size);
 
-        if let Cow::Owned(ref mut vec) = packet.data {
-            self.read_exact(vec)?;
+        if let Some(data_mut) = packet.data_mut() {
+            self.read_exact(data_mut)?;
         } else {
             // Packet::new always creates an owned packet
             unreachable!()
@@ -114,7 +199,7 @@ pub trait ReadPacket: Read {
 
 pub trait WritePacket: Write {
     fn write_packet(&mut self, packet: &Packet) -> io::Result<()> {
-        self.write_all(&packet.data)
+        self.write_all(packet.data())
     }
 }
 

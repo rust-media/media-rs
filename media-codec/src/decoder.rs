@@ -19,7 +19,7 @@ use crate::AudioParameters;
 #[cfg(feature = "video")]
 use crate::VideoParameters;
 use crate::{
-    find_codec, find_codec_by_name, packet::Packet, register_codec, Codec, CodecBuilder, CodecConfiguration, CodecID, CodecList, CodecParameters,
+    find_codec, find_codec_by_name, packet::Packet, register_codec, Codec, CodecBuilder, CodecConfig, CodecID, CodecList, CodecParameters,
     CodecParametersType, CodecType, LazyCodecList, MediaParametersType,
 };
 
@@ -95,7 +95,7 @@ pub struct AudioDecoder {
 pub type AudioDecoderConfiguration = AudioDecoder;
 
 #[cfg(feature = "audio")]
-impl CodecConfiguration for AudioDecoder {
+impl CodecConfig for AudioDecoder {
     fn media_type() -> MediaType {
         MediaType::Audio
     }
@@ -164,7 +164,7 @@ pub struct VideoDecoder {
 pub type VideoDecoderConfiguration = VideoDecoder;
 
 #[cfg(feature = "video")]
-impl CodecConfiguration for VideoDecoder {
+impl CodecConfig for VideoDecoder {
     fn media_type() -> MediaType {
         MediaType::Video
     }
@@ -203,31 +203,35 @@ impl CodecConfiguration for VideoDecoder {
     }
 }
 
-pub trait Decoder<T: CodecConfiguration>: Codec<T> + Send + Sync {
+pub trait Decoder<T: CodecConfig>: Codec<T> + Send + Sync {
+    fn init(&mut self, _config: &T) -> Result<()> {
+        Ok(())
+    }
     fn send_packet(&mut self, config: &T, packet: &Packet) -> Result<()>;
     fn receive_frame(&mut self, config: &T) -> Result<Frame<'static>> {
-        self.receive_frame_borrowed(config).map(|frame| frame.into_owned())
+        Ok(self.receive_frame_borrowed(config)?.into_owned())
     }
     fn receive_frame_borrowed(&mut self, config: &T) -> Result<Frame<'_>>;
-    fn receive_shared_frame(&mut self, config: &T) -> Result<SharedFrame<Frame<'static>>> {
+    fn receive_shared_frame(&mut self, config: &T, pool: Option<&Arc<FramePool<Frame<'static>>>>) -> Result<SharedFrame<Frame<'static>>> {
+        if let Some(pool) = pool {
+            let frame = self.receive_frame_borrowed(config)?;
+            let desc = frame.descriptor().clone();
+            let mut pooled_frame = pool.get_frame_with_descriptor(desc)?;
+            frame.convert_to(pooled_frame.write().unwrap())?;
+            return Ok(pooled_frame);
+        }
+
         Ok(SharedFrame::<Frame<'static>>::new(self.receive_frame(config)?))
-    }
-    fn receive_shared_frame_with_pool(&mut self, config: &T, pool: &Arc<FramePool<Frame<'static>>>) -> Result<SharedFrame<Frame<'static>>> {
-        let frame = self.receive_frame_borrowed(config)?;
-        let desc = frame.descriptor().clone();
-        let mut pooled_frame = pool.get_frame_with_descriptor(desc)?;
-        frame.convert_to(pooled_frame.write().unwrap())?;
-        Ok(pooled_frame)
     }
     fn flush(&mut self, config: &T) -> Result<()>;
 }
 
-pub trait DecoderBuilder<T: CodecConfiguration>: CodecBuilder<T> {
+pub trait DecoderBuilder<T: CodecConfig>: CodecBuilder<T> {
     fn new_decoder(&self, id: CodecID, params: &CodecParameters, options: Option<&Variant>) -> Result<Box<dyn Decoder<T>>>;
 }
 
-pub struct DecoderContext<T: CodecConfiguration> {
-    pub configurations: T,
+pub struct DecoderContext<T: CodecConfig> {
+    pub config: T,
     decoder: Box<dyn Decoder<T>>,
     pool: Option<Arc<FramePool<Frame<'static>>>>,
 }
@@ -246,7 +250,7 @@ static VIDEO_DECODER_LIST: LazyCodecList<VideoDecoder> = LazyLock::new(|| {
     })
 });
 
-pub fn register_decoder<T: CodecConfiguration>(builder: Arc<dyn DecoderBuilder<T>>, default: bool) -> Result<()> {
+pub fn register_decoder<T: CodecConfig>(builder: Arc<dyn DecoderBuilder<T>>, default: bool) -> Result<()> {
     match TypeId::of::<T>() {
         #[cfg(feature = "audio")]
         id if id == TypeId::of::<AudioDecoder>() => {
@@ -262,7 +266,7 @@ pub fn register_decoder<T: CodecConfiguration>(builder: Arc<dyn DecoderBuilder<T
     }
 }
 
-pub(crate) fn find_decoder<T: CodecConfiguration>(id: CodecID) -> Result<Arc<dyn DecoderBuilder<T>>> {
+pub(crate) fn find_decoder<T: CodecConfig>(id: CodecID) -> Result<Arc<dyn DecoderBuilder<T>>> {
     match TypeId::of::<T>() {
         #[cfg(feature = "audio")]
         type_id if type_id == TypeId::of::<AudioDecoder>() => {
@@ -278,7 +282,7 @@ pub(crate) fn find_decoder<T: CodecConfiguration>(id: CodecID) -> Result<Arc<dyn
     }
 }
 
-pub(crate) fn find_decoder_by_name<T: CodecConfiguration>(name: &str) -> Result<Arc<dyn DecoderBuilder<T>>> {
+pub(crate) fn find_decoder_by_name<T: CodecConfig>(name: &str) -> Result<Arc<dyn DecoderBuilder<T>>> {
     match TypeId::of::<T>() {
         #[cfg(feature = "audio")]
         id if id == TypeId::of::<AudioDecoder>() => {
@@ -294,10 +298,9 @@ pub(crate) fn find_decoder_by_name<T: CodecConfiguration>(name: &str) -> Result<
     }
 }
 
-impl<T: CodecConfiguration> DecoderContext<T> {
-    pub fn from_codec_id(id: CodecID, params: &CodecParameters, options: Option<&Variant>) -> Result<Self> {
-        let builder = find_decoder(id)?;
-        let decoder = builder.new_decoder(id, params, options)?;
+impl<T: CodecConfig> DecoderContext<T> {
+    fn new_with_builder(builder: Arc<dyn DecoderBuilder<T>>, params: &CodecParameters, options: Option<&Variant>) -> Result<Self> {
+        let decoder = builder.new_decoder(builder.id(), params, options)?;
         let config = T::from_parameters(params)?;
 
         let frame_pool = match &params.codec {
@@ -312,22 +315,18 @@ impl<T: CodecConfiguration> DecoderContext<T> {
         };
 
         Ok(Self {
-            configurations: config,
+            config,
             decoder,
             pool: frame_pool,
         })
     }
 
-    pub fn from_codec_name(name: &str, params: &CodecParameters, options: Option<&Variant>) -> Result<Self> {
-        let builder = find_decoder_by_name(name)?;
-        let decoder = builder.new_decoder(builder.id(), params, options)?;
-        let config = T::from_parameters(params)?;
+    pub fn from_codec_id(id: CodecID, params: &CodecParameters, options: Option<&Variant>) -> Result<Self> {
+        Self::new_with_builder(find_decoder(id)?, params, options)
+    }
 
-        Ok(Self {
-            configurations: config,
-            decoder,
-            pool: None,
-        })
+    pub fn from_codec_name(name: &str, params: &CodecParameters, options: Option<&Variant>) -> Result<Self> {
+        Self::new_with_builder(find_decoder_by_name(name)?, params, options)
     }
 
     pub fn with_frame_creator(mut self, creator: Box<dyn FrameCreator>) -> Self {
@@ -348,7 +347,7 @@ impl<T: CodecConfiguration> DecoderContext<T> {
 
     pub fn configure(&mut self, params: Option<&CodecParameters>, options: Option<&Variant>) -> Result<()> {
         if let Some(params) = params {
-            self.configurations.configure(params)?;
+            self.config.configure(params)?;
         }
         self.decoder.configure(params, options)
     }
@@ -358,22 +357,18 @@ impl<T: CodecConfiguration> DecoderContext<T> {
     }
 
     pub fn send_packet(&mut self, packet: &Packet) -> Result<()> {
-        self.decoder.send_packet(&self.configurations, packet)
+        self.decoder.send_packet(&self.config, packet)
     }
 
     pub fn receive_frame(&mut self) -> Result<Frame<'static>> {
-        self.decoder.receive_frame(&self.configurations)
+        self.decoder.receive_frame(&self.config)
     }
 
     pub fn receive_frame_borrowed(&mut self) -> Result<Frame<'_>> {
-        self.decoder.receive_frame_borrowed(&self.configurations)
+        self.decoder.receive_frame_borrowed(&self.config)
     }
 
     pub fn receive_shared_frame(&mut self) -> Result<SharedFrame<Frame<'static>>> {
-        if let Some(pool) = &self.pool {
-            self.decoder.receive_shared_frame_with_pool(&self.configurations, pool)
-        } else {
-            self.decoder.receive_shared_frame(&self.configurations)
-        }
+        self.decoder.receive_shared_frame(&self.config, self.pool.as_ref())
     }
 }

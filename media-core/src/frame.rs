@@ -312,11 +312,11 @@ impl FrameData<'_> {
         }
     }
 
-    // Truncate audio frame data to the specified size
+    // Truncate audio frame data to the specified length
     #[cfg(feature = "audio")]
-    pub(crate) fn truncate(&mut self, size: usize) -> Result<()> {
+    pub(crate) fn truncate(&mut self, len: usize) -> Result<()> {
         match self {
-            FrameData::Memory(data) => data.truncate(size),
+            FrameData::Memory(data) => data.truncate(len),
             _ => Err(Error::Unsupported("truncate for non-memory data".to_string())),
         }
     }
@@ -701,6 +701,16 @@ impl Frame<'_> {
     #[cfg(any(feature = "audio", feature = "video"))]
     pub fn map_mut(&mut self) -> Result<MappedGuard<'_>> {
         self.data.map_mut()
+    }
+
+    pub fn convert_to(&self, dst: &mut Frame) -> Result<()> {
+        match self.media_type() {
+            #[cfg(feature = "audio")]
+            MediaType::Audio => self.convert_audio_to(dst),
+            #[cfg(feature = "video")]
+            MediaType::Video => self.convert_video_to(dst),
+            _ => Err(Error::Unsupported("media type".to_string())),
+        }
     }
 }
 

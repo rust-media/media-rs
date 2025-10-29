@@ -10,44 +10,75 @@ use crossbeam_queue::SegQueue;
 
 pub struct Buffer {
     data: Box<[u8]>,
+    available: usize,
     pool: Weak<BufferPool>,
 }
 
 impl Buffer {
-    pub fn size(&self) -> usize {
+    fn new(data: Box<[u8]>, pool: &Arc<BufferPool>) -> Self {
+        let available = data.len();
+
+        Self {
+            data,
+            available,
+            pool: Arc::downgrade(pool),
+        }
+    }
+
+    fn new_with_available(data: Box<[u8]>, pool: &Arc<BufferPool>, available: usize) -> Self {
+        let available = available.min(data.len());
+
+        Self {
+            data,
+            available,
+            pool: Arc::downgrade(pool),
+        }
+    }
+
+    pub fn capacity(&self) -> usize {
         self.data.len()
     }
 
+    pub fn len(&self) -> usize {
+        self.available
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.available == 0
+    }
+
     pub fn data(&self) -> &[u8] {
-        &self.data
+        &self.data[..self.available]
     }
 
     pub fn data_mut(&mut self) -> &mut [u8] {
-        &mut self.data
+        &mut self.data[..self.available]
+    }
+
+    // Resize the buffer to the specified length, not exceeding its capacity
+    pub fn resize(&mut self, len: usize) {
+        self.available = len.min(self.capacity());
     }
 }
 
 impl Drop for Buffer {
     fn drop(&mut self) {
         if let Some(pool) = self.pool.upgrade() {
-            pool.recycle_buffer(Arc::new(Buffer {
-                data: mem::take(&mut self.data),
-                pool: Arc::downgrade(&pool),
-            }));
+            pool.recycle_buffer(Arc::new(Buffer::new(mem::take(&mut self.data), &pool)));
         }
     }
 }
 
 pub struct BufferPool {
     queue: SegQueue<Arc<Buffer>>,
-    buffer_size: AtomicUsize,
+    buffer_capacity: AtomicUsize,
 }
 
 impl BufferPool {
-    pub fn new(buffer_size: usize) -> Arc<Self> {
+    pub fn new(buffer_capacity: usize) -> Arc<Self> {
         Arc::new(Self {
             queue: SegQueue::new(),
-            buffer_size: AtomicUsize::new(buffer_size),
+            buffer_capacity: AtomicUsize::new(buffer_capacity),
         })
     }
 
@@ -56,34 +87,49 @@ impl BufferPool {
     }
 
     pub fn get_buffer(self: &Arc<Self>) -> Arc<Buffer> {
-        let buffer_size = self.buffer_size.load(Ordering::Relaxed);
+        let buffer_capacity = self.buffer_capacity.load(Ordering::Relaxed);
         if let Some(mut buffer) = self.queue.pop() {
-            if buffer_size == buffer.size() {
+            if buffer_capacity == buffer.capacity() {
                 if let Some(buffer_mut) = Arc::get_mut(&mut buffer) {
+                    buffer_mut.resize(buffer_capacity);
                     buffer_mut.data_mut().fill(0);
                     return buffer;
                 }
             }
         }
 
-        Arc::new(Buffer {
-            data: vec![0u8; buffer_size].into_boxed_slice(),
-            pool: Arc::downgrade(self),
-        })
+        Arc::new(Buffer::new(vec![0u8; buffer_capacity].into_boxed_slice(), self))
+    }
+
+    pub fn get_buffer_with_length(self: &Arc<Self>, len: usize) -> Arc<Buffer> {
+        let buffer_capacity = self.buffer_capacity.load(Ordering::Relaxed);
+        let len = len.min(buffer_capacity);
+
+        if let Some(mut buffer) = self.queue.pop() {
+            if buffer_capacity == buffer.capacity() {
+                if let Some(buffer_mut) = Arc::get_mut(&mut buffer) {
+                    buffer_mut.resize(len);
+                    buffer_mut.data_mut().fill(0);
+                    return buffer;
+                }
+            }
+        }
+
+        Arc::new(Buffer::new_with_available(vec![0u8; buffer_capacity].into_boxed_slice(), self, len))
     }
 
     pub fn recycle_buffer(&self, buffer: Arc<Buffer>) {
-        if buffer.size() == self.buffer_size.load(Ordering::Relaxed) {
+        if buffer.capacity() == self.buffer_capacity.load(Ordering::Relaxed) {
             self.queue.push(buffer);
         }
     }
 
-    pub fn get_buffer_size(&self) -> usize {
-        self.buffer_size.load(Ordering::Relaxed)
+    pub fn get_buffer_capacity(&self) -> usize {
+        self.buffer_capacity.load(Ordering::Relaxed)
     }
 
-    pub fn set_buffer_size(&self, buffer_size: usize) {
-        self.buffer_size.store(buffer_size, Ordering::Relaxed);
+    pub fn set_buffer_capacity(&self, buffer_capacity: usize) {
+        self.buffer_capacity.store(buffer_capacity, Ordering::Relaxed);
         while self.queue.pop().is_some() {}
     }
 }
