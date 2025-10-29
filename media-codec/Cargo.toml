@@ -15,8 +15,8 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-bitflags = "2.6"
-num-rational = "0.4"
+bitflags.workspace = true
+num-rational.workspace = true
 
 [features]
 default = ["audio", "audio-enc", "audio-dec", "video", "video-enc", "video-dec"]

@@ -13,19 +13,19 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-bitflags = "2.6"
-bytemuck = "1.23"
-cfg-if = "1.0"
+bitflags.workspace = true
+bytemuck = "1.24"
+cfg-if.workspace = true
 crossbeam-queue = "0.3"
 num_enum = "0.7"
-num-rational = "0.4"
+num-rational.workspace = true
 num-traits = "0.2"
-os-ver = "0.2"
+os-ver.workspace = true
 pic-scale = { version = "0.6", optional = true}
-smallvec = "1.15"
+smallvec.workspace = true
 strum = { version = "0.27", features = ["derive"] }
-thiserror = "1.0"
-x-variant = "0.1"
+thiserror.workspace = true
+x-variant.workspace = true
 yuv = { version = "0.8", features = ["fast_mode"], optional = true}
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
