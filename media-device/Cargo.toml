@@ -15,9 +15,9 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-cfg-if = "1.0"
-os-ver = "0.2"
-thiserror = "1.0"
+cfg-if.workspace = true
+os-ver.workspace = true
+thiserror.workspace = true
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 av-foundation = "0.5"
@@ -71,7 +71,6 @@ console_error_panic_hook = "0.1"
 [dev-dependencies]
 env_logger = "0.11"
 log = "0.4"
-media-core = { workspace = true }
 
 [features]
 default = ["audio", "video"]
