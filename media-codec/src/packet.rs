@@ -79,7 +79,7 @@ impl PacketData<'_> {
         match self {
             PacketData::Borrowed(slice) => PacketData::Owned(slice.to_vec()),
             PacketData::Owned(vec) => PacketData::Owned(vec),
-            PacketData::Buffer(buffer) => PacketData::Owned(buffer.data().to_vec()),
+            PacketData::Buffer(buffer) => PacketData::Buffer(buffer),
         }
     }
 }
