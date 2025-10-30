@@ -5,7 +5,14 @@ use std::{
     sync::{Arc, LazyLock, RwLock},
 };
 
-use media_core::{buffer::BufferPool, error::Error, frame::Frame, invalid_param_error, variant::Variant, MediaType, Result};
+use media_core::{
+    buffer::BufferPool,
+    error::Error,
+    frame::{Frame, SharedFrame},
+    invalid_param_error,
+    variant::Variant,
+    MediaType, Result,
+};
 
 #[cfg(feature = "audio")]
 use crate::AudioParameters;
@@ -218,22 +225,23 @@ impl CodecConfig for VideoEncoder {
 }
 
 pub trait Encoder<T: CodecConfig>: Codec<T> + Send + Sync {
-    fn send_frame(&mut self, config: &T, frame: &Frame) -> Result<()>;
+    fn init(&mut self, _config: &T) -> Result<()> {
+        Ok(())
+    }
+    fn send_frame(&mut self, config: &T, pool: Option<&Arc<BufferPool>>, frame: SharedFrame<Frame<'static>>) -> Result<()>;
     fn receive_packet(&mut self, config: &T, pool: Option<&Arc<BufferPool>>) -> Result<Packet<'static>> {
-        if let Some(pool) = pool {
-            let packet = self.receive_packet_borrowed(config)?;
-            let mut buffer = pool.get_buffer_with_length(packet.len());
+        let packet = self.receive_packet_borrowed(config)?;
 
+        if let Some(pool) = pool {
+            let mut buffer = pool.get_buffer_with_length(packet.len());
             if let Some(buffer_mut) = Arc::get_mut(&mut buffer) {
                 buffer_mut.data_mut().copy_from_slice(packet.data());
-
                 return Ok(Packet::from_buffer(buffer));
             }
-
             return Ok(packet.into_owned());
         }
 
-        self.receive_packet_borrowed(config).map(|packet| packet.into_owned())
+        Ok(packet.into_owned())
     }
     fn receive_packet_borrowed(&mut self, config: &T) -> Result<Packet<'_>>;
     fn flush(&mut self, config: &T) -> Result<()>;
@@ -358,15 +366,11 @@ impl<T: CodecConfig> EncoderContext<T> {
         self.encoder.set_option(key, value)
     }
 
-    pub fn send_frame(&mut self, frame: &Frame) -> Result<()> {
-        self.encoder.send_frame(&self.config, frame)
+    pub fn send_frame(&mut self, frame: SharedFrame<Frame<'static>>) -> Result<()> {
+        self.encoder.send_frame(&self.config, self.pool.as_ref(), frame)
     }
 
     pub fn receive_packet(&mut self) -> Result<Packet<'static>> {
         self.encoder.receive_packet(&self.config, self.pool.as_ref())
-    }
-
-    pub fn receive_packet_borrowed(&mut self) -> Result<Packet<'_>> {
-        self.encoder.receive_packet_borrowed(&self.config)
     }
 }

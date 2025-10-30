@@ -207,22 +207,22 @@ pub trait Decoder<T: CodecConfig>: Codec<T> + Send + Sync {
     fn init(&mut self, _config: &T) -> Result<()> {
         Ok(())
     }
-    fn send_packet(&mut self, config: &T, packet: &Packet) -> Result<()>;
-    fn receive_frame(&mut self, config: &T) -> Result<Frame<'static>> {
-        Ok(self.receive_frame_borrowed(config)?.into_owned())
-    }
-    fn receive_frame_borrowed(&mut self, config: &T) -> Result<Frame<'_>>;
-    fn receive_shared_frame(&mut self, config: &T, pool: Option<&Arc<FramePool<Frame<'static>>>>) -> Result<SharedFrame<Frame<'static>>> {
+    fn send_packet(&mut self, config: &T, pool: Option<&Arc<FramePool<Frame<'static>>>>, packet: Packet) -> Result<()>;
+    fn receive_frame(&mut self, config: &T, pool: Option<&Arc<FramePool<Frame<'static>>>>) -> Result<SharedFrame<Frame<'static>>> {
+        let frame = self.receive_frame_borrowed(config)?;
+
         if let Some(pool) = pool {
-            let frame = self.receive_frame_borrowed(config)?;
             let desc = frame.descriptor().clone();
             let mut pooled_frame = pool.get_frame_with_descriptor(desc)?;
-            frame.convert_to(pooled_frame.write().unwrap())?;
-            return Ok(pooled_frame);
+            if let Some(frame_mut) = pooled_frame.write() {
+                frame.convert_to(frame_mut)?;
+                return Ok(pooled_frame);
+            }
         }
 
-        Ok(SharedFrame::<Frame<'static>>::new(self.receive_frame(config)?))
+        Ok(SharedFrame::<Frame<'static>>::new(frame))
     }
+    fn receive_frame_borrowed(&mut self, config: &T) -> Result<Frame<'_>>;
     fn flush(&mut self, config: &T) -> Result<()>;
 }
 
@@ -356,19 +356,11 @@ impl<T: CodecConfig> DecoderContext<T> {
         self.decoder.set_option(key, value)
     }
 
-    pub fn send_packet(&mut self, packet: &Packet) -> Result<()> {
-        self.decoder.send_packet(&self.config, packet)
+    pub fn send_packet(&mut self, packet: Packet) -> Result<()> {
+        self.decoder.send_packet(&self.config, self.pool.as_ref(), packet)
     }
 
-    pub fn receive_frame(&mut self) -> Result<Frame<'static>> {
-        self.decoder.receive_frame(&self.config)
-    }
-
-    pub fn receive_frame_borrowed(&mut self) -> Result<Frame<'_>> {
-        self.decoder.receive_frame_borrowed(&self.config)
-    }
-
-    pub fn receive_shared_frame(&mut self) -> Result<SharedFrame<Frame<'static>>> {
-        self.decoder.receive_shared_frame(&self.config, self.pool.as_ref())
+    pub fn receive_frame(&mut self) -> Result<SharedFrame<Frame<'static>>> {
+        self.decoder.receive_frame(&self.config, self.pool.as_ref())
     }
 }
