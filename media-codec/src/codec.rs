@@ -248,12 +248,12 @@ impl From<EncoderParameters> for CodecParametersType {
     }
 }
 
-pub trait CodecInfomation {
+pub trait CodecInformation {
     fn id(&self) -> CodecID;
     fn name(&self) -> &'static str;
 }
 
-pub trait Codec<T: CodecConfig>: CodecInfomation {
+pub trait Codec<T: CodecConfig>: CodecInformation {
     fn configure(&mut self, params: Option<&CodecParameters>, options: Option<&Variant>) -> Result<()>;
     fn set_option(&mut self, key: &str, value: &Variant) -> Result<()>;
 }
