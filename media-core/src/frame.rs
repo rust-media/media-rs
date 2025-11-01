@@ -10,11 +10,12 @@ use num_rational::Rational64;
 use smallvec::SmallVec;
 
 #[cfg(any(feature = "audio", feature = "video"))]
+use crate::buffer::Buffer;
+#[cfg(any(feature = "audio", feature = "video"))]
 use crate::error::Error;
 #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
 use crate::video::pixel_buffer::frame::PixelBuffer;
 use crate::{
-    buffer::Buffer,
     frame_pool::FramePool,
     media::{FrameDescriptor, MediaType},
     variant::Variant,
@@ -294,6 +295,7 @@ pub(crate) enum FrameData<'a> {
     #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
     PixelBuffer(PixelBuffer),
     Variant(Variant),
+    #[allow(dead_code)]
     Empty,
 }
 
@@ -703,6 +705,7 @@ impl Frame<'_> {
         self.data.map_mut()
     }
 
+    #[cfg(any(feature = "audio", feature = "video"))]
     pub fn convert_to(&self, dst: &mut Frame) -> Result<()> {
         match self.media_type() {
             #[cfg(feature = "audio")]
