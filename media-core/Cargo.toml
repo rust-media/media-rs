@@ -1,6 +1,6 @@
 [package]
 name = "media-core"
-description = "Defines media types and provides basic media utilities"
+description = "Define media types and provide basic media utilities"
 homepage.workspace = true
 repository.workspace = true
 documentation = "https://docs.rs/media-core"
@@ -14,12 +14,12 @@ rust-version.workspace = true
 
 [dependencies]
 bitflags.workspace = true
-bytemuck = "1.24"
+bytemuck.workspace = true
 cfg-if.workspace = true
 crossbeam-queue = "0.3"
-num_enum = "0.7"
+num_enum.workspace = true
 num-rational.workspace = true
-num-traits = "0.2"
+num-traits.workspace = true
 os-ver.workspace = true
 pic-scale = { version = "0.6", optional = true}
 smallvec.workspace = true

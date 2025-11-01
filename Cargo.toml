@@ -11,7 +11,7 @@ members = [
 [workspace.package]
 homepage = "https://github.com/rust-media"
 repository = "https://github.com/rust-media/media-rs"
-version = "0.6.1"
+version = "0.7.0"
 authors = ["Zhou Wei <zhouwei@ehom.net>"]
 license = "MIT OR Apache-2.0"
 categories = ["multimedia", "multimedia::audio", "multimedia::video"]
@@ -20,13 +20,16 @@ edition = "2021"
 rust-version = "1.83.0"
 
 [workspace.dependencies]
-media = { version = "0.6.1", path = "./media" }
-media-core = { version = "0.6.1", default-features = false, path = "./media-core" }
-media-codec = { version = "0.6.1", default-features = false, path = "./media-codec" }
-media-device = { version = "0.6.1", default-features = false, path = "./media-device" }
+media = { version = "0.7.0", path = "./media" }
+media-core = { version = "0.7.0", default-features = false, path = "./media-core" }
+media-codec = { version = "0.7.0", default-features = false, path = "./media-codec" }
+media-device = { version = "0.7.0", default-features = false, path = "./media-device" }
 bitflags = "2.10"
+bytemuck = "1.24"
 cfg-if = "1.0"
+num_enum = "0.7"
 num-rational = "0.4"
+num-traits = "0.2"
 os-ver = "0.2"
 smallvec = "1.15"
 thiserror = "1.0"
