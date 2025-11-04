@@ -15,55 +15,97 @@ use num_rational::Rational64;
 
 use crate::{decoder::DecoderParameters, encoder::EncoderParameters};
 
-#[cfg(feature = "audio")]
-#[allow(non_camel_case_types, clippy::upper_case_acronyms)]
-#[repr(u16)]
-enum AudioCodecID {
-    AAC = 1,
-    Opus,
-}
-
-#[cfg(feature = "video")]
-#[allow(non_camel_case_types, clippy::upper_case_acronyms)]
-#[repr(u16)]
-enum VideoCodecID {
-    H264 = 1,
-    HEVC,
-    VP8,
-    VP9,
-    AV1,
-}
-
-macro_rules! codec_id {
-    ($media_type:ident, $id_enum:ident, $id:ident) => {
-        ((MediaType::$media_type as u32) << 16) | ($id_enum::$id as u32)
+macro_rules! codecs {
+    (@$media_type:ident: $($name:ident),+ $(,)?) => {
+        codecs!(@impl $media_type, 1, $($name),+);
+    };
+    
+    (@impl $media_type:ident, $id:expr, $name:ident) => {
+        pub const $name: CodecID = CodecID(((MediaType::$media_type as u32) << 16) | $id);
+    };
+    
+    (@impl $media_type:ident, $id:expr, $name:ident, $($rest:ident),+) => {
+        pub const $name: CodecID = CodecID(((MediaType::$media_type as u32) << 16) | $id);
+        codecs!(@impl $media_type, $id + 1, $($rest),+);
     };
 }
 
-#[repr(u32)]
+#[repr(transparent)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum CodecID {
-    // Audio codecs
-    #[cfg(feature = "audio")]
-    AAC  = codec_id!(Audio, AudioCodecID, AAC),
-    #[cfg(feature = "audio")]
-    Opus = codec_id!(Audio, AudioCodecID, Opus),
-    // Video codecs
-    #[cfg(feature = "video")]
-    H264 = codec_id!(Video, VideoCodecID, H264),
-    #[cfg(feature = "video")]
-    HEVC = codec_id!(Video, VideoCodecID, HEVC),
-    #[cfg(feature = "video")]
-    VP8  = codec_id!(Video, VideoCodecID, VP8),
-    #[cfg(feature = "video")]
-    VP9  = codec_id!(Video, VideoCodecID, VP9),
-    #[cfg(feature = "video")]
-    AV1  = codec_id!(Video, VideoCodecID, AV1),
+pub struct CodecID(u32);
+
+// Audio codecs
+#[cfg(feature = "audio")]
+impl CodecID {
+    codecs! {
+        @Audio:
+        MP1,
+        MP2,
+        MP3,
+        AAC,
+        AC3,
+        EAC3,
+        DTS,
+        FLAC,
+        ALAC,
+        G723_1,
+        G729,
+        VORBIS,
+        OPUS,
+        WMA1,
+        WMA2,
+        WMAVOICE,
+        WMAPRO,
+        WMALOSSLESS,
+    }
+}
+
+// Video codecs
+#[cfg(feature = "video")]
+impl CodecID {
+    codecs! {
+        @Video:
+        MPEG1,
+        MPEG2,
+        MPEG4,
+        MJPEG,
+        H261,
+        H263,
+        H264,
+        HEVC,
+        VVC,
+        VP8,
+        VP9,
+        AV1,
+        RV10,
+        RV20,
+        RV30,
+        RV40,
+        RV60,
+        FLV1,
+        WMV1,
+        WMV2,
+        WMV3,
+        VC1,
+        AVS,
+        CAVS,
+        AVS2,
+        AVS3,
+        BMP,
+        PNG,
+        APNG,
+        GIF,
+        TIFF,
+        WEBP,
+        JPEGXL,
+        JPEG2000,
+        PRORES,
+    }
 }
 
 impl CodecID {
     pub fn media_type(&self) -> MediaType {
-        match ((*self as u32) >> 16) as u16 {
+        match ((self.0) >> 16) as u16 {
             #[cfg(feature = "audio")]
             x if x == MediaType::Audio as u16 => MediaType::Audio,
             #[cfg(feature = "video")]
