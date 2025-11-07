@@ -14,6 +14,7 @@ cfg_if! {
 }
 
 pub mod buffer;
+pub mod circular_buffer;
 pub mod data;
 pub mod error;
 pub mod frame;
