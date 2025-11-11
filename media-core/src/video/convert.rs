@@ -17,7 +17,7 @@ use crate::{
 
 fn into_yuv_planar_image<'a, T>(src: &'a MappedPlanes, width: NonZeroU32, height: NonZeroU32) -> Result<YuvPlanarImage<'a, T>>
 where
-    T: Copy + Debug + Pod,
+    T: Debug + Pod,
 {
     if src.planes.len() != 3 {
         return Err(Error::Invalid("invalid plane count".to_string()));
@@ -40,7 +40,7 @@ where
 
 fn into_yuv_planar_image_mut<'a, T>(dst: &'a mut MappedPlanes, width: NonZeroU32, height: NonZeroU32) -> Result<YuvPlanarImageMut<'a, T>>
 where
-    T: Copy + Debug + Pod,
+    T: Debug + Pod,
 {
     if dst.planes.len() != 3 {
         return Err(Error::Invalid("invalid plane count".to_string()));
@@ -70,7 +70,7 @@ where
 
 fn into_yuv_bi_planar_image<'a, T>(src: &'a MappedPlanes, width: NonZeroU32, height: NonZeroU32) -> Result<YuvBiPlanarImage<'a, T>>
 where
-    T: Copy + Debug + Pod,
+    T: Debug + Pod,
 {
     if src.planes.len() != 2 {
         return Err(Error::Invalid("invalid plane count".to_string()));
@@ -91,7 +91,7 @@ where
 
 fn into_yuv_bi_planar_image_mut<'a, T>(dst: &'a mut MappedPlanes, width: NonZeroU32, height: NonZeroU32) -> Result<YuvBiPlanarImageMut<'a, T>>
 where
-    T: Copy + Debug + Pod,
+    T: Debug + Pod,
 {
     if dst.planes.len() != 2 {
         return Err(Error::Invalid("invalid plane count".to_string()));
@@ -117,7 +117,7 @@ where
 
 fn into_yuv_packed_image<'a, T>(src: &'a MappedPlanes, width: NonZeroU32, height: NonZeroU32) -> Result<YuvPackedImage<'a, T>>
 where
-    T: Copy + Debug + Pod,
+    T: Debug + Pod,
 {
     if src.planes.len() != 1 {
         return Err(Error::Invalid("invalid plane count".to_string()));
@@ -136,7 +136,7 @@ where
 
 fn into_yuv_packed_image_mut<'a, T>(dst: &'a mut MappedPlanes, width: NonZeroU32, height: NonZeroU32) -> Result<YuvPackedImageMut<'a, T>>
 where
-    T: Copy + Debug + Pod,
+    T: Debug + Pod,
 {
     if dst.planes.len() != 1 {
         return Err(Error::Invalid("invalid plane count".to_string()));

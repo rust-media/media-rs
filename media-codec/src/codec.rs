@@ -19,11 +19,11 @@ macro_rules! codecs {
     (@$media_type:ident: $($name:ident),+ $(,)?) => {
         codecs!(@impl $media_type, 1, $($name),+);
     };
-    
+
     (@impl $media_type:ident, $id:expr, $name:ident) => {
         pub const $name: CodecID = CodecID(((MediaType::$media_type as u32) << 16) | $id);
     };
-    
+
     (@impl $media_type:ident, $id:expr, $name:ident, $($rest:ident),+) => {
         pub const $name: CodecID = CodecID(((MediaType::$media_type as u32) << 16) | $id);
         codecs!(@impl $media_type, $id + 1, $($rest),+);

@@ -87,7 +87,7 @@ static AUDIO_SAMPLE_CONVERT_FUNCS: [[SampleFormatConvertFunc; AUDIO_SAMPLE_FORMA
 ];
 
 #[allow(clippy::too_many_arguments)]
-fn convert_samples<S: Copy + Pod, D: Copy + Pod>(
+fn convert_samples<S: Pod, D: Pod>(
     src_planes: &MappedPlanes,
     dst_planes: &mut MappedPlanes,
     src_plane_index_step: usize,

@@ -23,7 +23,7 @@ impl From<ScaleFilter> for ResamplingFunction {
 
 fn into_image_store<'a, T, const N: usize>(src: &'a MappedPlane, width: u32, height: u32) -> Result<ImageStore<'a, T, N>>
 where
-    T: Copy + Clone + Debug + Pod,
+    T: Debug + Pod,
 {
     Ok(ImageStore::<T, N> {
         buffer: Cow::Borrowed(bytemuck::cast_slice(src.data().unwrap())),
@@ -37,7 +37,7 @@ where
 
 fn into_image_store_mut<'a, T, const N: usize>(dst: &'a mut MappedPlane, width: u32, height: u32) -> Result<ImageStoreMut<'a, T, N>>
 where
-    T: Copy + Clone + Debug + Default + Pod,
+    T: Debug + Pod,
 {
     let stride = dst.stride().unwrap() / size_of::<T>();
 
