@@ -1,10 +1,15 @@
-#[cfg(any(feature = "audio", feature = "video"))]
-use std::slice::{Iter, IterMut};
 use std::{
     borrow::Cow,
     sync::{Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard, Weak},
 };
+#[cfg(any(feature = "audio", feature = "video"))]
+use std::{
+    ops::{Index, IndexMut},
+    slice::{Iter, IterMut},
+};
 
+#[cfg(any(feature = "audio", feature = "video"))]
+use bytemuck::Pod;
 use num_rational::Rational64;
 #[cfg(any(feature = "audio", feature = "video"))]
 use smallvec::SmallVec;
@@ -57,8 +62,6 @@ impl MappedPlane<'_> {
                 MappedData::Ref(data) => Some(data),
                 MappedData::RefMut(data) => Some(data),
             },
-            #[cfg(not(any(feature = "audio", feature = "video")))]
-            _ => None,
         }
     }
 
@@ -78,8 +81,6 @@ impl MappedPlane<'_> {
                 MappedData::Ref(_) => None,
                 MappedData::RefMut(data) => Some(data),
             },
-            #[cfg(not(any(feature = "audio", feature = "video")))]
-            _ => None,
         }
     }
 
@@ -103,6 +104,20 @@ impl MappedPlane<'_> {
             } => Some(*height),
             _ => None,
         }
+    }
+
+    pub fn as_slice_of<T>(&self) -> Option<&[T]>
+    where
+        T: Pod,
+    {
+        bytemuck::try_cast_slice(self.data()?).ok()
+    }
+
+    pub fn as_mut_slice_of<T>(&mut self) -> Option<&mut [T]>
+    where
+        T: Pod,
+    {
+        bytemuck::try_cast_slice_mut(self.data_mut()?).ok()
     }
 }
 
@@ -163,6 +178,22 @@ impl<'a> IntoIterator for MappedPlanes<'a> {
 
     fn into_iter(self) -> Self::IntoIter {
         self.planes.into_iter()
+    }
+}
+
+#[cfg(any(feature = "audio", feature = "video"))]
+impl<'a> Index<usize> for MappedPlanes<'a> {
+    type Output = MappedPlane<'a>;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.planes[index]
+    }
+}
+
+#[cfg(any(feature = "audio", feature = "video"))]
+impl<'a> IndexMut<usize> for MappedPlanes<'a> {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.planes[index]
     }
 }
 
