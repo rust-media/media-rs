@@ -1,16 +1,16 @@
 use crate::{Error, Result};
 
-pub struct CircularBuffer {
-    buffer: Vec<u8>,
+pub struct CircularBuffer<T = u8> {
+    buffer: Vec<T>,
     read_pos: usize,
     write_pos: usize,
     len: usize,
 }
 
-impl CircularBuffer {
+impl<T: Default + Copy> CircularBuffer<T> {
     pub fn new(capacity: usize) -> Self {
         Self {
-            buffer: vec![0; capacity],
+            buffer: vec![T::default(); capacity],
             read_pos: 0,
             write_pos: 0,
             len: 0,
@@ -45,15 +45,15 @@ impl CircularBuffer {
         let new_capacity = capacity.max(self.capacity() * 2);
 
         if self.read_pos + self.len <= self.capacity() {
-            if self.write_pos == 0 && self.len > 0{
+            if self.write_pos == 0 && self.len > 0 {
                 let pos = self.capacity();
-                self.buffer.resize(new_capacity, 0);
+                self.buffer.resize(new_capacity, T::default());
                 self.write_pos = pos;
             } else {
-                self.buffer.resize(new_capacity, 0);
+                self.buffer.resize(new_capacity, T::default());
             }
         } else {
-            let mut new_buffer = vec![0; new_capacity];
+            let mut new_buffer = vec![T::default(); new_capacity];
             let len = self.len;
 
             if len > 0 {
@@ -69,7 +69,7 @@ impl CircularBuffer {
         Ok(())
     }
 
-    pub fn write(&mut self, buf: &[u8]) -> Result<usize> {
+    pub fn write(&mut self, buf: &[T]) -> Result<usize> {
         if buf.is_empty() {
             return Err(Error::WriteFailed("input buffer is empty".to_string()));
         }
@@ -96,7 +96,7 @@ impl CircularBuffer {
         Ok(write_len)
     }
 
-    pub fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+    pub fn read(&mut self, buf: &mut [T]) -> Result<usize> {
         if buf.is_empty() {
             return Err(Error::ReadFailed("output buffer is empty".to_string()));
         }
@@ -110,7 +110,7 @@ impl CircularBuffer {
         Ok(read_len)
     }
 
-    fn read_to_slice(&mut self, buf: &mut [u8]) {
+    fn read_to_slice(&mut self, buf: &mut [T]) {
         let read_len = buf.len();
         let end_pos = self.read_pos + read_len;
 
@@ -127,7 +127,7 @@ impl CircularBuffer {
         self.len -= read_len;
     }
 
-    pub fn peek(&self, buf: &mut [u8]) -> Result<usize> {
+    pub fn peek(&self, buf: &mut [T]) -> Result<usize> {
         if buf.is_empty() {
             return Err(Error::ReadFailed("output buffer is empty".to_string()));
         }
