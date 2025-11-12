@@ -38,10 +38,6 @@ impl<T: DeviceManager> CameraManager<T> {
         })
     }
 
-    pub fn list(&self) -> Vec<&T::DeviceType> {
-        self.backend.list()
-    }
-
     pub fn index(&self, index: usize) -> Option<&T::DeviceType> {
         self.backend.index(index)
     }
@@ -56,6 +52,14 @@ impl<T: DeviceManager> CameraManager<T> {
 
     pub fn lookup_mut(&mut self, id: &str) -> Option<&mut T::DeviceType> {
         self.backend.lookup_mut(id)
+    }
+
+    pub fn iter(&self) -> T::Iter<'_> {
+        self.backend.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> T::IterMut<'_> {
+        self.backend.iter_mut()
     }
 
     pub fn refresh(&mut self) -> Result<()> {

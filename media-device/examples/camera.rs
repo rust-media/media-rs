@@ -21,8 +21,7 @@ fn main() {
     };
 
     // List all camera devices
-    let devices = cam_mgr.list();
-    for device in devices {
+    for device in cam_mgr.iter() {
         info!("name: {}", device.name());
         info!("id: {}", device.id());
     }

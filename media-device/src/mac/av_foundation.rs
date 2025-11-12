@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    slice::{Iter, IterMut},
+    sync::Arc,
+};
 
 #[cfg(target_os = "macos")]
 use av_foundation::capture_device::AVCaptureDeviceTypeExternalUnknown;
@@ -52,6 +55,14 @@ pub struct AVFoundationCaptureDeviceManager {
 
 impl DeviceManager for AVFoundationCaptureDeviceManager {
     type DeviceType = AVFoundationCaptureDevice;
+    type Iter<'a>
+        = Iter<'a, AVFoundationCaptureDevice>
+    where
+        Self: 'a;
+    type IterMut<'a>
+        = IterMut<'a, AVFoundationCaptureDevice>
+    where
+        Self: 'a;
 
     fn init() -> Result<Self>
     where
@@ -64,10 +75,6 @@ impl DeviceManager for AVFoundationCaptureDeviceManager {
     }
 
     fn deinit(&mut self) {}
-
-    fn list(&self) -> Vec<&Self::DeviceType> {
-        self.devices.as_ref().map(|devices| devices.iter().collect()).unwrap_or_default()
-    }
 
     fn index(&self, index: usize) -> Option<&Self::DeviceType> {
         self.devices.as_ref().and_then(|devices| devices.get(index))
@@ -83,6 +90,14 @@ impl DeviceManager for AVFoundationCaptureDeviceManager {
 
     fn lookup_mut(&mut self, id: &str) -> Option<&mut Self::DeviceType> {
         self.devices.as_mut().and_then(|devices| devices.iter_mut().find(|device| device.info.id == id))
+    }
+
+    fn iter(&self) -> Iter<'_, AVFoundationCaptureDevice> {
+        self.devices.as_deref().unwrap_or(&[]).iter()
+    }
+
+    fn iter_mut(&mut self) -> IterMut<'_, AVFoundationCaptureDevice> {
+        self.devices.as_deref_mut().unwrap_or(&mut []).iter_mut()
     }
 
     fn refresh(&mut self) -> Result<()> {

@@ -2,7 +2,7 @@ use std::{
     mem::MaybeUninit,
     num::NonZeroU32,
     ptr::null_mut,
-    slice::from_raw_parts,
+    slice::{from_raw_parts, Iter, IterMut},
     sync::{
         atomic::{AtomicBool, Ordering::SeqCst},
         Arc, Condvar, Mutex, Weak,
@@ -46,6 +46,14 @@ pub struct MediaFoundationDeviceManager {
 
 impl DeviceManager for MediaFoundationDeviceManager {
     type DeviceType = MediaFoundationDevice;
+    type Iter<'a>
+        = Iter<'a, MediaFoundationDevice>
+    where
+        Self: 'a;
+    type IterMut<'a>
+        = IterMut<'a, MediaFoundationDevice>
+    where
+        Self: 'a;
 
     fn init() -> Result<Self>
     where
@@ -68,10 +76,6 @@ impl DeviceManager for MediaFoundationDeviceManager {
         }
     }
 
-    fn list(&self) -> Vec<&Self::DeviceType> {
-        self.devices.as_ref().map(|devices| devices.iter().collect()).unwrap_or_default()
-    }
-
     fn index(&self, index: usize) -> Option<&Self::DeviceType> {
         self.devices.as_ref().and_then(|devices| devices.get(index))
     }
@@ -86,6 +90,14 @@ impl DeviceManager for MediaFoundationDeviceManager {
 
     fn lookup_mut(&mut self, id: &str) -> Option<&mut Self::DeviceType> {
         self.devices.as_mut().and_then(|devices| devices.iter_mut().find(|device| device.info.id == id))
+    }
+
+    fn iter(&self) -> Iter<'_, MediaFoundationDevice> {
+        self.devices.as_deref().unwrap_or(&[]).iter()
+    }
+
+    fn iter_mut(&mut self) -> IterMut<'_, MediaFoundationDevice> {
+        self.devices.as_deref_mut().unwrap_or(&mut []).iter_mut()
     }
 
     fn refresh(&mut self) -> Result<()> {
