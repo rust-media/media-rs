@@ -24,7 +24,7 @@ enum PacketData<'a> {
 }
 
 impl PacketData<'_> {
-    fn from_slice<'a>(slice: &'a [u8]) -> PacketData<'a> {
+    fn from_slice(slice: &[u8]) -> PacketData<'_> {
         PacketData::Borrowed(slice)
     }
 

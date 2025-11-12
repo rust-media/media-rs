@@ -529,7 +529,7 @@ unsafe impl Send for PixelBuffer {}
 unsafe impl Sync for PixelBuffer {}
 
 impl DataMappable for PixelBuffer {
-    fn map(&self) -> Result<MappedGuard> {
+    fn map(&self) -> Result<MappedGuard<'_>> {
         if self.0.lock_base_address(kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess {
             return Err(Error::Failed("lock base address".to_string()));
         }
@@ -539,7 +539,7 @@ impl DataMappable for PixelBuffer {
         })
     }
 
-    fn map_mut(&mut self) -> Result<MappedGuard> {
+    fn map_mut(&mut self) -> Result<MappedGuard<'_>> {
         if self.0.lock_base_address(0) != kCVReturnSuccess {
             return Err(Error::Failed("lock base address".to_string()));
         }
