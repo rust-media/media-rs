@@ -9,6 +9,7 @@ use smallvec::SmallVec;
 use strum::EnumCount;
 
 use crate::{
+    align_to,
     error::Error,
     frame::{PlaneDescriptor, PlaneVec},
     invalid_param_error,
@@ -164,37 +165,32 @@ impl SampleFormat {
         }
     }
 
-    pub fn stride(&self, channels: u8, samples: u32) -> usize {
+    pub(crate) fn calc_actual_plane_size(&self, channels: u8, samples: u32) -> u32 {
         if self.is_planar() {
-            self.bytes() as usize * samples as usize
+            self.bytes() as u32 * samples
         } else {
-            self.bytes() as usize * channels as usize * samples as usize
+            self.bytes() as u32 * samples * channels as u32
         }
     }
 
-    pub(crate) fn calc_data(&self, channels: u8, samples: u32) -> (usize, PlaneVec<PlaneDescriptor>) {
-        let mut size = 0;
-        let mut planes = PlaneVec::new();
-        let stride = self.stride(channels, samples);
+    pub(crate) fn calc_plane_size(&self, channels: u8, samples: u32, alignment: u32) -> u32 {
+        align_to(self.calc_actual_plane_size(channels, samples), alignment)
+    }
 
-        if self.is_planar() {
-            planes.extend(iter::repeat_n(PlaneDescriptor::Audio(stride, stride), channels as usize));
-            size += stride * channels as usize;
+    pub(crate) fn calc_data(&self, channels: u8, samples: u32, alignment: u32) -> (usize, PlaneVec<PlaneDescriptor>) {
+        let mut planes = PlaneVec::new();
+        let stride = self.calc_plane_size(channels, samples, alignment) as usize;
+        let actual_bytes = self.calc_actual_plane_size(channels, samples) as usize;
+
+        let size = if self.is_planar() {
+            planes.extend(iter::repeat_n(PlaneDescriptor::Audio(stride, actual_bytes), channels as usize));
+            stride * channels as usize
         } else {
-            planes.push(PlaneDescriptor::Audio(stride, stride));
-            size = stride;
-        }
+            planes.push(PlaneDescriptor::Audio(stride, actual_bytes));
+            stride
+        };
 
         (size, planes)
-    }
-
-    pub(crate) fn calc_actual_bytes(&self, channels: u8, samples: u32) -> usize {
-        let bytes = self.stride(channels, samples);
-        if self.is_planar() {
-            bytes * channels as usize
-        } else {
-            bytes
-        }
     }
 }
 

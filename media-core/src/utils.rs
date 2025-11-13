@@ -6,10 +6,13 @@ use num_traits::One;
 cfg_if! {
     if #[cfg(target_arch = "x86_64")] {
         #[allow(dead_code)]
-        pub(crate) const DEFAULT_ALIGNMENT: u32 = 32;
+        pub(crate) const DEFAULT_ALIGNMENT: usize = 32;
+    } else if #[cfg(target_arch = "wasm32")] {
+        #[allow(dead_code)]
+        pub(crate) const DEFAULT_ALIGNMENT: usize = 8;
     } else {
         #[allow(dead_code)]
-        pub(crate) const DEFAULT_ALIGNMENT: u32 = 16;
+        pub(crate) const DEFAULT_ALIGNMENT: usize = 16;
     }
 }
 

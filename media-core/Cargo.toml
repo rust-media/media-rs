@@ -13,6 +13,7 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+aligned-vec.workspace = true
 bitflags.workspace = true
 bytemuck.workspace = true
 cfg-if.workspace = true

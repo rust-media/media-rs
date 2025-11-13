@@ -3,20 +3,22 @@ use std::{
     num::{NonZeroU32, NonZeroU8},
 };
 
+use aligned_vec::avec;
+
 use super::audio::{AudioFrameDescriptor, SampleFormat};
 use crate::{
     error::Error,
-    frame::{Frame, FrameData, MemoryData},
+    frame::{Data, Frame, FrameData, MemoryData},
     invalid_param_error,
     media::FrameDescriptor,
-    Result,
+    Result, DEFAULT_ALIGNMENT,
 };
 
 pub struct AudioDataCreator;
 
 impl AudioDataCreator {
     fn create(format: SampleFormat, channels: NonZeroU8, samples: NonZeroU32) -> Result<MemoryData<'static>> {
-        let (size, planes) = format.calc_data(channels.get(), samples.get());
+        let (size, planes) = format.calc_data(channels.get(), samples.get(), DEFAULT_ALIGNMENT as u32);
         let initial_value = if matches!(format, SampleFormat::U8 | SampleFormat::U8P) {
             0x80
         } else {
@@ -24,7 +26,7 @@ impl AudioDataCreator {
         };
 
         Ok(MemoryData {
-            data: vec![initial_value; size].into(),
+            data: Data::Owned(avec![[DEFAULT_ALIGNMENT]| initial_value; size]),
             planes,
         })
     }
@@ -33,7 +35,7 @@ impl AudioDataCreator {
     where
         T: Into<Cow<'a, [u8]>>,
     {
-        let (size, planes) = format.calc_data(channels.get(), samples.get());
+        let (size, planes) = format.calc_data(channels.get(), samples.get(), DEFAULT_ALIGNMENT as u32);
         let buffer = buffer.into();
 
         if buffer.len() != size {
@@ -41,7 +43,7 @@ impl AudioDataCreator {
         }
 
         Ok(MemoryData {
-            data: buffer,
+            data: buffer.into(),
             planes,
         })
     }
@@ -119,8 +121,8 @@ impl Frame<'_> {
             return Err(invalid_param_error!(samples));
         }
 
-        let actual_bytes = desc.format.calc_actual_bytes(desc.channels().get(), samples);
-        self.data.truncate(actual_bytes)?;
+        let actual_bytes = desc.format.calc_actual_plane_size(desc.channels().get(), samples);
+        self.data.truncate(actual_bytes as usize)?;
 
         desc.samples = NonZeroU32::new(samples).unwrap();
         Ok(())

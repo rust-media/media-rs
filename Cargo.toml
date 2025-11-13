@@ -24,6 +24,7 @@ media = { version = "0.7.1", path = "./media" }
 media-core = { version = "0.7.1", default-features = false, path = "./media-core" }
 media-codec = { version = "0.7.1", default-features = false, path = "./media-codec" }
 media-device = { version = "0.7.1", default-features = false, path = "./media-device" }
+aligned-vec = "0.6"
 bitflags = "2.10"
 bytemuck = "1.24"
 cfg-if = "1.0"

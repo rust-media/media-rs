@@ -1,10 +1,12 @@
 use std::{borrow::Cow, num::NonZeroU32, sync::Arc};
 
+use aligned_vec::avec;
+
 use super::video::{PixelFormat, VideoFrameDescriptor};
 use crate::{
     buffer::Buffer,
     error::Error,
-    frame::{BufferData, Frame, FrameData, MemoryData, PlaneDescriptor, PlaneVec, SeparateMemoryData},
+    frame::{BufferData, Data, Frame, FrameData, MemoryData, PlaneDescriptor, PlaneVec, SeparateMemoryData},
     invalid_param_error,
     media::FrameDescriptor,
     Result, DEFAULT_ALIGNMENT,
@@ -14,10 +16,10 @@ pub struct VideoDataCreator;
 
 impl VideoDataCreator {
     fn create(format: PixelFormat, width: NonZeroU32, height: NonZeroU32) -> Result<MemoryData<'static>> {
-        let (size, planes) = format.calc_data(width.get(), height.get(), DEFAULT_ALIGNMENT);
+        let (size, planes) = format.calc_data(width.get(), height.get(), DEFAULT_ALIGNMENT as u32);
 
         Ok(MemoryData {
-            data: vec![0; size].into(),
+            data: Data::Owned(avec![[DEFAULT_ALIGNMENT]| 0u8; size]),
             planes,
         })
     }
@@ -34,7 +36,7 @@ impl VideoDataCreator {
         }
 
         Ok(MemoryData {
-            data: buffer,
+            data: buffer.into(),
             planes,
         })
     }
@@ -51,7 +53,7 @@ impl VideoDataCreator {
         }
 
         let data = MemoryData {
-            data: buffer,
+            data: buffer.into(),
             planes,
         };
 
@@ -75,7 +77,7 @@ impl VideoDataCreator {
         let planes = PlaneVec::from_slice(&[PlaneDescriptor::Video(stride.get() as usize, height.get())]);
 
         let data = MemoryData {
-            data: buffer,
+            data: buffer.into(),
             planes,
         };
 

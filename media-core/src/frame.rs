@@ -8,6 +8,7 @@ use std::{
     slice::{Iter, IterMut},
 };
 
+use aligned_vec::{AVec, ConstAlign};
 #[cfg(any(feature = "audio", feature = "video"))]
 use bytemuck::Pod;
 use num_rational::Rational64;
@@ -24,7 +25,7 @@ use crate::{
     frame_pool::FramePool,
     media::{FrameDescriptor, MediaType},
     variant::Variant,
-    Result,
+    Result, DEFAULT_ALIGNMENT,
 };
 
 #[cfg(any(feature = "audio", feature = "video"))]
@@ -247,8 +248,43 @@ pub(crate) enum PlaneDescriptor {
 }
 
 #[derive(Clone)]
+pub(crate) enum Data<'a, T: Clone = u8> {
+    Borrowed(&'a [T]),
+    Owned(AVec<T, ConstAlign<DEFAULT_ALIGNMENT>>),
+}
+
+impl<T: Clone> Data<'_, T> {
+    fn into_owned(self) -> Data<'static, T> {
+        match self {
+            Data::Borrowed(slice) => Data::Owned(AVec::from_slice(DEFAULT_ALIGNMENT, slice)),
+            Data::Owned(vec) => Data::Owned(vec),
+        }
+    }
+
+    #[cfg(any(feature = "audio", feature = "video"))]
+    fn as_ref(&self) -> &[T] {
+        match self {
+            Data::Borrowed(slice) => slice,
+            Data::Owned(vec) => vec.as_slice(),
+        }
+    }
+}
+
+impl<'a, T> From<Cow<'a, [T]>> for Data<'a, T>
+where
+    T: Clone,
+{
+    fn from(cow: Cow<'a, [T]>) -> Self {
+        match cow {
+            Cow::Borrowed(slice) => Data::Borrowed(slice),
+            Cow::Owned(vec) => Data::Owned(AVec::from_slice(DEFAULT_ALIGNMENT, &vec)),
+        }
+    }
+}
+
+#[derive(Clone)]
 pub(crate) struct MemoryData<'a> {
-    pub(crate) data: Cow<'a, [u8]>,
+    pub(crate) data: Data<'a>,
     #[cfg(any(feature = "audio", feature = "video"))]
     pub(crate) planes: PlaneVec<PlaneDescriptor>,
 }
@@ -256,7 +292,7 @@ pub(crate) struct MemoryData<'a> {
 impl MemoryData<'_> {
     fn into_owned(self) -> MemoryData<'static> {
         MemoryData {
-            data: Cow::Owned(self.data.into_owned()),
+            data: self.data.into_owned(),
             #[cfg(any(feature = "audio", feature = "video"))]
             planes: self.planes,
         }
@@ -292,7 +328,7 @@ pub(crate) struct SeparateMemoryData<'a> {
 #[cfg(feature = "video")]
 impl SeparateMemoryData<'_> {
     fn into_owned(self) -> MemoryData<'static> {
-        let mut data = Vec::new();
+        let mut data = AVec::new(DEFAULT_ALIGNMENT);
         let mut planes = PlaneVec::<PlaneDescriptor>::new();
 
         for (slice, stride, height) in self.planes {
@@ -301,7 +337,7 @@ impl SeparateMemoryData<'_> {
         }
 
         MemoryData {
-            data: Cow::Owned(data),
+            data: Data::Owned(data),
             planes,
         }
     }
@@ -431,8 +467,8 @@ impl DataMappable for MemoryData<'_> {
 
     fn planes_mut(&mut self) -> Option<MappedPlanes<'_>> {
         let mut data_slice = match &mut self.data {
-            Cow::Owned(vec) => vec.as_mut_slice(),
-            Cow::Borrowed(_) => return None,
+            Data::Owned(vec) => vec.as_mut_slice(),
+            Data::Borrowed(_) => return None,
         };
         let mut planes = SmallVec::new();
 
