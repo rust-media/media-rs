@@ -16,7 +16,7 @@ pub struct VideoDataCreator;
 
 impl VideoDataCreator {
     fn create(format: PixelFormat, width: NonZeroU32, height: NonZeroU32) -> Result<MemoryData<'static>> {
-        let (size, planes) = format.calc_data(width.get(), height.get(), DEFAULT_ALIGNMENT as u32);
+        let (size, planes) = format.calc_data_size(width.get(), height.get(), DEFAULT_ALIGNMENT as u32);
 
         Ok(MemoryData {
             data: Data::Owned(avec![[DEFAULT_ALIGNMENT]| 0u8; size]),
@@ -28,7 +28,7 @@ impl VideoDataCreator {
     where
         T: Into<Cow<'a, [u8]>>,
     {
-        let (size, planes) = format.calc_data(width.get(), height.get(), 1);
+        let (size, planes) = format.calc_data_size(width.get(), height.get(), 1);
         let buffer = buffer.into();
 
         if buffer.len() != size {
@@ -45,7 +45,7 @@ impl VideoDataCreator {
     where
         T: Into<Cow<'a, [u8]>>,
     {
-        let (size, planes) = format.calc_data_with_stride(height.get(), stride.get() as usize);
+        let (size, planes) = format.calc_data_size_with_stride(height.get(), stride.get());
         let buffer = buffer.into();
 
         if buffer.len() != size {

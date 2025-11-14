@@ -16,11 +16,11 @@ impl AudioCircularBuffer {
             1
         };
 
-        let stride = format.stride(channels, samples);
+        let buffer_size = format.calc_plane_size(channels, samples);
 
         let mut buffers = Vec::with_capacity(num_buffers);
         for _ in 0..num_buffers {
-            buffers.push(CircularBuffer::new(stride));
+            buffers.push(CircularBuffer::new(buffer_size));
         }
 
         Self {
@@ -38,6 +38,11 @@ impl AudioCircularBuffer {
     }
 
     #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    #[inline]
     pub fn capacity(&self) -> u32 {
         self.capacity
     }
@@ -51,10 +56,10 @@ impl AudioCircularBuffer {
         if self.capacity >= samples {
             return Ok(());
         }
-        let stride = self.format.stride(self.channels, samples);
+        let buffer_size = self.format.calc_plane_size(self.channels, samples);
 
         for buffer in &mut self.buffers {
-            buffer.grow(stride)?;
+            buffer.grow(buffer_size)?;
         }
 
         self.capacity = samples;

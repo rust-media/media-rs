@@ -165,29 +165,25 @@ impl SampleFormat {
         }
     }
 
-    pub(crate) fn calc_actual_plane_size(&self, channels: u8, samples: u32) -> u32 {
+    pub(crate) fn calc_plane_size(&self, channels: u8, samples: u32) -> usize {
         if self.is_planar() {
-            self.bytes() as u32 * samples
+            self.bytes() as usize * samples as usize
         } else {
-            self.bytes() as u32 * samples * channels as u32
+            self.bytes() as usize * samples as usize * channels as usize
         }
     }
 
-    pub(crate) fn calc_plane_size(&self, channels: u8, samples: u32, alignment: u32) -> u32 {
-        align_to(self.calc_actual_plane_size(channels, samples), alignment)
-    }
-
-    pub(crate) fn calc_data(&self, channels: u8, samples: u32, alignment: u32) -> (usize, PlaneVec<PlaneDescriptor>) {
+    pub(crate) fn calc_data_size(&self, channels: u8, samples: u32, alignment: u32) -> (usize, PlaneVec<PlaneDescriptor>) {
         let mut planes = PlaneVec::new();
-        let stride = self.calc_plane_size(channels, samples, alignment) as usize;
-        let actual_bytes = self.calc_actual_plane_size(channels, samples) as usize;
+        let used_bytes = self.calc_plane_size(channels, samples);
+        let allocated_size = align_to(used_bytes, alignment as usize);
 
         let size = if self.is_planar() {
-            planes.extend(iter::repeat_n(PlaneDescriptor::Audio(stride, actual_bytes), channels as usize));
-            stride * channels as usize
+            planes.extend(iter::repeat_n(PlaneDescriptor::Audio(allocated_size, used_bytes), channels as usize));
+            allocated_size * channels as usize
         } else {
-            planes.push(PlaneDescriptor::Audio(stride, actual_bytes));
-            stride
+            planes.push(PlaneDescriptor::Audio(allocated_size, used_bytes));
+            allocated_size
         };
 
         (size, planes)

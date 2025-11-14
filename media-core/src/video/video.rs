@@ -893,7 +893,7 @@ impl PixelFormat {
         }
     }
 
-    pub(crate) fn calc_data(&self, width: u32, height: u32, alignment: u32) -> (usize, PlaneVec<PlaneDescriptor>) {
+    pub(crate) fn calc_data_size(&self, width: u32, height: u32, alignment: u32) -> (usize, PlaneVec<PlaneDescriptor>) {
         let desc = &PIXEL_FORMAT_DESC[*self as usize];
         let mut size;
         let mut planes = PlaneVec::with_capacity(desc.components as usize);
@@ -930,21 +930,21 @@ impl PixelFormat {
         (size, planes)
     }
 
-    pub(crate) fn calc_data_with_stride(&self, height: u32, stride: usize) -> (usize, PlaneVec<PlaneDescriptor>) {
+    pub(crate) fn calc_data_size_with_stride(&self, height: u32, stride: u32) -> (usize, PlaneVec<PlaneDescriptor>) {
         let desc = &PIXEL_FORMAT_DESC[*self as usize];
         let mut size;
         let mut planes = PlaneVec::with_capacity(desc.components as usize);
 
-        planes.push(PlaneDescriptor::Video(stride, height));
-        size = stride * height as usize;
+        planes.push(PlaneDescriptor::Video(stride as usize, height));
+        size = stride * height;
         for i in 1..desc.components as usize {
-            let plane_stride = ceil_rshift(stride, desc.chroma_shift_x as usize) * desc.component_bytes[i] as usize;
+            let plane_stride = ceil_rshift(stride, desc.chroma_shift_x as u32) * desc.component_bytes[i] as u32;
             let plane_height = ceil_rshift(height, desc.chroma_shift_y as u32);
-            planes.push(PlaneDescriptor::Video(plane_stride, plane_height));
-            size += plane_stride * plane_height as usize;
+            planes.push(PlaneDescriptor::Video(plane_stride as usize, plane_height));
+            size += plane_stride * plane_height;
         }
 
-        (size, planes)
+        (size as usize, planes)
     }
 
     pub(crate) fn calc_chroma_dimensions(&self, width: u32, height: u32) -> (u32, u32) {
