@@ -242,7 +242,7 @@ pub(crate) type PlaneVec<T> = SmallVec<[T; DEFAULT_MAX_PLANES]>;
 #[derive(Copy, Clone)]
 pub(crate) enum PlaneDescriptor {
     #[cfg(feature = "audio")]
-    Audio(usize, usize), // stride, actual_bytes
+    Audio(usize, usize), // allocated size, used bytes
     #[cfg(feature = "video")]
     Video(usize, u32), // stride, height
 }

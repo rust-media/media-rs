@@ -18,7 +18,7 @@ pub struct AudioDataCreator;
 
 impl AudioDataCreator {
     fn create(format: SampleFormat, channels: NonZeroU8, samples: NonZeroU32) -> Result<MemoryData<'static>> {
-        let (size, planes) = format.calc_data(channels.get(), samples.get(), DEFAULT_ALIGNMENT as u32);
+        let (size, planes) = format.calc_data_size(channels.get(), samples.get(), DEFAULT_ALIGNMENT as u32);
         let initial_value = if matches!(format, SampleFormat::U8 | SampleFormat::U8P) {
             0x80
         } else {
@@ -35,7 +35,7 @@ impl AudioDataCreator {
     where
         T: Into<Cow<'a, [u8]>>,
     {
-        let (size, planes) = format.calc_data(channels.get(), samples.get(), DEFAULT_ALIGNMENT as u32);
+        let (size, planes) = format.calc_data_size(channels.get(), samples.get(), 1);
         let buffer = buffer.into();
 
         if buffer.len() != size {
@@ -121,8 +121,8 @@ impl Frame<'_> {
             return Err(invalid_param_error!(samples));
         }
 
-        let actual_bytes = desc.format.calc_actual_plane_size(desc.channels().get(), samples);
-        self.data.truncate(actual_bytes as usize)?;
+        let actual_bytes = desc.format.calc_plane_size(desc.channels().get(), samples);
+        self.data.truncate(actual_bytes)?;
 
         desc.samples = NonZeroU32::new(samples).unwrap();
         Ok(())
