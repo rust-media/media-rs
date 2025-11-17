@@ -46,29 +46,29 @@ impl_convert!(s16_to_u8, i16, u8, |x: i16| ((x >> 8) + 0x80) as u8);
 impl_convert!(s16_to_s16, i16, i16, |x: i16| x);
 impl_convert!(s16_to_s32, i16, i32, |x: i16| (x as i32) << 16);
 impl_convert!(s16_to_s64, i16, i64, |x: i16| (x as i64) << 48);
-impl_convert!(s16_to_f32, i16, f32, |x: i16| (x as f32) * (1.0f32 / (1 << 15) as f32));
-impl_convert!(s16_to_f64, i16, f64, |x: i16| (x as f64) * (1.0f64 / (1 << 15) as f64));
+impl_convert!(s16_to_f32, i16, f32, |x: i16| (x as f32) * (1.0f32 / (1u16 << 15) as f32));
+impl_convert!(s16_to_f64, i16, f64, |x: i16| (x as f64) * (1.0f64 / (1u16 << 15) as f64));
 impl_convert!(s32_to_u8, i32, u8, |x: i32| ((x >> 24) + 0x80) as u8);
 impl_convert!(s32_to_s16, i32, i16, |x: i32| (x >> 16) as i16);
 impl_convert!(s32_to_s32, i32, i32, |x: i32| x);
 impl_convert!(s32_to_s64, i32, i64, |x: i32| (x as i64) << 32);
-impl_convert!(s32_to_f32, i32, f32, |x: i32| (x as f32) * (1.0f32 / (1 << 31) as f32));
-impl_convert!(s32_to_f64, i32, f64, |x: i32| (x as f64) * (1.0f64 / (1 << 31) as f64));
+impl_convert!(s32_to_f32, i32, f32, |x: i32| (x as f32) * (1.0f32 / (1u32 << 31) as f32));
+impl_convert!(s32_to_f64, i32, f64, |x: i32| (x as f64) * (1.0f64 / (1u32 << 31) as f64));
 impl_convert!(s64_to_u8, i64, u8, |x: i64| ((x >> 56) + 0x80) as u8);
 impl_convert!(s64_to_s16, i64, i16, |x: i64| (x >> 48) as i16);
 impl_convert!(s64_to_s32, i64, i32, |x: i64| (x >> 32) as i32);
 impl_convert!(s64_to_s64, i64, i64, |x: i64| x);
 impl_convert!(s64_to_f32, i64, f32, |x: i64| (x as f32) * (1.0f32 / (1u64 << 63) as f32));
 impl_convert!(s64_to_f64, i64, f64, |x: i64| (x as f64) * (1.0f64 / (1u64 << 63) as f64));
-impl_convert!(f32_to_u8, f32, u8, |x: f32| ((x * (1 << 7) as f32).round() as i32 + 0x80).clamp(0, 255) as u8);
-impl_convert!(f32_to_s16, f32, i16, |x: f32| ((x * (1 << 15) as f32).round() as i32).clamp(i16::MIN as i32, i16::MAX as i32) as i16);
-impl_convert!(f32_to_s32, f32, i32, |x: f32| ((x * (1 << 31) as f32).round() as i64).clamp(i32::MIN as i64, i32::MAX as i64) as i32);
+impl_convert!(f32_to_u8, f32, u8, |x: f32| ((x * (1u8 << 7) as f32).round() as i32 + 0x80).clamp(0, 255) as u8);
+impl_convert!(f32_to_s16, f32, i16, |x: f32| ((x * (1u16 << 15) as f32).round() as i32).clamp(i16::MIN as i32, i16::MAX as i32) as i16);
+impl_convert!(f32_to_s32, f32, i32, |x: f32| ((x * (1u32 << 31) as f32).round() as i64).clamp(i32::MIN as i64, i32::MAX as i64) as i32);
 impl_convert!(f32_to_s64, f32, i64, |x: f32| (x * (1u64 << 63) as f32).round() as i64);
 impl_convert!(f32_to_f32, f32, f32, |x: f32| x);
 impl_convert!(f32_to_f64, f32, f64, |x: f32| x as f64);
-impl_convert!(f64_to_u8, f64, u8, |x: f64| ((x * (1 << 7) as f64).round() as i32 + 0x80).clamp(0, 255) as u8);
-impl_convert!(f64_to_s16, f64, i16, |x: f64| ((x * (1 << 15) as f64).round() as i32).clamp(i16::MIN as i32, i16::MAX as i32) as i16);
-impl_convert!(f64_to_s32, f64, i32, |x: f64| ((x * (1 << 31) as f64).round() as i64).clamp(i32::MIN as i64, i32::MAX as i64) as i32);
+impl_convert!(f64_to_u8, f64, u8, |x: f64| ((x * (1u8 << 7) as f64).round() as i32 + 0x80).clamp(0, 255) as u8);
+impl_convert!(f64_to_s16, f64, i16, |x: f64| ((x * (1u16 << 15) as f64).round() as i32).clamp(i16::MIN as i32, i16::MAX as i32) as i16);
+impl_convert!(f64_to_s32, f64, i32, |x: f64| ((x * (1u32 << 31) as f64).round() as i64).clamp(i32::MIN as i64, i32::MAX as i64) as i32);
 impl_convert!(f64_to_s64, f64, i64, |x: f64| (x * (1u64 << 63) as f64).round() as i64);
 impl_convert!(f64_to_f32, f64, f32, |x: f64| x as f32);
 impl_convert!(f64_to_f64, f64, f64, |x: f64| x);
@@ -101,8 +101,8 @@ fn convert_samples<S: Pod, D: Pod>(
     for ch in 0..channels as usize {
         let src_i = ch * src_plane_index_step;
         let dst_i = ch * dst_plane_index_step;
-        let src_data = src_planes.plane_data(src_i).ok_or_else(|| Error::Invalid("out of range: src".to_string()))?;
-        let dst_data = dst_planes.plane_data_mut(dst_i).ok_or_else(|| Error::Invalid("out of range: dst".to_string()))?;
+        let src_data = src_planes.plane_data(src_i).ok_or_else(|| Error::Invalid(format!("out of range: src index {}", src_i)))?;
+        let dst_data = dst_planes.plane_data_mut(dst_i).ok_or_else(|| Error::Invalid(format!("out of range: dst index {}", dst_i)))?;
 
         let src_data: &[S] = bytemuck::cast_slice(src_data);
         let dst_data: &mut [D] = bytemuck::cast_slice_mut(dst_data);
@@ -151,7 +151,7 @@ fn data_convert(
         (0, channels as usize)
     };
 
-    convert(src_planes, dst_planes, src_plane_index_step, src_data_step, dst_plane_index_step, dst_data_step, channels, samples)
+    convert(src_planes, dst_planes, src_plane_index_step, dst_plane_index_step, src_data_step, dst_data_step, channels, samples)
 }
 
 impl Frame<'_> {
