@@ -28,11 +28,11 @@ fn test_sample_format() {
 
 #[test]
 fn test_channel_layout_from_mask() {
-    let layout = ChannelLayout::from_mask(ChannelFormatMasks::Stereo).unwrap();
+    let layout = ChannelLayout::from_mask(ChannelMasks::Stereo).unwrap();
     assert_eq!(layout.channels.get(), 2);
     assert_eq!(layout.order, ChannelOrder::Native);
 
-    let layout = ChannelLayout::from_mask(ChannelFormatMasks::Surround_5_1).unwrap();
+    let layout = ChannelLayout::from_mask(ChannelMasks::Surround_5_1).unwrap();
     assert_eq!(layout.channels.get(), 6);
     assert_eq!(layout.order, ChannelOrder::Native);
 }
@@ -41,11 +41,11 @@ fn test_channel_layout_from_mask() {
 fn test_channel_layout_default() {
     let mono = ChannelLayout::default_from_channels(1).unwrap();
     assert_eq!(mono.channels.get(), 1);
-    assert_eq!(mono.spec, ChannelLayoutSpec::Mask(ChannelFormatMasks::Mono));
+    assert_eq!(mono.spec, ChannelLayoutSpec::Mask(ChannelMasks::Mono));
 
     let stereo = ChannelLayout::default_from_channels(2).unwrap();
     assert_eq!(stereo.channels.get(), 2);
-    assert_eq!(stereo.spec, ChannelLayoutSpec::Mask(ChannelFormatMasks::Stereo));
+    assert_eq!(stereo.spec, ChannelLayoutSpec::Mask(ChannelMasks::Stereo));
 
     assert!(ChannelLayout::default_from_channels(0).is_err());
 }
