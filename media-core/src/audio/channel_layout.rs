@@ -1,4 +1,4 @@
-use std::{num::NonZeroU8, sync::LazyLock};
+use std::{mem, num::NonZeroU8, sync::LazyLock};
 
 use bitflags::bitflags;
 use smallvec::SmallVec;
@@ -7,6 +7,7 @@ use strum::EnumCount;
 use crate::{error::Error, invalid_param_error, Result};
 
 #[derive(Clone, Copy, Debug, EnumCount, Eq, PartialEq)]
+#[repr(u8)]
 pub enum Channel {
     FrontLeft,
     FrontRight,
@@ -29,14 +30,26 @@ pub enum Channel {
 }
 
 impl From<Channel> for u32 {
-    fn from(format: Channel) -> Self {
-        format as u32
+    fn from(chn: Channel) -> Self {
+        chn as u32
     }
 }
 
 impl From<Channel> for ChannelMasks {
-    fn from(format: Channel) -> Self {
-        ChannelMasks::from_bits_truncate(1u32 << format as u32)
+    fn from(chn: Channel) -> Self {
+        ChannelMasks::from_bits_truncate(1u32 << chn as u32)
+    }
+}
+
+impl TryFrom<u8> for Channel {
+    type Error = Error;
+
+    fn try_from(value: u8) -> Result<Self> {
+        if value < Channel::COUNT as u8 {
+            Ok(unsafe { mem::transmute::<u8, Channel>(value) })
+        } else {
+            Err(invalid_param_error!(value))
+        }
     }
 }
 
@@ -120,42 +133,73 @@ pub enum ChannelOrder {
 }
 
 struct ChannelLayoutMap {
-    map: Vec<Option<Vec<ChannelLayout>>>,
+    map: Vec<Option<Vec<(&'static str, ChannelLayout)>>>,
 }
 
-macro_rules! define_channel_layout_map {
-    ( $($channel_count:literal => [$($mask:ident),*]),* $(,)? ) => {
+macro_rules! define_channel_layouts {
+    ( $(
+        $const_name:ident: [$name:literal, $mask:ident($channel_count:literal)]
+        ),* $(,)?
+    ) => {
+        impl ChannelLayout {
+            $(
+                pub const $const_name: Self = Self {
+                    order: ChannelOrder::Native,
+                    channels: NonZeroU8::new($channel_count).unwrap(),
+                    spec: ChannelLayoutSpec::Mask(ChannelMasks::$mask),
+                };
+            )*
+        }
+
         static CHANNEL_LAYOUT_MAP: LazyLock<ChannelLayoutMap> = LazyLock::new(|| {
             let mut map = vec![None; DEFAULT_MAX_CHANNELS];
             $(
-                let channels = NonZeroU8::new($channel_count).unwrap();
-                map[($channel_count - 1) as usize] = Some(vec![
-                    $(
-                        ChannelLayout {
-                            order: ChannelOrder::Native,
-                            channels,
-                            spec: ChannelLayoutSpec::Mask(ChannelMasks::$mask),
-                        }
-                    ),*
-                ]);
+                let entry = map[($channel_count - 1) as usize].get_or_insert_with(Vec::new);
+                entry.push((
+                    $name,
+                    ChannelLayout::$const_name,
+                ));
             )*
             ChannelLayoutMap { map }
         });
     };
 }
 
-define_channel_layout_map! {
-    1 => [Mono],
-    2 => [Stereo],
-    3 => [Surround_2_1, Surround_3_0, Surround_3_0_BACK],
-    4 => [Surround_3_1, Surround_4_0, Surround_2_2, Quad],
-    5 => [Surround_4_1, Surround_5_0, Surround_5_0_BACK],
-    6 => [Surround_5_1, Surround_5_1_BACK, Surround_6_0, Surround_6_0_FRONT, Surround_3_1_2, Hexagonal],
-    7 => [Surround_6_1, Surround_6_1_FRONT, Surround_6_1_BACK, Surround_7_0, Surround_7_0_FRONT],
-    8 => [Surround_7_1, Surround_7_1_WIDE, Surround_7_1_WIDE_BACK, Surround_5_1_2, Surround_5_1_2_BACK, Octagonal, Cube],
-   10 => [Surround_5_1_4_BACK, Surround_7_1_2],
-   12 => [Surround_7_1_4_BACK],
-   14 => [Surround_9_1_4_BACK],
+define_channel_layouts! {
+    MONO: ["mono", Mono(1)],
+    STEREO: ["stereo", Stereo(2)],
+    SURROUND_2_1: ["2.1", Surround_2_1(3)],
+    SURROUND_3_0: ["3.0", Surround_3_0(3)],
+    SURROUND_3_0_BACK: ["3.0(back)", Surround_3_0_BACK(3)],
+    SURROUND_4_0: ["4.0", Surround_4_0(4)],
+    QUAD: ["quad", Quad(4)],
+    SURROUND_2_2: ["quad(side)", Surround_2_2(4)],
+    SURROUND_3_1: ["3.1", Surround_3_1(4)],
+    SURROUND_5_0_BACK: ["5.0", Surround_5_0_BACK(5)],
+    SURROUND_5_0: ["5.0(side)", Surround_5_0(5)],
+    SURROUND_4_1: ["4.1", Surround_4_1(5)],
+    SURROUND_5_1_BACK: ["5.1", Surround_5_1_BACK(6)],
+    SURROUND_5_1: ["5.1(side)", Surround_5_1(6)],
+    SURROUND_6_0: ["6.0", Surround_6_0(6)],
+    SURROUND_6_0_FRONT: ["6.0(front)", Surround_6_0_FRONT(6)],
+    SURROUND_3_1_2: ["3.1.2", Surround_3_1_2(6)],
+    HEXAGONAL: ["hexagonal", Hexagonal(6)],
+    SURROUND_6_1: ["6.1", Surround_6_1(7)],
+    SURROUND_6_1_BACK: ["6.1(back)", Surround_6_1_BACK(7)],
+    SURROUND_6_1_FRONT: ["6.1(front)", Surround_6_1_FRONT(7)],
+    SURROUND_7_0: ["7.0", Surround_7_0(7)],
+    SURROUND_7_0_FRONT: ["7.0(front)", Surround_7_0_FRONT(7)],
+    SURROUND_7_1: ["7.1", Surround_7_1(8)],
+    SURROUND_7_1_WIDE_BACK: ["7.1(wide)", Surround_7_1_WIDE_BACK(8)],
+    SURROUND_7_1_WIDE: ["7.1(wide-side)", Surround_7_1_WIDE(8)],
+    SURROUND_5_1_2: ["5.1.2", Surround_5_1_2(8)],
+    SURROUND_5_1_2_BACK: ["5.1.2(back)", Surround_5_1_2_BACK(8)],
+    OCTAGONAL: ["octagonal", Octagonal(8)],
+    CUBE: ["cube", Cube(8)],
+    SURROUND_5_1_4_BACK: ["5.1.4", Surround_5_1_4_BACK(10)],
+    SURROUND_7_1_2: ["7.1.2", Surround_7_1_2(10)],
+    SURROUND_7_1_4_BACK: ["7.1.4", Surround_7_1_4_BACK(12)],
+    SURROUND_9_1_4_BACK: ["9.1.4", Surround_9_1_4_BACK(14)],
 }
 
 const DEFAULT_MAX_CHANNELS: usize = 16;
@@ -219,13 +263,80 @@ impl ChannelLayout {
         Ok(CHANNEL_LAYOUT_MAP
             .map
             .get((channels.get() - 1) as usize)
-            .and_then(|opt| opt.as_ref())
-            .and_then(|layouts| layouts.first())
-            .cloned()
+            .and_then(|opt| opt.as_ref()?.first())
+            .map(|(_, layout)| layout.clone())
             .unwrap_or_else(|| Self {
                 order: ChannelOrder::Unspecified,
                 channels,
                 spec: ChannelLayoutSpec::Mask(ChannelMasks::from_bits_truncate(0)),
             }))
+    }
+
+    pub fn get_channel_from_index(&self, index: usize) -> Option<Channel> {
+        if index >= self.channels.get() as usize {
+            return None;
+        }
+
+        match (&self.order, &self.spec) {
+            (ChannelOrder::Native, ChannelLayoutSpec::Mask(mask)) => {
+                let mut remaining = index;
+                for chn in 0..Channel::COUNT {
+                    let channel = Channel::try_from(chn as u8).ok()?;
+                    if mask.contains(ChannelMasks::from(channel)) {
+                        if remaining == 0 {
+                            return Some(channel);
+                        }
+                        remaining -= 1;
+                    }
+                }
+                None
+            }
+            (ChannelOrder::Custom, ChannelLayoutSpec::Map(Some(map))) => map.get(index).copied(),
+            _ => None,
+        }
+    }
+
+    pub fn get_index_from_channel(&self, channel: Channel) -> Option<usize> {
+        match (&self.order, &self.spec) {
+            (ChannelOrder::Native, ChannelLayoutSpec::Mask(mask)) => {
+                let channel_mask = ChannelMasks::from(channel);
+                mask.contains(channel_mask).then(|| {
+                    let lower_bits = channel_mask.bits() - 1;
+                    (mask.bits() & lower_bits).count_ones() as usize
+                })
+            }
+            (ChannelOrder::Custom, ChannelLayoutSpec::Map(Some(map))) => map.iter().position(|&c| c == channel),
+            _ => None,
+        }
+    }
+
+    pub fn is_valid(&self) -> bool {
+        if self.channels.get() <= 0 {
+            return false;
+        }
+
+        match (&self.order, &self.spec) {
+            (ChannelOrder::Unspecified, _) => true,
+            (ChannelOrder::Native, ChannelLayoutSpec::Mask(mask)) => mask.bits().count_ones() as u8 == self.channels.get(),
+            (ChannelOrder::Custom, ChannelLayoutSpec::Map(Some(map))) => map.len() == self.channels.get() as usize,
+            _ => false,
+        }
+    }
+
+    pub fn subset(&self, mask: ChannelMasks) -> ChannelMasks {
+        match (&self.order, &self.spec) {
+            (ChannelOrder::Native, ChannelLayoutSpec::Mask(channel_mask)) => *channel_mask & mask,
+            (ChannelOrder::Custom, ChannelLayoutSpec::Map(Some(map))) => {
+                let mut subset_mask = ChannelMasks::empty();
+                for &channel in map.iter() {
+                    let channel_mask = ChannelMasks::from(channel);
+                    if mask.contains(channel_mask) {
+                        subset_mask |= channel_mask;
+                    }
+                }
+                subset_mask
+            }
+            _ => ChannelMasks::from_bits_truncate(0),
+        }
     }
 }
