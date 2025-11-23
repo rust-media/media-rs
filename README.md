@@ -47,3 +47,7 @@ A pure Rust media framework for handling multimedia tasks such as encoding, deco
 ### Filter
 - **Video Filters** - Process video and apply effects
 - **Audio Filters** - Process audio and apply effects
+
+## History
+
+This crate is newer than the `video-capture` and `x-media` crates and should be considered as a replacement.
