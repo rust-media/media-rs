@@ -9,6 +9,7 @@
 //!
 //! Original Author: Dominic Clifton <me@dominiclifton.name>
 use std::{io, sync::Arc, thread, time::{SystemTime, UNIX_EPOCH}};
+use std::fmt::Debug;
 use std::num::NonZeroU32;
 use std::slice::{Iter, IterMut};
 use std::sync::mpsc;
@@ -28,7 +29,7 @@ use libcamera::framebuffer::AsFrameBuffer;
 use libcamera::framebuffer_allocator::FrameBuffer;
 use libcamera::framebuffer_map::MemoryMappedFrameBuffer;
 use libcamera::properties::Model;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use media_core::{
     error::Error,
     frame::Frame,
@@ -333,39 +334,57 @@ impl LinuxCameraWorker {
 
                         let controls: &libcamera::control::ControlInfoMap = instance.pending_camera.controls();
 
-                        let Ok(frame_duration_limits) = controls.find(ControlId::FrameDurationLimits.into()) else {
-                            let _ = instance.cmd_response_tx.send(CameraCmdResponse::DeviceError(Error::GetFailed("No 'frame duration limits' control".into())));
-                            continue
-                        };
+                        let result = controls.find(ControlId::FrameDurationLimits.into()).map(|frame_duration_limits|{
+                            debug!("Frame Duration. Min: {:?}, Max: {:?}, Default: {:?}",
+                                frame_duration_limits.min(),
+                                frame_duration_limits.max(),
+                                frame_duration_limits.def(),
+                            );
 
-                        debug!("Frame Duration. Min: {:?}, Max: {:?}, Default: {:?}",
-                             frame_duration_limits.min(),
-                             frame_duration_limits.max(),
-                             frame_duration_limits.def(),
-                        );
+                            // there really must be a better way of doing this...
+                            let (min, max, default) = match (frame_duration_limits.min(), frame_duration_limits.max(), frame_duration_limits.def()) {
+                                (ControlValue::Int64(min), ControlValue::Int64(max), ControlValue::Int64(default)) => (min[0], max[0], default[0]),
+                                _ => {
+                                    return Err(Error::GetFailed("Unexpected types for frame duration limits".into()))
+                                }
+                            };
+                            let (fps_min, fps_max, fps_default) = (
+                                1_000_000_f64 / max as f64, // fps min = max interval
+                                1_000_000_f64 / min as f64, // fps max = min interval
+                                1_000_000_f64 / default as f64,
+                            );
 
-                        // there really must be a better way of doing this...
-                        let (min, max, default) = match (frame_duration_limits.min(), frame_duration_limits.max(), frame_duration_limits.def()) {
-                            (ControlValue::Int64(min), ControlValue::Int64(max), ControlValue::Int64(default)) => (min[0], max[0], default[0]),
-                            _ => {
-                                let _ = instance.cmd_response_tx.send(CameraCmdResponse::DeviceError(Error::GetFailed("Unexpected types for frame duration limits".into())));
+                            // now, since there is no ACTUAL fps (like you get with a USB camera) but a range instead, we have to invent some...
+                            let mut frame_rates = vec![fps_min, fps_max, fps_default];
+                            frame_rates.dedup();
+
+                            let mut variable_frame_durations = Variant::new_dict();
+                            variable_frame_durations["min"] = min.into();
+                            variable_frame_durations["max"] = max.into();
+                            variable_frame_durations["default"] = default.into();
+
+                            Ok((frame_rates, variable_frame_durations))
+                        }).unwrap_or({
+                            // libcamera does not expose the frame duration limits control for V4L2 USB cameras. See https://gitlab.freedesktop.org/camera/libcamera/-/issues/296
+                            // FIXME update this when libcamera exposes a better API for enumerating frame rate limits on a per format and resolution basis.
+                            warn!("camera does not expose 'frame duration limits' control; using hard-coded values which can result in an invalid configuration");
+                            let frame_rates = vec![7.5, 10.0, 15.0, 20.0, 25.0, 30.0, 60.0, 100.0, 120.0];
+
+                            let mut variable_frame_durations = Variant::new_dict();
+                            variable_frame_durations["min"] = (*frame_rates.first().unwrap()).into();
+                            variable_frame_durations["max"] = (*frame_rates.first().unwrap()).into();
+                            variable_frame_durations["default"] = (*frame_rates.last().unwrap()).into();
+
+                            Ok((frame_rates, variable_frame_durations))
+                        });
+
+                        let (frame_rates, variable_frame_durations) = match result {
+                            Ok((frame_rates, variable_frame_durations)) => (frame_rates, variable_frame_durations),
+                            Err(e) => {
+                                let _ = instance.cmd_response_tx.send(CameraCmdResponse::DeviceError(e));
                                 continue
                             }
                         };
-                        let (fps_min, fps_max, fps_default) = (
-                            1_000_000_f64 / max as f64, // fps min = max interval
-                            1_000_000_f64 / min as f64, // fps max = min interval
-                            1_000_000_f64 / default as f64,
-                        );
-
-                        // now, since there is no ACTUAL fps (like you get with a USB camera) but a range instead, we have to invent some...
-                        let mut frame_rates = vec![fps_min, fps_max, fps_default];
-                        frame_rates.dedup();
-
-                        let mut variable_frame_durations = Variant::new_dict();
-                        variable_frame_durations["min"] = min.into();
-                        variable_frame_durations["max"] = max.into();
-                        variable_frame_durations["default"] = default.into();
 
                         let mut formats = Variant::new_array();
                         for pixel_format in camera_formats.pixel_formats().into_iter() {
