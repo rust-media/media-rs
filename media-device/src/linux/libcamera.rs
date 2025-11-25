@@ -28,7 +28,7 @@ use libcamera::framebuffer::AsFrameBuffer;
 use libcamera::framebuffer_allocator::FrameBuffer;
 use libcamera::framebuffer_map::MemoryMappedFrameBuffer;
 use libcamera::properties::Model;
-use log::{error, info};
+use log::{debug, error, info};
 use media_core::{
     error::Error,
     frame::Frame,
@@ -338,10 +338,10 @@ impl LinuxCameraWorker {
                             continue
                         };
 
-                        println!("Frame Duration. Min: {:?}, Max: {:?}, Default: {:?}",
-                                 frame_duration_limits.min(),
-                                 frame_duration_limits.max(),
-                                 frame_duration_limits.def(),
+                        debug!("Frame Duration. Min: {:?}, Max: {:?}, Default: {:?}",
+                             frame_duration_limits.min(),
+                             frame_duration_limits.max(),
+                             frame_duration_limits.def(),
                         );
 
                         // there really must be a better way of doing this...
