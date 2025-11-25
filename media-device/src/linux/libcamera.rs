@@ -36,7 +36,7 @@ use media_core::{
     video::{ColorRange, CompressionFormat, Origin, PixelFormat, VideoFormat, VideoFrameDescriptor},
     Result,
 };
-
+use media_core::data::{DataFormat, DataFrameDescriptor};
 use crate::{Device, DeviceEvent, DeviceManager, OutputDevice};
 use crate::device::DeviceEventHandler;
 
@@ -374,6 +374,7 @@ impl LinuxCameraWorker {
                                 FOURCC_YUYV => VideoFormat::Pixel(PixelFormat::YUYV),
                                 FOURCC_YU12 => VideoFormat::Pixel(PixelFormat::YV12),
                                 FOURCC_NV12 => VideoFormat::Pixel(PixelFormat::NV12),
+                                FOURCC_MJPG => VideoFormat::Compression(CompressionFormat::MJPEG),
                                 _ => {
                                     // TODO support more formats (Contribution/PR's welcomed)
                                     continue
@@ -442,22 +443,31 @@ impl LinuxCameraWorker {
                         let format: libcamera::pixel_format::PixelFormat = stream_cfg.get_pixel_format();
 
                         // TODO support more formats (Contribution/PR's welcomed)
-                        let pixel_format = match format.fourcc() {
-                            FOURCC_NV12 => PixelFormat::NV12,
-                            FOURCC_YU12 => PixelFormat::YV12,
-                            FOURCC_YUYV => PixelFormat::YUYV,
+                        let video_format = match format.fourcc() {
+                            FOURCC_NV12 => VideoFormat::Pixel(PixelFormat::NV12),
+                            FOURCC_YU12 => VideoFormat::Pixel(PixelFormat::YV12),
+                            FOURCC_YUYV => VideoFormat::Pixel(PixelFormat::YUYV),
+                            FOURCC_MJPG => VideoFormat::Compression(CompressionFormat::MJPEG),
                             _ => {
-                                let _ = instance.cmd_response_tx.send(CameraCmdResponse::DeviceError(Error::StartFailed(format!("Unsupported pixel format. {:?}", format).into())));
+                                let _ = instance.cmd_response_tx.send(CameraCmdResponse::DeviceError(Error::StartFailed(format!("Unsupported format. {:?}", format).into())));
                                 continue;
                             },
                         };
 
-                        let mut desc = VideoFrameDescriptor::new(
-                            pixel_format,
-                            unsafe { NonZeroU32::new_unchecked(size.width) },
-                            unsafe { NonZeroU32::new_unchecked(size.height) },
-                        );
-                        desc.origin = origin;
+                        let (vfd, dfd) = match &video_format {
+                            VideoFormat::Pixel(pixel_format) => {
+                                let mut desc = VideoFrameDescriptor::new(
+                                    *pixel_format,
+                                    unsafe { NonZeroU32::new_unchecked(size.width) },
+                                    unsafe { NonZeroU32::new_unchecked(size.height) },
+                                );
+                                desc.origin = origin;
+                                (Some(desc), None)
+                            },
+                            VideoFormat::Compression(_compression_format) => {
+                                (None, Some(DataFrameDescriptor::new(DataFormat::Variant)))
+                            }
+                        };
 
                         let (req_tx, new_req_rx) = mpsc::channel::<libcamera::request::Request>();
                         req_rx = Some(new_req_rx);
@@ -465,34 +475,54 @@ impl LinuxCameraWorker {
                         if let Some(handler) = handler {
                             // Set callback for completed requests
                             camera.on_request_completed({
-                                let desc = desc.clone();
+                                let vfd = vfd.clone();
+                                let dfd = dfd.clone();
                                 let source = source.clone();
 
                                 move |req| {
                                     if let Some(framebuffer) = req.buffer::<MemoryMappedFrameBuffer<FrameBuffer>>(&stream) {
                                         if let Some(plane) = framebuffer.data().get(0) {
                                             let bytes_used = framebuffer.planes().get(0).unwrap().len() as usize;
-                                            let data = plane[..bytes_used].to_vec();
+                                            let frame_data = plane[..bytes_used].to_vec();
 
                                             let timestamp = SystemTime::now()
                                                 .duration_since(UNIX_EPOCH)
                                                 .unwrap()
                                                 .as_micros() as u64;
 
-                                            let video_frame = if stride != 0 {
-                                                Frame::video_creator().create_from_aligned_buffer_with_descriptor(desc.clone(), NonZeroU32::new(stride).unwrap(), data)
-                                            } else {
-                                                Frame::video_creator().create_from_buffer_with_descriptor(desc.clone(), data)
+                                            let frame = match (&vfd, &dfd) {
+                                                (Some(vfd), None) => {
+                                                    if stride != 0 {
+                                                        Frame::video_creator().create_from_aligned_buffer_with_descriptor(vfd.clone(), NonZeroU32::new(stride).unwrap(), frame_data)
+                                                    } else {
+                                                        Frame::video_creator().create_from_buffer_with_descriptor(vfd.clone(), frame_data)
+                                                    }
+                                                }
+                                                (None, Some(dfd)) => {
+                                                    let mut frame = Frame::data_creator().create_with_descriptor(dfd.clone());
+                                                    if let Ok(frame) = frame.as_mut() {
+                                                        let mut variant = Variant::new_dict();
+
+                                                        variant.dict_set("buffer", Variant::Buffer(frame_data));
+                                                        variant.dict_set("format", Variant::UInt32(video_format.into()));
+
+                                                        *frame.data_mut().unwrap() = variant;
+                                                    }
+
+                                                    frame
+                                                }
+                                                _ => unreachable!()
                                             };
 
-                                            if let Ok(mut video_frame) = video_frame {
-                                                video_frame.source = Some(source.clone());
+                                            if let Ok(mut frame) = frame {
+                                                frame.source = Some(source.clone());
 
                                                 // TODO duration support
                                                 //video_frame.timestamp = timestamp;
 
-                                                let _ = handler(video_frame);
+                                                let _ = handler(frame);
                                             }
+
                                         }
                                     }
 
@@ -586,6 +616,7 @@ impl LinuxCameraWorker {
                             Some(VideoFormat::Pixel(PixelFormat::YUYV)) => stream_config.set_pixel_format(PIXEL_FORMAT_YUYV),
                             // YV12 == YU12 ?
                             Some(VideoFormat::Pixel(PixelFormat::YV12)) => stream_config.set_pixel_format(PIXEL_FORMAT_YU12),
+                            Some(VideoFormat::Compression(CompressionFormat::MJPEG)) => stream_config.set_pixel_format(PIXEL_FORMAT_MJPG),
                             Some(_) => {
                                 let _ = instance.cmd_response_tx.send(CameraCmdResponse::DeviceError(Error::SetFailed(format!("Unsupported format. '{:?}'", video_format))));
                             },
@@ -662,9 +693,11 @@ impl LinuxCameraWorker {
 const PIXEL_FORMAT_NV12: libcamera::pixel_format::PixelFormat = libcamera::pixel_format::PixelFormat::new(FOURCC_NV12, 0);
 const PIXEL_FORMAT_YUYV: libcamera::pixel_format::PixelFormat = libcamera::pixel_format::PixelFormat::new(FOURCC_YUYV, 0);
 const PIXEL_FORMAT_YU12: libcamera::pixel_format::PixelFormat = libcamera::pixel_format::PixelFormat::new(FOURCC_YU12, 0);
+const PIXEL_FORMAT_MJPG: libcamera::pixel_format::PixelFormat = libcamera::pixel_format::PixelFormat::new(FOURCC_MJPG, 0);
 const FOURCC_NV12: u32 = u32::from_le_bytes([b'N', b'V', b'1', b'2']);
 const FOURCC_YUYV: u32 = u32::from_le_bytes([b'Y', b'U', b'Y', b'V']);
 const FOURCC_YU12: u32 = u32::from_le_bytes([b'Y', b'U', b'1', b'2']);
+const FOURCC_MJPG: u32 = u32::from_le_bytes([b'M', b'J', b'P', b'G']);
 
 
 #[cfg(test)]
