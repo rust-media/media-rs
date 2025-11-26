@@ -570,7 +570,7 @@ impl LinuxCameraWorker {
                         }).unwrap_or({
                             // libcamera does not expose the frame duration limits control for V4L2 USB cameras. See https://gitlab.freedesktop.org/camera/libcamera/-/issues/296
                             // FIXME update this when libcamera exposes a better API for enumerating frame rate limits on a per format and resolution basis.
-                            warn!("camera does not expose 'frame duration limits' control; using hard-coded values which can result in an invalid configuration");
+                            warn!("camera does not expose 'frame duration limits' control; using hard-coded values which can result in an invalid configuration. id: {}", instance.pending_camera.id());
                             let frame_rates = vec![7.5, 10.0, 15.0, 20.0, 25.0, 30.0, 60.0, 100.0, 120.0];
 
                             let mut variable_frame_durations = Variant::new_dict();
