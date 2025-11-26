@@ -31,6 +31,7 @@ use libcamera::framebuffer::AsFrameBuffer;
 use libcamera::framebuffer_allocator::FrameBuffer;
 use libcamera::framebuffer_map::MemoryMappedFrameBuffer;
 use libcamera::properties::Model;
+use libcamera::request::RequestStatus;
 use log::{debug, error, info, warn};
 use media_core::{
     error::Error,
@@ -372,13 +373,11 @@ impl LibcameraDevice {
         let (cmd_response_tx, cmd_response_rx) = std::sync::mpsc::channel::<CameraCmdResponse>();
 
         let config = camera.generate_configuration(&[StreamRole::VideoRecording]).unwrap();
-        let alloc = FrameBufferAllocator::new(&camera);
-
         let worker = LinuxCameraWorker {
             pending_camera: camera,
             camera: None,
             config,
-            alloc,
+            alloc: None,
             output_handler: None,
             cmd_rx,
             cmd_response_tx,
@@ -521,7 +520,7 @@ type OutputHandlerArc = Arc<OutputHanderFn>;
 struct LinuxCameraWorker {
     pending_camera: Camera<'static>,
     camera: Option<ActiveCamera<'static>>,
-    alloc: FrameBufferAllocator,
+    alloc: Option<FrameBufferAllocator>,
     output_handler: Option<OutputHandlerArc>,
     config: CameraConfiguration,
     cmd_rx: mpsc::Receiver<CameraCmd>,
@@ -778,13 +777,27 @@ impl LinuxCameraWorker {
                                         }
                                     }
 
-                                    // Reuse and requeue
-                                    req_tx.send(req).unwrap();
+                                    match req.status() {
+                                        status @ RequestStatus::Cancelled |
+                                        status @ RequestStatus::Pending => {
+                                            warn!("request completed. status: {:?}", status);
+                                        },
+                                        RequestStatus::Complete => {
+                                            // Reuse and requeue
+                                            req_tx.send(req).unwrap();
+                                        }
+                                    }
                                 }
                             });
                         }
 
-                        let buffers = instance.alloc
+                        let allocator = FrameBufferAllocator::new(&camera);
+                        instance.alloc = Some(allocator);
+
+                        let buffers = instance
+                            .alloc
+                            .as_mut()
+                            .unwrap()
                             .alloc(&stream)
                             .unwrap()
                             .into_iter()
@@ -825,7 +838,13 @@ impl LinuxCameraWorker {
                             let _ = instance.cmd_response_tx.send(CameraCmdResponse::DeviceError(Error::StopFailed(format!("{e:?}"))));
                         }
 
-                        // active camera dropped at end of scope (`ActiveCamera::Drop` impl releases it)
+                        // explict drops, so that log messages are correctly ordered.
+                        drop(camera);
+
+                        if let Some(allocator) = instance.alloc.take() {
+                            info!("Destroying allocator (releasing buffers)");
+                            drop(allocator)
+                        }
 
                         running = false;
                         info!("Camera stopped. id: {}", instance.pending_camera.id().to_string());
@@ -907,7 +926,7 @@ impl LinuxCameraWorker {
             }
             if let Some(req_rx) = req_rx.as_mut() {
                 if let Ok(mut req) = req_rx.recv_timeout(Duration::from_millis(250)) {
-                    if let Some(ref camera) = instance.camera {
+                    if let Some(camera) = instance.camera.as_mut() {
                         req.reuse(ReuseFlag::REUSE_BUFFERS);
 
                         if let Some(desired_frame_interval) = desired_frame_interval {
@@ -924,8 +943,6 @@ impl LinuxCameraWorker {
                             error!("queue_request failed: {:?}", e);
                             break;
                         }
-                    } else {
-                        drop(req);
                     }
                 }
             }
