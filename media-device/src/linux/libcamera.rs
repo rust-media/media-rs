@@ -688,7 +688,7 @@ impl LinuxCameraWorker {
 
                         let size = stream_cfg.get_size();
                         let stride: u32 = stream_cfg.get_stride();
-                        // libcamera only returns positve strides
+                        // libcamera only returns positive strides
                         let origin = Origin::TopDown;
 
                         let format: libcamera::pixel_format::PixelFormat = stream_cfg.get_pixel_format();
@@ -791,7 +791,7 @@ impl LinuxCameraWorker {
                             });
                         }
 
-                        let allocator = FrameBufferAllocator::new(&camera);
+                        let allocator = FrameBufferAllocator::new(&instance.pending_camera);
                         instance.alloc = Some(allocator);
 
                         let buffers = instance
@@ -846,6 +846,7 @@ impl LinuxCameraWorker {
                             drop(allocator)
                         }
 
+                        instance.config_applied = false;
                         running = false;
                         info!("Camera stopped. id: {}", instance.pending_camera.id().to_string());
 
