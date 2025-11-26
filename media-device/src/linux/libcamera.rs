@@ -7,12 +7,14 @@
 //!
 //! See `variable-frame-durations` in the `formats` response.
 //!
+//! Libcamera API: https://libcamera.org/api-html/classlibcamera_1_1CameraManager.html
+//!
 //! Original Author: Dominic Clifton <me@dominiclifton.name>
 use std::{io, sync::Arc, thread, time::{SystemTime, UNIX_EPOCH}};
-use std::fmt::Debug;
+use std::fmt::{Debug, Display, Formatter};
 use std::num::NonZeroU32;
 use std::slice::{Iter, IterMut};
-use std::sync::mpsc;
+use std::sync::{mpsc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 use libcamera::{
@@ -41,11 +43,171 @@ use media_core::data::{DataFormat, DataFrameDescriptor};
 use crate::{Device, DeviceEvent, DeviceManager, OutputDevice};
 use crate::device::DeviceEventHandler;
 
+enum CameraManagerCmd {
+    Initialize,
+    Deinitialize,
+    Refresh,
+}
+
+enum CameraManagerCmdResponse {
+    Ok,
+    Devices(Vec<LibcameraDevice>),
+    Error(Error),
+}
+
+struct CameraManagerRequest {
+    command: CameraManagerCmd,
+    response_tx: mpsc::Sender<CameraManagerCmdResponse>,
+}
+
+fn camera_manager_main(command_rx: mpsc::Receiver<CameraManagerRequest>) {
+
+    let mut camera_manager = None;
+
+    let mut shutdown = false;
+    while !shutdown {
+        match command_rx.recv() {
+            Ok(request) => {
+                if camera_manager.is_none() {
+                    match &request.command {
+                        CameraManagerCmd::Initialize => {
+                            let result = CameraManager::new();
+                            match result {
+                                Ok(new_camera_manager) => {
+                                    camera_manager = Some(new_camera_manager);
+                                    request.response_tx.send(CameraManagerCmdResponse::Ok).ok();
+                                }
+                                Err(e) => {
+                                    let error = Error::InitializationFailed(format!("{:?}", e));
+                                    request.response_tx.send(CameraManagerCmdResponse::Error(error)).ok();
+                                }
+                            }
+
+                            continue
+                        }
+                        _ => {}
+                    }
+                }
+
+                // all other commands require a camera manager to be initialized
+
+                let Some(mgr) = camera_manager.as_mut() else {
+                    let error = Error::InitializationFailed("CameraManager not initialized".into());
+                    request.response_tx.send(CameraManagerCmdResponse::Error(error)).ok();
+                    continue;
+                };
+
+                match &request.command {
+                    CameraManagerCmd::Initialize => {
+                        info!("Already initialized");
+                        request.response_tx.send(CameraManagerCmdResponse::Ok).ok();
+                    }
+                    CameraManagerCmd::Deinitialize => {
+                        info!("Camera manager deinitialize request received");
+
+                        shutdown = true;
+
+                        request.response_tx.send(CameraManagerCmdResponse::Ok).ok();
+                    }
+                    CameraManagerCmd::Refresh => {
+                        info!("Camera manager refreshing devices");
+                        let mut devices = Vec::new();
+
+                        let cameras = mgr.cameras();
+                        for i in 0..cameras.len() {
+                            if let Some(cam) = cameras.get(i) {
+
+                                // Safe, because get returns a shared pointer according to the libcamera docs.
+                                let cam: Camera<'static> = unsafe { std::mem::transmute(cam) };
+
+                                let dev = LibcameraDevice::new(cam);
+                                devices.push(dev);
+                            }
+                        }
+                        request.response_tx.send(CameraManagerCmdResponse::Devices(devices)).ok();
+                    }
+                }
+            }
+            Err(_) => {
+                error!("Camera manager command channel closed, improper shutdown");
+                // channel closed, shutdown
+                shutdown = true;
+            }
+        }
+    }
+
+    {
+        // 'camera_manager' runs cleanup though it's 'Drop' impl
+        let _ = camera_manager.take();
+    }
+
+    info!("Camera manager worker thread shutdown.");
+}
+
+
+struct CameraManagerHandle {
+    handle: thread::JoinHandle<()>,
+    command_tx: mpsc::Sender<CameraManagerRequest>,
+}
+
+static CAMERA_MANAGER: Mutex<Option<CameraManagerHandle>> = Mutex::new(None);
+
+
 /// Linux backend device manager
 pub struct LibcameraDeviceManager {
-    mgr: CameraManager,
     devices: Vec<LibcameraDevice>,
-    handler: Option<DeviceEventHandler>,
+}
+
+impl LibcameraDeviceManager {
+    fn call(&self, command: CameraManagerCmd) -> std::result::Result<CameraManagerCmdResponse, CommandError> {
+
+        let mut camera_manager = CAMERA_MANAGER.lock().unwrap();
+        let Some(handle) = camera_manager.as_mut() else {
+            // this can occur during shutdown with multiple threads.
+            return Err(CommandError::NotReady);
+        };
+
+        let (response_tx, response_rx) = mpsc::channel::<CameraManagerCmdResponse>();
+
+        handle.command_tx.send(CameraManagerRequest {
+            command,
+            response_tx,
+        })
+                .map_err(|_e|CommandError::SendFailed)?;
+
+        response_rx.recv()
+                .map_err(|_e|CommandError::ReceiveFailed)
+    }
+}
+
+impl Drop for LibcameraDeviceManager {
+    fn drop(&mut self) {
+
+        let mut camera_manager = CAMERA_MANAGER.lock().unwrap();
+        if let Some(handle) = camera_manager.take() {
+            info!("Joining worker thread");
+            handle.handle.join().ok();
+        }
+
+        info!("Camera manager shutdown.");
+    }
+}
+
+#[derive(Debug)]
+enum CommandError {
+    NotReady,
+    SendFailed,
+    ReceiveFailed,
+}
+
+impl Display for CommandError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CommandError::NotReady => {f.write_str("Not ready")}
+            CommandError::SendFailed => {f.write_str("Send failed")}
+            CommandError::ReceiveFailed => {f.write_str("Receive failed")}
+        }
+    }
 }
 
 impl DeviceManager for LibcameraDeviceManager {
@@ -58,20 +220,34 @@ impl DeviceManager for LibcameraDeviceManager {
     where
         Self: Sized
     {
-        let mgr = CameraManager::new()
-            .map_err(|e| Error::InitializationFailed(format!("{:?}", e)))?;
+        {
+            let mut maybe_mgr = CAMERA_MANAGER.lock().unwrap();
 
-        let devices = Vec::new();
+            if maybe_mgr.is_none() {
+                let (command_tx, command_rx) = mpsc::channel::<CameraManagerRequest>();
 
-        Ok(Self {
-            mgr,
-            devices,
-            handler: None,
-        })
+                let handle = thread::spawn(|| camera_manager_main(command_rx));
+                let handle = CameraManagerHandle {
+                    handle,
+                    command_tx,
+                };
+
+                *maybe_mgr = Some(handle);
+            }
+        }
+
+        let instance = Self {
+            devices: Vec::new(),
+        };
+
+        instance.call(CameraManagerCmd::Initialize)
+            .map_err(|e|Error::InitializationFailed(format!("Failed to initialize camera manager: {:?}", e)))?;
+
+        Ok(instance)
     }
 
     fn deinit(&mut self) {
-        self.devices.clear();
+        self.call(CameraManagerCmd::Deinitialize).ok();
     }
 
     fn index(&self, index: usize) -> Option<&Self::DeviceType> {
@@ -99,32 +275,28 @@ impl DeviceManager for LibcameraDeviceManager {
     }
 
     fn refresh(&mut self) -> Result<()> {
+        let result = self.call(CameraManagerCmd::Refresh)
+            .map_err(|e|Error::Failed(e.to_string()))?;
 
-        self.devices.clear();
-
-        let cameras = self.mgr.cameras();
-        for i in 0..cameras.len() {
-            if let Some(cam) = cameras.get(i) {
-                let cam: Camera<'static> = unsafe { std::mem::transmute(cam) };
-
-                let dev = LibcameraDevice::new(cam);
-                self.devices.push(dev);
-            }
+        match result {
+            CameraManagerCmdResponse::Devices(devices) => {
+                self.devices = devices;
+                Ok(())
+            },
+            CameraManagerCmdResponse::Error(e) => Err(Error::Failed(e.to_string())),
+            _ => unreachable!()
         }
-
-        Ok(())
     }
 
     fn set_change_handler<F>(&mut self, handler: F) -> Result<()>
     where
         F: Fn(&DeviceEvent) + Send + Sync + 'static
     {
-        self.handler = Some(Box::new(handler));
-        Ok(())
+        // TODO support this, requires the worker thread to signal each handler
+        Err(Error::Unsupported("Change handler not supported".into()))
     }
 }
 
-// TODO rename to LibcameraCameraDevice
 pub struct LibcameraDevice {
     id: String,
     name: String,
@@ -246,11 +418,13 @@ impl Device for LibcameraDevice {
 
 impl Drop for LibcameraDevice {
     fn drop(&mut self) {
+        info!("Shutting down camera worker thread. id: {}", self.id);
         let _ = self.cmd_tx.send(CameraCmd::Shutdown);
 
         let handle = self.worker_handle.take().unwrap();
 
         let _ = handle.join.join();
+        info!("Camera shut down. id: {}", self.id);
     }
 }
 
@@ -306,8 +480,12 @@ struct LinuxCameraWorkerHandle {
     join: JoinHandle<()>,
 }
 
-
-// Safety: the `ActiveCamera` is only used by the worker thread
+/// Safety: the `Camera` instance is obtained via libcamera's `CameraManager::get` or `CameraManager::cameras`
+/// methods, which return shared pointers, they are marked as-thread safe in the docs.
+///
+/// Reference:
+/// https://libcamera.org/api-html/classlibcamera_1_1CameraManager.html#a3b20427687e9920b256625838bea8f9a
+/// https://libcamera.org/api-html/classlibcamera_1_1CameraManager.html#a004d822ffc9ad72137711ce20aebb7cc
 unsafe impl Send for LinuxCameraWorker {}
 
 impl LinuxCameraWorker {
