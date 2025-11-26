@@ -13,8 +13,7 @@
 use std::{io, sync::Arc, thread, time::{SystemTime, UNIX_EPOCH}};
 use std::fmt::{Debug, Display, Formatter};
 use std::num::NonZeroU32;
-use std::slice::{Iter, IterMut};
-use std::sync::{mpsc, Mutex};
+use std::sync::{mpsc, Mutex, MutexGuard};
 use std::thread::JoinHandle;
 use std::time::Duration;
 use libcamera::{
@@ -41,7 +40,6 @@ use media_core::{
 };
 use media_core::data::{DataFormat, DataFrameDescriptor};
 use crate::{Device, DeviceEvent, DeviceManager, OutputDevice};
-use crate::device::DeviceEventHandler;
 
 enum CameraManagerCmd {
     Initialize,
@@ -49,9 +47,8 @@ enum CameraManagerCmd {
     Refresh,
 }
 
-enum CameraManagerCmdResponse {
+enum CameraManagerCmdResponse<> {
     Ok,
-    Devices(Vec<LibcameraDevice>),
     Error(Error),
 }
 
@@ -63,7 +60,6 @@ struct CameraManagerRequest {
 fn camera_manager_main(command_rx: mpsc::Receiver<CameraManagerRequest>) {
 
     let mut camera_manager = None;
-
     let mut shutdown = false;
     while !shutdown {
         match command_rx.recv() {
@@ -111,7 +107,9 @@ fn camera_manager_main(command_rx: mpsc::Receiver<CameraManagerRequest>) {
                     }
                     CameraManagerCmd::Refresh => {
                         info!("Camera manager refreshing devices");
-                        let mut devices = Vec::new();
+
+                        let mut devices = CAMERA_DEVICES.lock().unwrap();
+                        devices.clear();
 
                         let cameras = mgr.cameras();
                         for i in 0..cameras.len() {
@@ -124,7 +122,7 @@ fn camera_manager_main(command_rx: mpsc::Receiver<CameraManagerRequest>) {
                                 devices.push(dev);
                             }
                         }
-                        request.response_tx.send(CameraManagerCmdResponse::Devices(devices)).ok();
+                        request.response_tx.send(CameraManagerCmdResponse::Ok).ok();
                     }
                 }
             }
@@ -136,6 +134,18 @@ fn camera_manager_main(command_rx: mpsc::Receiver<CameraManagerRequest>) {
         }
     }
 
+    // shut down the cameras
+    {
+        // using a scope to limit the scope of the lock on the devices
+
+        let mut devices = CAMERA_DEVICES.lock().unwrap();
+        devices.drain(..).for_each(|device| {
+            drop(device);
+        });
+
+        assert!(devices.is_empty());
+    }
+
     {
         // 'camera_manager' runs cleanup though it's 'Drop' impl
         let _ = camera_manager.take();
@@ -145,51 +155,49 @@ fn camera_manager_main(command_rx: mpsc::Receiver<CameraManagerRequest>) {
 }
 
 
-struct CameraManagerHandle {
-    handle: thread::JoinHandle<()>,
+struct LibcameraDeviceManagerWorker {
+    handle: JoinHandle<()>,
     command_tx: mpsc::Sender<CameraManagerRequest>,
 }
 
-static CAMERA_MANAGER: Mutex<Option<CameraManagerHandle>> = Mutex::new(None);
+impl LibcameraDeviceManagerWorker {
+    fn call(&self, command: CameraManagerCmd) -> std::result::Result<CameraManagerCmdResponse, CommandError> {
+        let (response_tx, response_rx) = mpsc::channel::<CameraManagerCmdResponse>();
+
+        self.command_tx.send(CameraManagerRequest {
+            command,
+            response_tx,
+        })
+            .map_err(|_e|CommandError::SendFailed)?;
+
+        response_rx.recv()
+            .map_err(|_e|CommandError::ReceiveFailed)
+    }
+}
+
+static CAMERA_MANAGER: Mutex<Option<LibcameraDeviceManagerWorker>> = Mutex::new(None);
+static CAMERA_DEVICES: Mutex<Vec<LibcameraDevice>> = Mutex::new(Vec::new());
 
 
 /// Linux backend device manager
 pub struct LibcameraDeviceManager {
-    devices: Vec<LibcameraDevice>,
 }
 
 impl LibcameraDeviceManager {
     fn call(&self, command: CameraManagerCmd) -> std::result::Result<CameraManagerCmdResponse, CommandError> {
 
         let mut camera_manager = CAMERA_MANAGER.lock().unwrap();
-        let Some(handle) = camera_manager.as_mut() else {
+        let Some(worker) = camera_manager.as_mut() else {
             // this can occur during shutdown with multiple threads.
             return Err(CommandError::NotReady);
         };
 
-        let (response_tx, response_rx) = mpsc::channel::<CameraManagerCmdResponse>();
-
-        handle.command_tx.send(CameraManagerRequest {
-            command,
-            response_tx,
-        })
-                .map_err(|_e|CommandError::SendFailed)?;
-
-        response_rx.recv()
-                .map_err(|_e|CommandError::ReceiveFailed)
+        worker.call(command)
     }
 }
 
 impl Drop for LibcameraDeviceManager {
     fn drop(&mut self) {
-
-        // shut down the cameras
-        self.devices.drain(..).for_each(|mut device| {
-            drop(device);
-        });
-
-        assert!(self.devices.is_empty());
-
         let mut camera_manager = CAMERA_MANAGER.lock().unwrap();
         if let Some(handle) = camera_manager.take() {
             info!("Joining worker thread");
@@ -219,9 +227,9 @@ impl Display for CommandError {
 
 impl DeviceManager for LibcameraDeviceManager {
     type DeviceType = LibcameraDevice;
-    type Iter<'a> = Iter<'a, LibcameraDevice> where Self: 'a;
+    type Iter<'a> = CameraDeviceIter<'a> where Self: 'a;
 
-    type IterMut<'a> = IterMut<'a, LibcameraDevice> where Self: 'a;
+    type IterMut<'a> = CameraDeviceIterMut<'a> where Self: 'a;
 
     fn init() -> Result<Self>
     where
@@ -234,7 +242,7 @@ impl DeviceManager for LibcameraDeviceManager {
                 let (command_tx, command_rx) = mpsc::channel::<CameraManagerRequest>();
 
                 let handle = thread::spawn(|| camera_manager_main(command_rx));
-                let handle = CameraManagerHandle {
+                let handle = LibcameraDeviceManagerWorker {
                     handle,
                     command_tx,
                 };
@@ -244,7 +252,6 @@ impl DeviceManager for LibcameraDeviceManager {
         }
 
         let instance = Self {
-            devices: Vec::new(),
         };
 
         instance.call(CameraManagerCmd::Initialize)
@@ -258,27 +265,39 @@ impl DeviceManager for LibcameraDeviceManager {
     }
 
     fn index(&self, index: usize) -> Option<&Self::DeviceType> {
-        self.devices.get(index)
+        let guard = CAMERA_DEVICES.lock().unwrap();
+        let device = guard.get(index)?;
+        // Safe because the data in static Mutex lives for the entire program
+        Some(unsafe { std::mem::transmute(device) })
     }
 
     fn index_mut(&mut self, index: usize) -> Option<&mut Self::DeviceType> {
-        self.devices.get_mut(index)
+        let mut guard = CAMERA_DEVICES.lock().unwrap();
+        let device = guard.get_mut(index)?;
+        // Safe because the data in static Mutex lives for the entire program
+        Some(unsafe { std::mem::transmute(device) })
     }
 
     fn lookup(&self, id: &str) -> Option<&Self::DeviceType> {
-        self.devices.iter().find(|d| d.id() == id)
+        let guard = CAMERA_DEVICES.lock().unwrap();
+        let device = guard.iter().find(|d| d.id() == id)?;
+        // Safe because the data in static Mutex lives for the entire program
+        Some(unsafe { std::mem::transmute(device) })
     }
 
     fn lookup_mut(&mut self, id: &str) -> Option<&mut Self::DeviceType> {
-        self.devices.iter_mut().find(|d| d.id() == id)
+        let mut guard = CAMERA_DEVICES.lock().unwrap();
+        let device = guard.iter_mut().find(|d| d.id() == id)?;
+        // Safe because the data in static Mutex lives for the entire program
+        Some(unsafe { std::mem::transmute(device) })
     }
 
     fn iter(&self) -> Self::Iter<'_> {
-        self.devices.iter()
+        CameraDeviceIter::new()
     }
 
     fn iter_mut(&mut self) -> Self::IterMut<'_> {
-        self.devices.iter_mut()
+        CameraDeviceIterMut::new()
     }
 
     fn refresh(&mut self) -> Result<()> {
@@ -286,12 +305,10 @@ impl DeviceManager for LibcameraDeviceManager {
             .map_err(|e|Error::Failed(e.to_string()))?;
 
         match result {
-            CameraManagerCmdResponse::Devices(devices) => {
-                self.devices = devices;
+            CameraManagerCmdResponse::Ok => {
                 Ok(())
             },
             CameraManagerCmdResponse::Error(e) => Err(Error::Failed(e.to_string())),
-            _ => unreachable!()
         }
     }
 
@@ -494,6 +511,7 @@ struct LinuxCameraWorkerHandle {
 /// https://libcamera.org/api-html/classlibcamera_1_1CameraManager.html#a3b20427687e9920b256625838bea8f9a
 /// https://libcamera.org/api-html/classlibcamera_1_1CameraManager.html#a004d822ffc9ad72137711ce20aebb7cc
 unsafe impl Send for LinuxCameraWorker {}
+unsafe impl Sync for LinuxCameraWorker {}
 
 impl LinuxCameraWorker {
     fn run(mut instance: LinuxCameraWorker) {
@@ -918,5 +936,59 @@ mod tests {
     #[test]
     pub fn fourcc() {
         assert_eq!(FOURCC_YU12, 0x32315559);
+    }
+}
+
+pub struct CameraDeviceIter<'a> {
+    devices: MutexGuard<'static, Vec<LibcameraDevice>>,
+    index: usize,
+    _phantom: std::marker::PhantomData<&'a LibcameraDevice>,
+}
+
+impl<'a> CameraDeviceIter<'a> {
+    pub fn new() -> Self {
+        Self {
+            devices: CAMERA_DEVICES.lock().unwrap(),
+            index: 0,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<'a> Iterator for CameraDeviceIter<'a> {
+    type Item = &'a LibcameraDevice;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let device = self.devices.get(self.index)?;
+        self.index += 1;
+        // Extend the lifetime of the reference to the device to the lifetime of the iterator
+        Some(unsafe { std::mem::transmute(device) })
+    }
+}
+
+pub struct CameraDeviceIterMut<'a> {
+    devices: MutexGuard<'static, Vec<LibcameraDevice>>,
+    index: usize,
+    _phantom: std::marker::PhantomData<&'a mut LibcameraDevice>,
+}
+
+impl<'a> CameraDeviceIterMut<'a> {
+    pub fn new() -> Self {
+        Self {
+            devices: CAMERA_DEVICES.lock().unwrap(),
+            index: 0,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<'a> Iterator for CameraDeviceIterMut<'a> {
+    type Item = &'a mut LibcameraDevice;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let device = self.devices.get_mut(self.index)?;
+        self.index += 1;
+        // Safe because the data in static Mutex lives for the entire program
+        Some(unsafe { std::mem::transmute(device) })
     }
 }

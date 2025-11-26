@@ -90,7 +90,7 @@ fn main() {
         }
     }
 
-    std::thread::sleep(std::time::Duration::from_secs(1));
+    std::thread::sleep(std::time::Duration::from_secs(5));
 
     // Stop the camera
     if let Err(e) = device.stop() {
