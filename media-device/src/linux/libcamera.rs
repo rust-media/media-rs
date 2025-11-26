@@ -109,19 +109,40 @@ fn camera_manager_main(command_rx: mpsc::Receiver<CameraManagerRequest>) {
                         info!("Camera manager refreshing devices");
 
                         let mut devices = CAMERA_DEVICES.lock().unwrap();
-                        devices.clear();
 
                         let cameras = mgr.cameras();
+
+                        let mut ids: Vec<String> = vec![];
+
                         for i in 0..cameras.len() {
                             if let Some(cam) = cameras.get(i) {
+                                let id = cam.id().to_string();
 
-                                // Safe, because get returns a shared pointer according to the libcamera docs.
-                                let cam: Camera<'static> = unsafe { std::mem::transmute(cam) };
+                                let exists = devices.iter().any(|dev| dev.id() == id);
 
-                                let dev = LibcameraDevice::new(cam);
-                                devices.push(dev);
+                                if !exists {
+                                    info!("Adding device: {}", id);
+
+                                    // Safe, because get returns a shared pointer according to the libcamera docs.
+                                    let cam: Camera<'static> = unsafe { std::mem::transmute(cam) };
+
+                                    let dev = LibcameraDevice::new(cam);
+                                    devices.push(dev);
+                                }
+
+                                ids.push(id);
                             }
                         }
+
+                        // now remove any devices that are no longer present
+                        devices.retain(|device| {
+                            let keep = ids.contains(&device.id().to_string());
+                            if !keep {
+                                info!("Removing device: {}", device.id());
+                            }
+                            keep
+                        });
+
                         request.response_tx.send(CameraManagerCmdResponse::Ok).ok();
                     }
                 }
