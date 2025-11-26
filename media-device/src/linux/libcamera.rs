@@ -662,7 +662,7 @@ impl LinuxCameraWorker {
                         let active_camera = match instance.pending_camera.acquire() {
                             Ok(camera) => camera,
                             Err(e) => {
-                                let _ = instance.cmd_response_tx.send(CameraCmdResponse::DeviceError(Error::StartFailed(format!("Acqurie failed. error: {:?}", e).into())));
+                                let _ = instance.cmd_response_tx.send(CameraCmdResponse::DeviceError(Error::StartFailed(format!("Acquire failed. error: {:?}", e).into())));
                                 continue
                             }
                         };
