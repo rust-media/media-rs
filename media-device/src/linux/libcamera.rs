@@ -183,6 +183,13 @@ impl LibcameraDeviceManager {
 impl Drop for LibcameraDeviceManager {
     fn drop(&mut self) {
 
+        // shut down the cameras
+        self.devices.drain(..).for_each(|mut device| {
+            drop(device);
+        });
+
+        assert!(self.devices.is_empty());
+
         let mut camera_manager = CAMERA_MANAGER.lock().unwrap();
         if let Some(handle) = camera_manager.take() {
             info!("Joining worker thread");
@@ -773,6 +780,8 @@ impl LinuxCameraWorker {
                         // active camera dropped at end of scope (`ActiveCamera::Drop` impl releases it)
 
                         running = false;
+                        info!("Camera stopped. id: {}", instance.pending_camera.id().to_string());
+
                         let _ = instance.cmd_response_tx.send(CameraCmdResponse::Ok);
                     }
                     CameraCmd::Shutdown => {
@@ -872,6 +881,11 @@ impl LinuxCameraWorker {
                     }
                 }
             }
+        }
+
+        if let Some(mut camera) = instance.camera.take() {
+            error!("Improper camera shutdown sequence. Camera was still running.");
+            camera.stop().unwrap();
         }
     }
 
