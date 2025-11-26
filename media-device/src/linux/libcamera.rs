@@ -14,6 +14,7 @@ use std::{io, sync::Arc, thread, time::{SystemTime, UNIX_EPOCH}};
 use std::fmt::{Debug, Display, Formatter};
 use std::num::NonZeroU32;
 use std::sync::{mpsc, Mutex, MutexGuard};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread::JoinHandle;
 use std::time::Duration;
 use libcamera::{
@@ -101,7 +102,10 @@ fn camera_manager_main(command_rx: mpsc::Receiver<CameraManagerRequest>) {
                     CameraManagerCmd::Deinitialize => {
                         info!("Camera manager deinitialize request received");
 
-                        shutdown = true;
+                        let remaining_instances = MANAGER_INSTANCE_COUNT.fetch_sub(1, Ordering::SeqCst);
+                        if remaining_instances == 1 {  // 1 because we've already decremented
+                            shutdown = true;
+                        }
 
                         request.response_tx.send(CameraManagerCmdResponse::Ok).ok();
                     }
@@ -198,6 +202,7 @@ impl LibcameraDeviceManagerWorker {
 
 static CAMERA_MANAGER: Mutex<Option<LibcameraDeviceManagerWorker>> = Mutex::new(None);
 static CAMERA_DEVICES: Mutex<Vec<LibcameraDevice>> = Mutex::new(Vec::new());
+static MANAGER_INSTANCE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 
 /// Linux backend device manager
@@ -219,13 +224,15 @@ impl LibcameraDeviceManager {
 
 impl Drop for LibcameraDeviceManager {
     fn drop(&mut self) {
-        let mut camera_manager = CAMERA_MANAGER.lock().unwrap();
-        if let Some(handle) = camera_manager.take() {
-            info!("Joining worker thread");
-            handle.handle.join().ok();
+        let remaining_instances = MANAGER_INSTANCE_COUNT.load(Ordering::SeqCst);
+        if remaining_instances == 0 {
+            let mut camera_manager = CAMERA_MANAGER.lock().unwrap();
+            if let Some(handle) = camera_manager.take() {
+                info!("Joining worker thread (last instance dropped)");
+                handle.handle.join().ok();
+                info!("Camera manager shutdown.");
+            }
         }
-
-        info!("Camera manager shutdown.");
     }
 }
 
@@ -270,6 +277,8 @@ impl DeviceManager for LibcameraDeviceManager {
 
                 *maybe_mgr = Some(handle);
             }
+
+            MANAGER_INSTANCE_COUNT.fetch_add(1, Ordering::SeqCst);
         }
 
         let instance = Self {
