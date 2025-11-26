@@ -90,10 +90,26 @@ fn main() {
         }
     }
 
-    std::thread::sleep(std::time::Duration::from_secs(5));
+    std::thread::sleep(std::time::Duration::from_secs(1));
 
     // Stop the camera
     if let Err(e) = device.stop() {
         error!("{:?}", e.to_string());
     }
+
+    info!("stopped");
+    std::thread::sleep(std::time::Duration::from_secs(1));
+
+    if let Err(e) = device.start() {
+        error!("{:?}", e.to_string());
+    }
+
+    info!("re-started");
+    std::thread::sleep(std::time::Duration::from_secs(1));
+
+    // Stop the camera
+    if let Err(e) = device.stop() {
+        error!("{:?}", e.to_string());
+    }
+    info!("done");
 }
