@@ -39,8 +39,9 @@ use media_core::{
     variant::Variant,
     video::{ColorRange, CompressionFormat, Origin, PixelFormat, VideoFormat, VideoFrameDescriptor},
     Result,
+    data::{DataFormat, DataFrameDescriptor},
+    time::NSEC_PER_MSEC,
 };
-use media_core::data::{DataFormat, DataFrameDescriptor};
 use crate::{Device, DeviceEvent, DeviceManager, OutputDevice};
 
 enum CameraManagerCmd {
@@ -736,11 +737,6 @@ impl LinuxCameraWorker {
                                             let bytes_used = framebuffer.planes().get(0).unwrap().len() as usize;
                                             let frame_data = plane[..bytes_used].to_vec();
 
-                                            let timestamp = SystemTime::now()
-                                                .duration_since(UNIX_EPOCH)
-                                                .unwrap()
-                                                .as_micros() as u64;
-
                                             let frame = match (&vfd, &dfd) {
                                                 (Some(vfd), None) => {
                                                     if stride != 0 {
@@ -768,8 +764,22 @@ impl LinuxCameraWorker {
                                             if let Ok(mut frame) = frame {
                                                 frame.source = Some(source.clone());
 
-                                                // TODO duration support
-                                                //video_frame.timestamp = timestamp;
+                                                frame.duration = desired_frame_interval.map(|it: Duration|it.as_millis() as i64);
+
+                                                // Get timestamp from metadata ControlList
+                                                let metadata = req.metadata();
+                                                if let Ok(sensor_timestamp) = metadata.get::<libcamera::controls::SensorTimestamp>() {
+                                                    let sensor_timestamp: i64 = (*sensor_timestamp).into();
+                                                    // frame.pts (presentation time stamp) is in milliseconds, sensor timestamp is nanoseconds
+                                                    frame.pts = Some(sensor_timestamp / (NSEC_PER_MSEC as i64));
+                                                } else {
+                                                    let timestamp_ms = SystemTime::now()
+                                                        .duration_since(UNIX_EPOCH)
+                                                        .unwrap()
+                                                        .as_millis() as i64;
+
+                                                    frame.pts = Some(timestamp_ms);
+                                                }
 
                                                 let _ = handler(frame);
                                             }
