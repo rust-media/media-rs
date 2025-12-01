@@ -42,7 +42,7 @@ use media_core::{
     data::{DataFormat, DataFrameDescriptor},
     time::NSEC_PER_MSEC,
 };
-use crate::{Device, DeviceEvent, DeviceManager, OutputDevice};
+use crate::{Device, DeviceEvent, DeviceEventHandler, DeviceManager, OutputDevice};
 
 enum CameraManagerCmd {
     Initialize,
@@ -52,7 +52,12 @@ enum CameraManagerCmd {
 
 enum CameraManagerCmdResponse<> {
     Ok,
+    Refreshed(RefreshResult),
     Error(Error),
+}
+
+struct RefreshResult {
+    device_count: usize,
 }
 
 struct CameraManagerRequest {
@@ -149,7 +154,9 @@ fn camera_manager_main(command_rx: mpsc::Receiver<CameraManagerRequest>) {
                             keep
                         });
 
-                        request.response_tx.send(CameraManagerCmdResponse::Ok).ok();
+                        let device_count = devices.len();
+
+                        request.response_tx.send(CameraManagerCmdResponse::Refreshed(RefreshResult { device_count })).ok();
                     }
                 }
             }
@@ -209,6 +216,7 @@ static MANAGER_INSTANCE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 /// Linux backend device manager
 pub struct LibcameraDeviceManager {
+    handler: Option<DeviceEventHandler>,
 }
 
 impl LibcameraDeviceManager {
@@ -284,6 +292,7 @@ impl DeviceManager for LibcameraDeviceManager {
         }
 
         let instance = Self {
+            handler: None,
         };
 
         instance.call(CameraManagerCmd::Initialize)
@@ -337,10 +346,14 @@ impl DeviceManager for LibcameraDeviceManager {
             .map_err(|e|Error::Failed(e.to_string()))?;
 
         match result {
-            CameraManagerCmdResponse::Ok => {
+            CameraManagerCmdResponse::Refreshed(r) => {
+                if let Some(handler) = &self.handler {
+                    handler(&DeviceEvent::Refreshed(r.device_count));
+                }
                 Ok(())
             },
             CameraManagerCmdResponse::Error(e) => Err(Error::Failed(e.to_string())),
+            _ => unreachable!(),
         }
     }
 
@@ -348,8 +361,8 @@ impl DeviceManager for LibcameraDeviceManager {
     where
         F: Fn(&DeviceEvent) + Send + Sync + 'static
     {
-        // TODO support this, requires the worker thread to signal each handler
-        Err(Error::Unsupported("Change handler not supported".into()))
+        self.handler = Some(Box::new(handler));
+        Ok(())
     }
 }
 
