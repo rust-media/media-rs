@@ -16,7 +16,7 @@ use std::num::NonZeroU32;
 use std::sync::{mpsc, Mutex, MutexGuard};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use libcamera::{
     camera::ActiveCamera,
     camera_manager::CameraManager,
@@ -32,7 +32,7 @@ use libcamera::framebuffer_allocator::FrameBuffer;
 use libcamera::framebuffer_map::MemoryMappedFrameBuffer;
 use libcamera::properties::Model;
 use libcamera::request::RequestStatus;
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn};
 use media_core::{
     error::Error,
     frame::Frame,
@@ -552,6 +552,8 @@ impl LinuxCameraWorker {
 
         let mut desired_frame_interval = None;
 
+        let mut next_frame_at = Instant::now();
+
         while !shutdown {
             // process all outstanding commands
             while let Ok(cmd) = instance.cmd_rx.try_recv() {
@@ -824,6 +826,8 @@ impl LinuxCameraWorker {
                             })
                             .collect::<Vec<_>>();
 
+                        next_frame_at = Instant::now();
+
                         if let Err(e) = camera.start(None) {
                             let _ = instance.cmd_response_tx.send(CameraCmdResponse::DeviceError(Error::StartFailed(format!("{e:?}"))));
                             continue;
@@ -941,11 +945,23 @@ impl LinuxCameraWorker {
                         req.reuse(ReuseFlag::REUSE_BUFFERS);
 
                         if let Some(desired_frame_interval) = desired_frame_interval {
-                            // TODO queue the request based on the desired frame rate / frame duration.
-                            // TODO pace the requests at a constant increment from when the camera was started
-                            //      currently this approach will cause capture timestamps to jitter
-                            // TODO ensure the method of sleeping has a high enough resolution for the desired duration
-                            thread::sleep(desired_frame_interval);
+                            // queue the request based on the desired frame rate / frame duration.
+
+                            next_frame_at += desired_frame_interval;
+                            let now = Instant::now();
+
+                            // ensure next_frame_at is in the future
+                            while now > next_frame_at {
+                                // catch up if behind, skipping missed capture points.
+                                next_frame_at = now + desired_frame_interval;
+                            }
+                            // pace the requests at a constant increment from when the camera was started
+                            let delay = next_frame_at - now;
+
+                            // FUTURE ensure the method of sleeping has a high enough resolution for the desired duration
+                            // FUTURE determine the average processing time and decrement the sleeping time by the processing time.
+                            trace!("now: {:?}, next_frame_at: {:?}, sleep: {:?}us", now, next_frame_at, delay.as_micros());
+                            thread::sleep(delay);
                         } else {
                             // queue immediately
                         }
