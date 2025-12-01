@@ -17,7 +17,7 @@
 //! Libcamera API: https://libcamera.org/api-html/classlibcamera_1_1CameraManager.html
 //!
 //! Original Author: Dominic Clifton <me@dominiclifton.name>
-use std::{io, sync::Arc, thread};
+use std::{sync::Arc, thread};
 use std::fmt::{Debug, Display, Formatter};
 use std::num::NonZeroU32;
 use std::sync::{mpsc, Mutex, MutexGuard};
@@ -31,7 +31,7 @@ use libcamera::{
     request::ReuseFlag,
     stream::StreamRole,
 };
-use libcamera::camera::{Camera, CameraConfiguration};
+use libcamera::camera::{Camera, CameraConfiguration, CameraConfigurationStatus};
 use libcamera::control_value::ControlValue;
 use libcamera::controls::ControlId;
 use libcamera::framebuffer::AsFrameBuffer;
@@ -405,7 +405,6 @@ impl LibcameraDevice {
             output_handler: None,
             cmd_rx,
             cmd_response_tx,
-            config_applied: false,
         };
 
         let worker_join_handle = thread::spawn(move || { LinuxCameraWorker::run(worker)});
@@ -549,8 +548,6 @@ struct LinuxCameraWorker {
     config: CameraConfiguration,
     cmd_rx: mpsc::Receiver<CameraCmd>,
     cmd_response_tx: mpsc::Sender<CameraCmdResponse>,
-
-    config_applied: bool,
 }
 
 struct LinuxCameraWorkerHandle {
@@ -698,11 +695,19 @@ impl LinuxCameraWorker {
 
                         let source = instance.pending_camera.id().to_string();
 
-                        if !instance.config_applied {
-                            if let Err(e) = Self::validate_and_configure(&mut instance) {
-                                let _ = instance.cmd_response_tx.send(CameraCmdResponse::DeviceError(Error::StartFailed(format!("Configuration failed. error: {:?}", e).into())));
+                        info!("camera: {}, config: {:?}", instance.pending_camera.id(), instance.config);
+
+                        let configuration_status = instance.config.validate();
+                        match configuration_status {
+                            CameraConfigurationStatus::Valid | CameraConfigurationStatus::Adjusted => {}
+                            CameraConfigurationStatus::Invalid => {
+                                let _ = instance.cmd_response_tx.send(CameraCmdResponse::DeviceError(Error::StartFailed("Configuration invalid.".into())));
                                 continue
                             }
+                        }
+                        if let Err(e) = instance.camera.as_mut().unwrap().configure(&mut instance.config) {
+                            let _ = instance.cmd_response_tx.send(CameraCmdResponse::DeviceError(Error::StartFailed(format!("Configuration failed. error: {:?}", e).into())));
+                            continue
                         }
 
                         let camera = instance.camera.as_mut().unwrap();
@@ -827,10 +832,19 @@ impl LinuxCameraWorker {
                             .as_mut()
                             .unwrap()
                             .alloc(&stream)
-                            .unwrap()
-                            .into_iter()
-                            .map(|b| MemoryMappedFrameBuffer::new(b).unwrap())
-                            .collect::<Vec<_>>();
+                            .map(|buffers|{
+                                buffers.into_iter()
+                                    .map(|b| MemoryMappedFrameBuffer::new(b).unwrap())
+                                    .collect::<Vec<_>>()
+                            });
+
+                        let buffers = match buffers {
+                            Ok(buffers) => buffers,
+                            Err(e) => {
+                                let _ = instance.cmd_response_tx.send(CameraCmdResponse::DeviceError(Error::StartFailed(format!("Buffer allocation failure. error: {e:?}"))));
+                                continue;
+                            }
+                        };
 
                         let reqs = buffers
                             .into_iter()
@@ -876,7 +890,6 @@ impl LinuxCameraWorker {
                             drop(allocator)
                         }
 
-                        instance.config_applied = false;
                         running = false;
                         info!("Camera stopped. id: {}", instance.pending_camera.id().to_string());
 
@@ -941,17 +954,28 @@ impl LinuxCameraWorker {
                         // drop the reference to avoid borrow checker issues
                         drop(stream_config);
 
+                        let configuation_status = instance.config.validate();
+                        match configuation_status {
+                            CameraConfigurationStatus::Valid => {}
+                            CameraConfigurationStatus::Adjusted => {
+                                let _ = instance.cmd_response_tx.send(CameraCmdResponse::DeviceError(Error::SetFailed(format!("Configuration adjusted. config: {:?}", instance.config).into())));
+                                continue
+                            }
+                            CameraConfigurationStatus::Invalid => {
+                                let _ = instance.cmd_response_tx.send(CameraCmdResponse::DeviceError(Error::SetFailed(format!("Configuration invalid. config: {:?}", instance.config).into())));
+                                continue
+                            }
+                        }
+
                         // we can't actually apply the configuration until the camera is acquired
 
                         if let Some(desired_size) = desired_size {
                             let stream_config = instance.config
                                 .get_mut(0).unwrap();
                             let actual_size = stream_config.get_size();
-                            assert_eq!((desired_size.width, desired_size.height), (actual_size.width, actual_size.height));
+                            debug_assert_eq!((desired_size.width, desired_size.height), (actual_size.width, actual_size.height));
                         }
-                        if instance.cmd_response_tx.send(CameraCmdResponse::Ok).is_err() {
-                            break
-                        }
+                        let _ = instance.cmd_response_tx.send(CameraCmdResponse::Ok);
                     }
                 }
             }
@@ -995,16 +1019,6 @@ impl LinuxCameraWorker {
             error!("Improper camera shutdown sequence. Camera was still running.");
             camera.stop().unwrap();
         }
-    }
-
-    fn validate_and_configure(instance: &mut LinuxCameraWorker) -> io::Result<()> {
-        instance.config.validate();
-        let result = instance.camera.as_mut().unwrap().configure(&mut instance.config);
-
-        info!("camera: {}, config: {:?}", instance.pending_camera.id(), instance.config);
-
-        instance.config_applied = true;
-        result
     }
 }
 
