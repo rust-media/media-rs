@@ -712,6 +712,13 @@ impl LinuxCameraWorker {
 
                         let camera = instance.camera.as_mut().unwrap();
                         let handler = instance.output_handler.clone();
+
+                        for i in 0..instance.config.len() {
+                            let cfg = instance.config.get(i).unwrap();
+                            debug!("Stream {}: {:?}, size={:?}, stride={}, frame_size={}",
+                                     i, cfg.get_pixel_format(), cfg.get_size(), cfg.get_stride(), cfg.get_frame_size());
+                        }
+
                         let stream_cfg = instance.config
                             .get_mut(0).unwrap();
 
@@ -763,10 +770,17 @@ impl LinuxCameraWorker {
 
                                 move |req| {
                                     if let Some(framebuffer) = req.buffer::<MemoryMappedFrameBuffer<FrameBuffer>>(&stream) {
-                                        if let Some(plane) = framebuffer.data().get(0) {
-                                            let bytes_used = framebuffer.planes().get(0).unwrap().len() as usize;
-                                            let frame_data = plane[..bytes_used].to_vec();
+                                        let mut frame_data = Vec::new();
 
+                                        for (plane_index, plane) in framebuffer.data().iter().enumerate() {
+                                            let planes = framebuffer.planes();
+                                            let plane_info = planes.get(plane_index).unwrap();
+                                            let bytes_used = plane_info.len();
+                                            trace!("bytes used for plane {}: {}", plane_index, bytes_used);
+                                            frame_data.extend_from_slice(&plane[..bytes_used]);
+                                        }
+
+                                        if !frame_data.is_empty() {
                                             let frame = match (&vfd, &dfd) {
                                                 (Some(vfd), None) => {
                                                     if stride != 0 {
