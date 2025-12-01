@@ -907,7 +907,9 @@ impl LinuxCameraWorker {
                         let mut stream_config = instance.config
                             .get_mut(0).unwrap();
 
-                        // TODO match the options against a valid format for this device, since the supplied values may be wrong or result in an invalid combination.
+                        let current_size = stream_config.get_size();
+
+                        // both width and height are required for the libcamera API.
                         let desired_size = if let (Some(width), Some(height)) = (options["width"].get_uint32(), options["height"].get_uint32()) {
                             Some(libcamera::geometry::Size { width, height })
                         } else {
@@ -915,44 +917,55 @@ impl LinuxCameraWorker {
                         };
 
                         if let Some(desired_size) = desired_size {
-                            println!("desired size: {:?}", desired_size);
+                            info!("Configuring camera. current size: {:?}, desired_size: {:?}", current_size, desired_size);
                             stream_config.set_size(desired_size);
                         }
 
-                        let video_format = options["format"].get_uint32();
+                        let desired_video_format = options["format"].get_uint32()
+                            .map(|value|{
+                                VideoFormat::try_from(value)
+                                    .map(|video_format| match video_format {
+                                        VideoFormat::Pixel(PixelFormat::NV12) => Ok(PIXEL_FORMAT_NV12),
+                                        VideoFormat::Pixel(PixelFormat::YUYV) => Ok(PIXEL_FORMAT_YUYV),
+                                        // YV12 == YU12 ?
+                                        VideoFormat::Pixel(PixelFormat::YV12) => Ok(PIXEL_FORMAT_YU12),
+                                        VideoFormat::Compression(CompressionFormat::MJPEG) => Ok(PIXEL_FORMAT_MJPG),
+                                        // known, but un-supported.
+                                        _ => Err(Error::SetFailed(format!("Unsupported format. '{:?}'", video_format).into()))
+                                    })
+                                    .map_err(|e|Error::SetFailed(format!("Unknown format. error: {:?}", e).into()))
+                                    .flatten()
+                            });
 
-                        let video_format = match video_format {
-                            Some(video_format) => VideoFormat::try_from(video_format).ok(),
-                            None => None,
-                        };
-
-                        println!("video format: {:?}", video_format);
-
-                        match video_format {
-                            Some(VideoFormat::Pixel(PixelFormat::NV12)) => stream_config.set_pixel_format(PIXEL_FORMAT_NV12),
-                            Some(VideoFormat::Pixel(PixelFormat::YUYV)) => stream_config.set_pixel_format(PIXEL_FORMAT_YUYV),
-                            // YV12 == YU12 ?
-                            Some(VideoFormat::Pixel(PixelFormat::YV12)) => stream_config.set_pixel_format(PIXEL_FORMAT_YU12),
-                            Some(VideoFormat::Compression(CompressionFormat::MJPEG)) => stream_config.set_pixel_format(PIXEL_FORMAT_MJPG),
-                            Some(_) => {
-                                let _ = instance.cmd_response_tx.send(CameraCmdResponse::DeviceError(Error::SetFailed(format!("Unsupported format. '{:?}'", video_format))));
-                            },
-                            None => {
-                                // XXX temporarily use YUYV as default format
-                                stream_config.set_pixel_format(PIXEL_FORMAT_YUYV)
+                        match desired_video_format {
+                            Some(Err(e)) => {
+                                let _ = instance.cmd_response_tx.send(CameraCmdResponse::DeviceError(e));
+                                continue
                             }
-                        };
+                            Some(Ok(desired_video_format)) => {
+                                stream_config.set_pixel_format(desired_video_format)
+                            }
+                            None => {}
+                        }
+
+                        // Note the mix of pixel format (libcamera) vs video format (media-rs) here
+                        let pixel_format = stream_config.get_pixel_format();
+                        info!("video format. desired video format: {:?}, actual pixel format: {:?}", desired_video_format, pixel_format);
+
 
                         let frame_rate = options["frame-rate"].get_float();
                         if let Some(frame_rate) = frame_rate {
                             desired_frame_interval = Some(Duration::from_secs_f32(1.0 / frame_rate));
                         } else {
-                            // TODO get the default frame rate for the format and use that, for now default to 30FPS
+                            // Libcamera does not currently support obtaining usable frame rates, so we have to default to something reasonable, which
+                            // may not be supported by the camera.
                             desired_frame_interval = Some(Duration::from_secs_f32(1.0 / 30.0));
                         }
 
                         // drop the reference to avoid borrow checker issues
                         drop(stream_config);
+
+                        // we can't /apply/ the configuration until the camera is acquired, but we can validate it.
 
                         let configuation_status = instance.config.validate();
                         match configuation_status {
@@ -965,15 +978,6 @@ impl LinuxCameraWorker {
                                 let _ = instance.cmd_response_tx.send(CameraCmdResponse::DeviceError(Error::SetFailed(format!("Configuration invalid. config: {:?}", instance.config).into())));
                                 continue
                             }
-                        }
-
-                        // we can't actually apply the configuration until the camera is acquired
-
-                        if let Some(desired_size) = desired_size {
-                            let stream_config = instance.config
-                                .get_mut(0).unwrap();
-                            let actual_size = stream_config.get_size();
-                            debug_assert_eq!((desired_size.width, desired_size.height), (actual_size.width, actual_size.height));
                         }
                         let _ = instance.cmd_response_tx.send(CameraCmdResponse::Ok);
                     }
