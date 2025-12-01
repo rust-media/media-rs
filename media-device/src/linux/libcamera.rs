@@ -7,6 +7,13 @@
 //!
 //! See `variable-frame-durations` in the `formats` response.
 //!
+//! Safety:
+//! This implementation spawns a thread that holds the libcamera manager, which spawns threads for
+//! each camera.  The implementations of `Device` and `DeviceManager` communicate with their worker
+//! threads via command+response channels.  The device manager from `libcamera` cannot be shared
+//! between threads.  The libcamera camera pointers for each cameras are shareable to other threads,
+//! but each camera is only accessed by one thread.
+//!
 //! Libcamera API: https://libcamera.org/api-html/classlibcamera_1_1CameraManager.html
 //!
 //! Original Author: Dominic Clifton <me@dominiclifton.name>
@@ -214,7 +221,10 @@ static CAMERA_DEVICES: Mutex<Vec<LibcameraDevice>> = Mutex::new(Vec::new());
 static MANAGER_INSTANCE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 
-/// Linux backend device manager
+/// Linux backend device manager.
+///
+/// Multiple instances of this can be created, when the last one is dropped the worker thread
+/// will be shut down.
 pub struct LibcameraDeviceManager {
     handler: Option<DeviceEventHandler>,
 }
