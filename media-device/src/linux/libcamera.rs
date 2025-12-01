@@ -10,7 +10,7 @@
 //! Libcamera API: https://libcamera.org/api-html/classlibcamera_1_1CameraManager.html
 //!
 //! Original Author: Dominic Clifton <me@dominiclifton.name>
-use std::{io, sync::Arc, thread, time::{SystemTime, UNIX_EPOCH}};
+use std::{io, sync::Arc, thread};
 use std::fmt::{Debug, Display, Formatter};
 use std::num::NonZeroU32;
 use std::sync::{mpsc, Mutex, MutexGuard};
@@ -774,13 +774,6 @@ impl LinuxCameraWorker {
                                                     let sensor_timestamp: i64 = (*sensor_timestamp).into();
                                                     // frame.pts (presentation time stamp) is in milliseconds, sensor timestamp is nanoseconds
                                                     frame.pts = Some(sensor_timestamp / (NSEC_PER_MSEC as i64));
-                                                } else {
-                                                    let timestamp_ms = SystemTime::now()
-                                                        .duration_since(UNIX_EPOCH)
-                                                        .unwrap()
-                                                        .as_millis() as i64;
-
-                                                    frame.pts = Some(timestamp_ms);
                                                 }
 
                                                 let _ = handler(frame);
