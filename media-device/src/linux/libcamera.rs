@@ -646,7 +646,8 @@ impl LinuxCameraWorker {
 
                             let video_format = match pixel_format.fourcc() {
                                 FOURCC_YUYV => VideoFormat::Pixel(PixelFormat::YUYV),
-                                FOURCC_YU12 => VideoFormat::Pixel(PixelFormat::YV12),
+                                // libcamera's YU12 == I420
+                                FOURCC_YU12 => VideoFormat::Pixel(PixelFormat::I420),
                                 FOURCC_NV12 => VideoFormat::Pixel(PixelFormat::NV12),
                                 FOURCC_MJPG => VideoFormat::Compression(CompressionFormat::MJPEG),
                                 _ => {
@@ -734,7 +735,8 @@ impl LinuxCameraWorker {
                         // TODO support more formats (Contribution/PR's welcomed)
                         let video_format = match format.fourcc() {
                             FOURCC_NV12 => VideoFormat::Pixel(PixelFormat::NV12),
-                            FOURCC_YU12 => VideoFormat::Pixel(PixelFormat::YV12),
+                            // libcamera's YU12 == I420
+                            FOURCC_YU12 => VideoFormat::Pixel(PixelFormat::I420),
                             FOURCC_YUYV => VideoFormat::Pixel(PixelFormat::YUYV),
                             FOURCC_MJPG => VideoFormat::Compression(CompressionFormat::MJPEG),
                             _ => {
@@ -941,8 +943,8 @@ impl LinuxCameraWorker {
                                     .map(|video_format| match video_format {
                                         VideoFormat::Pixel(PixelFormat::NV12) => Ok(PIXEL_FORMAT_NV12),
                                         VideoFormat::Pixel(PixelFormat::YUYV) => Ok(PIXEL_FORMAT_YUYV),
-                                        // YV12 == YU12 ?
-                                        VideoFormat::Pixel(PixelFormat::YV12) => Ok(PIXEL_FORMAT_YU12),
+                                        // I420 == libcamera's YU12
+                                        VideoFormat::Pixel(PixelFormat::I420) => Ok(PIXEL_FORMAT_YU12),
                                         VideoFormat::Compression(CompressionFormat::MJPEG) => Ok(PIXEL_FORMAT_MJPG),
                                         // known, but un-supported.
                                         _ => Err(Error::SetFailed(format!("Unsupported format. '{:?}'", video_format).into()))
