@@ -21,9 +21,10 @@ os-ver.workspace = true
 thiserror.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
-#libcamera 0.4.0 doesn't contain all the APIs required, we need to use a newer version from git
+# libcamera (rust) 0.4.0 doesn't contain all the APIs required, we need to use a newer version from git.
+# additionally support for libcamera 0.6.0 (c version) is required, introduced in (their) rev 419e4b142920c23f64d6acb11f88d5dad0a9fc23.
 #libcamera = { version = "0.4.0" }
-libcamera = { git = "https://github.com/lit-robotics/libcamera-rs.git", rev = "764c498c0eb69f3cca1954dd306408841b7171ad"}
+libcamera = { git = "https://github.com/lit-robotics/libcamera-rs.git", rev = "419e4b142920c23f64d6acb11f88d5dad0a9fc23"}
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 av-foundation = "0.5"
