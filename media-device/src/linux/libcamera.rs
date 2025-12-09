@@ -949,7 +949,7 @@ impl LinuxCameraWorker {
                                         // known, but un-supported.
                                         _ => Err(Error::SetFailed(format!("Unsupported format. '{:?}'", video_format).into()))
                                     })
-                                    .map_err(|e|Error::SetFailed(format!("Unknown format. error: {:?}", e).into()))
+                                    .map_err(|e|Error::SetFailed(format!("Unknown format. value: {}, error: {:?}", value, e).into()))
                                     .flatten()
                             });
 
