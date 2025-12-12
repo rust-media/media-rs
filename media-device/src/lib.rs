@@ -1,5 +1,5 @@
 #[cfg(feature = "video")]
-#[cfg(any(target_os = "windows", target_os = "macos", target_os = "ios"))]
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "ios", target_os = "linux"))]
 pub mod camera;
 
 mod device;
@@ -14,5 +14,10 @@ cfg_if! {
     } else if #[cfg(any(target_os = "macos", target_os = "ios"))] {
         #[path = "mac/mod.rs"]
         pub mod backend;
+    } else if #[cfg(target_os = "linux")] {
+        #[path = "linux/mod.rs"]
+        pub mod backend;
+    } else {
+        compile_error!("unsupported target_os");
     }
 }

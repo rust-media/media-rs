@@ -11,8 +11,10 @@ cfg_if! {
         pub use crate::backend::media_foundation::MediaFoundationDeviceManager as DefaultCameraManager;
     } else if #[cfg(any(target_os = "macos", target_os = "ios"))] {
         pub use crate::backend::av_foundation::AVFoundationCaptureDeviceManager as DefaultCameraManager;
-    } else {
-        compile_error!("unsupported target");
+    } else if #[cfg(target_os = "linux")] {
+        pub use crate::backend::libcamera::LibcameraDeviceManager as DefaultCameraManager;
+    }  else {
+        compile_error!("unsupported target_os");
     }
 }
 
