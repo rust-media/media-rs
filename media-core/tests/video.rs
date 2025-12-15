@@ -44,8 +44,8 @@ fn test_video_frame() {
     let frame = frame.unwrap();
     let desc = frame.video_descriptor().unwrap();
     assert_eq!(desc.format, PixelFormat::I420);
-    assert_eq!(desc.width.get(), 640);
-    assert_eq!(desc.height.get(), 480);
+    assert_eq!(desc.width().get(), 640);
+    assert_eq!(desc.height().get(), 480);
 }
 
 #[test]
@@ -63,6 +63,6 @@ fn test_video_frame_from_buffer() {
     let frame = frame.unwrap();
     let desc = frame.video_descriptor().unwrap();
     assert_eq!(desc.format, PixelFormat::ARGB32);
-    assert_eq!(desc.width.get(), 640);
-    assert_eq!(desc.height.get(), 480);
+    assert_eq!(desc.width().get(), 640);
+    assert_eq!(desc.height().get(), 480);
 }

@@ -585,8 +585,8 @@ impl Frame<'_> {
             return Err(Error::Invalid("not video frame".to_string()));
         };
 
-        if src_desc.width != dst_desc.width || src_desc.height != dst_desc.height {
-            return Err(Error::Invalid("video frame size mismatch".to_string()));
+        if src_desc.dimensions != dst_desc.dimensions {
+            return Err(Error::Invalid("video frame dimensions mismatch".to_string()));
         }
 
         let guard = self.map().map_err(|_| Error::Invalid("not readable".into()))?;
@@ -595,12 +595,12 @@ impl Frame<'_> {
         let mut dst_planes = dst_guard.planes_mut().unwrap();
 
         if src_desc.format == dst_desc.format {
-            return data_copy(&src_planes, &mut dst_planes, src_desc.format, src_desc.width, src_desc.height);
+            return data_copy(&src_planes, &mut dst_planes, src_desc.format, src_desc.width(), src_desc.height());
         }
 
         let convert = VIDEO_FORMAT_CONVERT_FUNCS[src_desc.format as usize][dst_desc.format as usize]
             .ok_or_else(|| Error::Unsupported("video format conversion".to_string()))?;
 
-        convert(&src_planes, &mut dst_planes, src_desc.color_range, src_desc.color_matrix, src_desc.width, src_desc.height)
+        convert(&src_planes, &mut dst_planes, src_desc.color_range, src_desc.color_matrix, src_desc.width(), src_desc.height())
     }
 }

@@ -19,36 +19,43 @@ use crate::{
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Resolution {
-    pub width: u32,
-    pub height: u32,
+pub struct Dimensions {
+    pub width: NonZeroU32,
+    pub height: NonZeroU32,
 }
 
-impl Resolution {
-    pub const fn new(width: u32, height: u32) -> Self {
+impl Dimensions {
+    const fn new_unchecked(width: u32, height: u32) -> Self {
         Self {
-            width,
-            height,
+            width: unsafe { NonZeroU32::new_unchecked(width) },
+            height: unsafe { NonZeroU32::new_unchecked(height) },
         }
     }
 
-    pub const SQCIF: Self = Self::new(128, 96);
-    pub const QCIF: Self = Self::new(176, 144);
-    pub const CIF: Self = Self::new(352, 288);
-    pub const QQVGA: Self = Self::new(160, 120);
-    pub const QVGA: Self = Self::new(320, 240);
-    pub const VGA: Self = Self::new(640, 480);
-    pub const SVGA: Self = Self::new(800, 600);
-    pub const XGA: Self = Self::new(1024, 768);
-    pub const SXGA: Self = Self::new(1280, 1024);
-    pub const UXGA: Self = Self::new(1600, 1200);
-    pub const QXGA: Self = Self::new(2048, 1536);
-    pub const SD: Self = Self::new(720, 480);
-    pub const HD: Self = Self::new(1280, 720);
-    pub const FHD: Self = Self::new(1920, 1080);
-    pub const QHD: Self = Self::new(2560, 1440);
-    pub const UHD_4K: Self = Self::new(3840, 2160);
-    pub const UHD_8K: Self = Self::new(7680, 4320);
+    pub fn new(width: u32, height: u32) -> Result<Self> {
+        Ok(Self {
+            width: NonZeroU32::new(width).ok_or_else(|| invalid_param_error!(width))?,
+            height: NonZeroU32::new(height).ok_or_else(|| invalid_param_error!(height))?,
+        })
+    }
+
+    pub const SQCIF: Self = Self::new_unchecked(128, 96);
+    pub const QCIF: Self = Self::new_unchecked(176, 144);
+    pub const CIF: Self = Self::new_unchecked(352, 288);
+    pub const QQVGA: Self = Self::new_unchecked(160, 120);
+    pub const QVGA: Self = Self::new_unchecked(320, 240);
+    pub const VGA: Self = Self::new_unchecked(640, 480);
+    pub const SVGA: Self = Self::new_unchecked(800, 600);
+    pub const XGA: Self = Self::new_unchecked(1024, 768);
+    pub const SXGA: Self = Self::new_unchecked(1280, 1024);
+    pub const UXGA: Self = Self::new_unchecked(1600, 1200);
+    pub const QXGA: Self = Self::new_unchecked(2048, 1536);
+    pub const SD: Self = Self::new_unchecked(720, 480);
+    pub const HD: Self = Self::new_unchecked(1280, 720);
+    pub const FHD: Self = Self::new_unchecked(1920, 1080);
+    pub const QHD: Self = Self::new_unchecked(2560, 1440);
+    pub const UHD_4K: Self = Self::new_unchecked(3840, 2160);
+    pub const UHD_8K: Self = Self::new_unchecked(7680, 4320);
 }
 
 #[derive(Clone, Copy, Debug, Default, EnumCount, Eq, PartialEq)]
@@ -1081,8 +1088,7 @@ pub enum ScaleFilter {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VideoFrameDescriptor {
     pub format: PixelFormat,
-    pub width: NonZeroU32,
-    pub height: NonZeroU32,
+    pub dimensions: Dimensions,
     pub color_range: ColorRange,
     pub color_matrix: ColorMatrix,
     pub color_primaries: ColorPrimaries,
@@ -1102,8 +1108,7 @@ impl VideoFrameDescriptor {
     pub fn new(format: PixelFormat, width: NonZeroU32, height: NonZeroU32) -> Self {
         Self {
             format,
-            width,
-            height,
+            dimensions: Dimensions { width, height },
             color_range: ColorRange::default(),
             color_matrix: ColorMatrix::default(),
             color_primaries: ColorPrimaries::default(),
@@ -1125,6 +1130,16 @@ impl VideoFrameDescriptor {
         let height = NonZeroU32::new(height).ok_or_else(|| invalid_param_error!(height))?;
 
         Ok(Self::new(format, width, height))
+    }
+
+    #[inline]
+    pub fn width(&self) -> NonZeroU32 {
+        self.dimensions.width
+    }
+
+    #[inline]
+    pub fn height(&self) -> NonZeroU32 {
+        self.dimensions.height
     }
 }
 

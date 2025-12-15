@@ -146,7 +146,7 @@ impl VideoFrameCreator {
     }
 
     pub fn create_with_descriptor(&self, desc: VideoFrameDescriptor) -> Result<Frame<'static>> {
-        let data = VideoDataCreator::create(desc.format, desc.width, desc.height)?;
+        let data = VideoDataCreator::create(desc.format, desc.width(), desc.height())?;
 
         Ok(Self::create_from_data(desc, data))
     }
@@ -164,7 +164,7 @@ impl VideoFrameCreator {
     where
         T: Into<Cow<'a, [u8]>>,
     {
-        let data = VideoDataCreator::create_from_buffer(desc.format, desc.width, desc.height, buffer)?;
+        let data = VideoDataCreator::create_from_buffer(desc.format, desc.width(), desc.height(), buffer)?;
 
         Ok(Self::create_from_data(desc, data))
     }
@@ -183,7 +183,7 @@ impl VideoFrameCreator {
     where
         T: Into<Cow<'a, [u8]>>,
     {
-        let data = VideoDataCreator::create_from_aligned_buffer(desc.format, desc.height, stride, buffer)?;
+        let data = VideoDataCreator::create_from_aligned_buffer(desc.format, desc.height(), stride, buffer)?;
 
         Ok(Self::create_from_data(desc, data))
     }
@@ -202,7 +202,7 @@ impl VideoFrameCreator {
     where
         T: Into<Cow<'a, [u8]>>,
     {
-        let data = VideoDataCreator::create_from_packed_buffer(desc.format, desc.height, stride, buffer)?;
+        let data = VideoDataCreator::create_from_packed_buffer(desc.format, desc.height(), stride, buffer)?;
 
         Ok(Self::create_from_data(desc, data))
     }
@@ -214,7 +214,7 @@ impl VideoFrameCreator {
     }
 
     pub fn create_from_buffers_with_descriptor<'a>(&self, desc: VideoFrameDescriptor, buffers: &[(&'a [u8], u32)]) -> Result<Frame<'a>> {
-        let data = SeparateMemoryData::from_buffers(desc.format, desc.height, buffers)?;
+        let data = SeparateMemoryData::from_buffers(desc.format, desc.height(), buffers)?;
 
         Ok(Frame::from_data(FrameDescriptor::Video(desc), FrameData::SeparateMemory(data)))
     }
@@ -238,7 +238,7 @@ impl VideoFrameCreator {
         buffer: Arc<Buffer>,
         planes: &[(usize, u32)], // (offset, stride), offset from the start of the Buffer
     ) -> Result<Frame<'static>> {
-        let data = VideoDataCreator::create_from_shared_buffer(desc.format, desc.height, buffer, planes)?;
+        let data = VideoDataCreator::create_from_shared_buffer(desc.format, desc.height(), buffer, planes)?;
 
         Ok(Frame::from_data(FrameDescriptor::Video(desc), FrameData::Buffer(data)))
     }
@@ -318,10 +318,10 @@ impl Frame<'_> {
     ) -> Result<()> {
         match &mut self.data {
             FrameData::Buffer(data) => {
-                data.attach_video_buffer(desc.format, desc.height, buffer, buffer_planes)?;
+                data.attach_video_buffer(desc.format, desc.height(), buffer, buffer_planes)?;
             }
             FrameData::Empty => {
-                let buffer_data = VideoDataCreator::create_from_shared_buffer(desc.format, desc.height, buffer, buffer_planes)?;
+                let buffer_data = VideoDataCreator::create_from_shared_buffer(desc.format, desc.height(), buffer, buffer_planes)?;
                 self.data = FrameData::Buffer(buffer_data);
             }
             _ => {

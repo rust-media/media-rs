@@ -76,13 +76,13 @@ impl Frame<'_> {
         let format = src_desc.format;
         match format {
             PixelFormat::ARGB32 | PixelFormat::BGRA32 | PixelFormat::ABGR32 | PixelFormat::RGBA32 => {
-                let src = into_image_store::<u8, 4>(&src_planes.planes[0], src_desc.width.get(), src_desc.height.get())?;
-                let mut dst = into_image_store_mut::<u8, 4>(&mut dst_planes.planes[0], dst_desc.width.get(), dst_desc.height.get())?;
+                let src = into_image_store::<u8, 4>(&src_planes.planes[0], src_desc.width().get(), src_desc.height().get())?;
+                let mut dst = into_image_store_mut::<u8, 4>(&mut dst_planes.planes[0], dst_desc.width().get(), dst_desc.height().get())?;
                 scaler.resize_rgba(&src, &mut dst, true).map_err(|e| Error::Invalid(e.to_string()))
             }
             PixelFormat::RGB24 | PixelFormat::BGR24 => {
-                let src = into_image_store::<u8, 3>(&src_planes.planes[0], src_desc.width.get(), src_desc.height.get())?;
-                let mut dst = into_image_store_mut::<u8, 3>(&mut dst_planes.planes[0], dst_desc.width.get(), dst_desc.height.get())?;
+                let src = into_image_store::<u8, 3>(&src_planes.planes[0], src_desc.width().get(), src_desc.height().get())?;
+                let mut dst = into_image_store_mut::<u8, 3>(&mut dst_planes.planes[0], dst_desc.width().get(), dst_desc.height().get())?;
                 scaler.resize_rgb(&src, &mut dst).map_err(|e| Error::Invalid(e.to_string()))
             }
             PixelFormat::I420 |
@@ -92,12 +92,12 @@ impl Frame<'_> {
             PixelFormat::YV12 |
             PixelFormat::YV16 |
             PixelFormat::YV24 => {
-                let (src_chroma_width, src_chroma_height) = format.calc_chroma_dimensions(src_desc.width.get(), src_desc.height.get());
-                let (dst_chroma_width, dst_chroma_height) = format.calc_chroma_dimensions(dst_desc.width.get(), dst_desc.height.get());
-                let src_y = into_image_store::<u8, 1>(&src_planes.planes[0], src_desc.width.get(), src_desc.height.get())?;
+                let (src_chroma_width, src_chroma_height) = format.calc_chroma_dimensions(src_desc.width().get(), src_desc.height().get());
+                let (dst_chroma_width, dst_chroma_height) = format.calc_chroma_dimensions(dst_desc.width().get(), dst_desc.height().get());
+                let src_y = into_image_store::<u8, 1>(&src_planes.planes[0], src_desc.width().get(), src_desc.height().get())?;
                 let src_u = into_image_store::<u8, 1>(&src_planes.planes[1], src_chroma_width, src_chroma_height)?;
                 let src_v = into_image_store::<u8, 1>(&src_planes.planes[2], src_chroma_width, src_chroma_height)?;
-                let mut dst_y = into_image_store_mut::<u8, 1>(&mut dst_planes.planes[0], dst_desc.width.get(), dst_desc.height.get())?;
+                let mut dst_y = into_image_store_mut::<u8, 1>(&mut dst_planes.planes[0], dst_desc.width().get(), dst_desc.height().get())?;
                 scaler.resize_plane(&src_y, &mut dst_y).map_err(|e| Error::Invalid(e.to_string()))?;
                 let mut dst_u = into_image_store_mut::<u8, 1>(&mut dst_planes.planes[1], dst_chroma_width, dst_chroma_height)?;
                 scaler.resize_plane(&src_u, &mut dst_u).map_err(|e| Error::Invalid(e.to_string()))?;
@@ -106,19 +106,19 @@ impl Frame<'_> {
                 Ok(())
             }
             PixelFormat::NV12 | PixelFormat::NV21 | PixelFormat::NV16 | PixelFormat::NV61 | PixelFormat::NV24 | PixelFormat::NV42 => {
-                let (src_chroma_width, src_chroma_height) = format.calc_chroma_dimensions(src_desc.width.get(), src_desc.height.get());
-                let (dst_chroma_width, dst_chroma_height) = format.calc_chroma_dimensions(dst_desc.width.get(), dst_desc.height.get());
-                let src_y = into_image_store::<u8, 1>(&src_planes.planes[0], src_desc.width.get(), src_desc.height.get())?;
+                let (src_chroma_width, src_chroma_height) = format.calc_chroma_dimensions(src_desc.width().get(), src_desc.height().get());
+                let (dst_chroma_width, dst_chroma_height) = format.calc_chroma_dimensions(dst_desc.width().get(), dst_desc.height().get());
+                let src_y = into_image_store::<u8, 1>(&src_planes.planes[0], src_desc.width().get(), src_desc.height().get())?;
                 let src_uv = into_image_store::<u8, 2>(&src_planes.planes[1], src_chroma_width, src_chroma_height)?;
-                let mut dst_y = into_image_store_mut::<u8, 1>(&mut dst_planes.planes[0], dst_desc.width.get(), dst_desc.height.get())?;
+                let mut dst_y = into_image_store_mut::<u8, 1>(&mut dst_planes.planes[0], dst_desc.width().get(), dst_desc.height().get())?;
                 scaler.resize_plane(&src_y, &mut dst_y).map_err(|e| Error::Invalid(e.to_string()))?;
                 let mut dst_uv = into_image_store_mut::<u8, 2>(&mut dst_planes.planes[1], dst_chroma_width, dst_chroma_height)?;
                 scaler.resize_cbcr8(&src_uv, &mut dst_uv).map_err(|e| Error::Invalid(e.to_string()))?;
                 Ok(())
             }
             PixelFormat::ARGB64 | PixelFormat::BGRA64 | PixelFormat::ABGR64 | PixelFormat::RGBA64 => {
-                let src = into_image_store::<u16, 4>(&src_planes.planes[0], src_desc.width.get(), src_desc.height.get())?;
-                let mut dst = into_image_store_mut::<u16, 4>(&mut dst_planes.planes[0], dst_desc.width.get(), dst_desc.height.get())?;
+                let src = into_image_store::<u16, 4>(&src_planes.planes[0], src_desc.width().get(), src_desc.height().get())?;
+                let mut dst = into_image_store_mut::<u16, 4>(&mut dst_planes.planes[0], dst_desc.width().get(), dst_desc.height().get())?;
                 scaler.resize_rgba_u16(&src, &mut dst, true).map_err(|e| Error::Invalid(e.to_string()))
             }
             PixelFormat::I010 |
@@ -133,12 +133,12 @@ impl Frame<'_> {
             PixelFormat::I216 |
             PixelFormat::I416 |
             PixelFormat::I44016 => {
-                let (src_chroma_width, src_chroma_height) = format.calc_chroma_dimensions(src_desc.width.get(), src_desc.height.get());
-                let (dst_chroma_width, dst_chroma_height) = format.calc_chroma_dimensions(dst_desc.width.get(), dst_desc.height.get());
-                let src_y = into_image_store::<u16, 1>(&src_planes.planes[0], src_desc.width.get(), src_desc.height.get())?;
+                let (src_chroma_width, src_chroma_height) = format.calc_chroma_dimensions(src_desc.width().get(), src_desc.height().get());
+                let (dst_chroma_width, dst_chroma_height) = format.calc_chroma_dimensions(dst_desc.width().get(), dst_desc.height().get());
+                let src_y = into_image_store::<u16, 1>(&src_planes.planes[0], src_desc.width().get(), src_desc.height().get())?;
                 let src_u = into_image_store::<u16, 1>(&src_planes.planes[1], src_chroma_width, src_chroma_height)?;
                 let src_v = into_image_store::<u16, 1>(&src_planes.planes[2], src_chroma_width, src_chroma_height)?;
-                let mut dst_y = into_image_store_mut::<u16, 1>(&mut dst_planes.planes[0], dst_desc.width.get(), dst_desc.height.get())?;
+                let mut dst_y = into_image_store_mut::<u16, 1>(&mut dst_planes.planes[0], dst_desc.width().get(), dst_desc.height().get())?;
                 scaler.resize_plane_u16(&src_y, &mut dst_y).map_err(|e| Error::Invalid(e.to_string()))?;
                 let mut dst_u = into_image_store_mut::<u16, 1>(&mut dst_planes.planes[1], dst_chroma_width, dst_chroma_height)?;
                 scaler.resize_plane_u16(&src_u, &mut dst_u).map_err(|e| Error::Invalid(e.to_string()))?;
@@ -155,24 +155,24 @@ impl Frame<'_> {
             PixelFormat::P016 |
             PixelFormat::P216 |
             PixelFormat::P416 => {
-                let (src_chroma_width, src_chroma_height) = format.calc_chroma_dimensions(src_desc.width.get(), src_desc.height.get());
-                let (dst_chroma_width, dst_chroma_height) = format.calc_chroma_dimensions(dst_desc.width.get(), dst_desc.height.get());
-                let src_y = into_image_store::<u16, 1>(&src_planes.planes[0], src_desc.width.get(), src_desc.height.get())?;
+                let (src_chroma_width, src_chroma_height) = format.calc_chroma_dimensions(src_desc.width().get(), src_desc.height().get());
+                let (dst_chroma_width, dst_chroma_height) = format.calc_chroma_dimensions(dst_desc.width().get(), dst_desc.height().get());
+                let src_y = into_image_store::<u16, 1>(&src_planes.planes[0], src_desc.width().get(), src_desc.height().get())?;
                 let src_uv = into_image_store::<u16, 2>(&src_planes.planes[1], src_chroma_width, src_chroma_height)?;
-                let mut dst_y = into_image_store_mut::<u16, 1>(&mut dst_planes.planes[0], dst_desc.width.get(), dst_desc.height.get())?;
+                let mut dst_y = into_image_store_mut::<u16, 1>(&mut dst_planes.planes[0], dst_desc.width().get(), dst_desc.height().get())?;
                 scaler.resize_plane_u16(&src_y, &mut dst_y).map_err(|e| Error::Invalid(e.to_string()))?;
                 let mut dst_uv = into_image_store_mut::<u16, 2>(&mut dst_planes.planes[1], dst_chroma_width, dst_chroma_height)?;
                 scaler.resize_cbcr_u16(&src_uv, &mut dst_uv).map_err(|e| Error::Invalid(e.to_string()))?;
                 Ok(())
             }
             PixelFormat::Y8 => {
-                let src = into_image_store::<u8, 1>(&src_planes.planes[0], src_desc.width.get(), src_desc.height.get())?;
-                let mut dst = into_image_store_mut::<u8, 1>(&mut dst_planes.planes[0], dst_desc.width.get(), dst_desc.height.get())?;
+                let src = into_image_store::<u8, 1>(&src_planes.planes[0], src_desc.width().get(), src_desc.height().get())?;
+                let mut dst = into_image_store_mut::<u8, 1>(&mut dst_planes.planes[0], dst_desc.width().get(), dst_desc.height().get())?;
                 scaler.resize_plane(&src, &mut dst).map_err(|e| Error::Invalid(e.to_string()))
             }
             PixelFormat::YA8 => {
-                let src = into_image_store::<u8, 2>(&src_planes.planes[0], src_desc.width.get(), src_desc.height.get())?;
-                let mut dst = into_image_store_mut::<u8, 2>(&mut dst_planes.planes[0], dst_desc.width.get(), dst_desc.height.get())?;
+                let src = into_image_store::<u8, 2>(&src_planes.planes[0], src_desc.width().get(), src_desc.height().get())?;
+                let mut dst = into_image_store_mut::<u8, 2>(&mut dst_planes.planes[0], dst_desc.width().get(), dst_desc.height().get())?;
                 // similar to UV component interleaving
                 scaler.resize_cbcr8(&src, &mut dst).map_err(|e| Error::Invalid(e.to_string()))
             }
