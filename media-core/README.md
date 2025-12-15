@@ -9,9 +9,9 @@ Defines media types and provides basic media utilities.
 
 ## Features
 
-- [x] **Media Types** - Definitions for media types
-- [x] **Media Frame** - Abstraction for raw multimedia data
+- [x] **Media Types** - Define common media types
+- [x] **Media Frame** - Represent audio and video frame data, including hardware abstraction
 - [x] **Video Pixel Format Conversion** - Convert between RGB, YUV, and other pixel formats
-- [x] **Video Scaling** - Change video resolution
+- [x] **Video Scaling** - Scale video resolution
 - [x] **Audio Sample Format Conversion** - Convert between different audio sample formats
-- [ ] **Audio Resampling** - Change audio sample rates
+- [ ] **Audio Resampling** - Resample audio sample rates
