@@ -3,12 +3,14 @@ use std::{borrow::Cow, fmt::Debug};
 use bytemuck::{self, Pod};
 use pic_scale::{BufferStore, ImageStore, ImageStoreMut, LinearScaler, ResamplingFunction, Scaling, ScalingU16};
 
-use super::video::{PixelFormat, ScaleFilter};
+use super::{
+    frame::VideoFrame,
+    video::{PixelFormat, ScaleFilter, VideoFrameDescriptor},
+};
 use crate::{
     error::Error,
-    frame::{Frame, MappedPlane},
-    media::FrameDescriptor,
-    Result,
+    frame::{DataMappable, Frame, FrameData, MappedPlane},
+    FrameDescriptor, Result,
 };
 
 impl From<ScaleFilter> for ResamplingFunction {
@@ -53,20 +55,28 @@ where
 
 impl Frame<'_> {
     pub fn scale_to(&self, dst: &mut Frame<'_>, scale_filter: ScaleFilter) -> Result<()> {
-        if self.media_type() != dst.media_type() || !self.is_video() {
-            return Err(Error::Unsupported("media type".to_string()));
-        }
-
-        let (FrameDescriptor::Video(src_desc), FrameDescriptor::Video(dst_desc)) = (&self.desc, &dst.desc.clone()) else {
+        let (FrameDescriptor::Video(src_desc), FrameDescriptor::Video(dst_desc)) = (&self.desc, &dst.desc) else {
             return Err(Error::Invalid("not video frame".to_string()));
         };
 
+        VideoFrame::scale_to_internal(src_desc, &self.data, dst_desc, &mut dst.data, scale_filter)
+    }
+}
+
+impl VideoFrame<'_> {
+    fn scale_to_internal(
+        src_desc: &VideoFrameDescriptor,
+        src_data: &FrameData,
+        dst_desc: &VideoFrameDescriptor,
+        dst_data: &mut FrameData,
+        scale_filter: ScaleFilter,
+    ) -> Result<()> {
         if src_desc.format != dst_desc.format {
             return Err(Error::Invalid("pixel format mismatch".to_string()));
         }
 
-        let guard = self.map().map_err(|_| Error::Invalid("not readable".into()))?;
-        let mut dst_guard = dst.map_mut().map_err(|_| Error::Invalid("not writable".into()))?;
+        let guard = src_data.map().map_err(|_| Error::Invalid("not readable".into()))?;
+        let mut dst_guard = dst_data.map_mut().map_err(|_| Error::Invalid("not writable".into()))?;
         let src_planes = guard.planes().unwrap();
         let mut dst_planes = dst_guard.planes_mut().unwrap();
 
@@ -178,5 +188,9 @@ impl Frame<'_> {
             }
             _ => Err(Error::Invalid("unsupported pixel format".to_string())),
         }
+    }
+
+    pub fn scale_to(&self, dst: &mut VideoFrame<'_>, scale_filter: ScaleFilter) -> Result<()> {
+        Self::scale_to_internal(&self.desc, &self.data, &dst.desc, &mut dst.data, scale_filter)
     }
 }

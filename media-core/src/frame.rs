@@ -21,12 +21,7 @@ use crate::buffer::Buffer;
 use crate::error::Error;
 #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
 use crate::video::pixel_buffer::frame::PixelBuffer;
-use crate::{
-    frame_pool::FramePool,
-    media::{FrameDescriptor, MediaType},
-    variant::Variant,
-    Result, DEFAULT_ALIGNMENT,
-};
+use crate::{frame_pool::FramePool, variant::Variant, FrameDescriptor, FrameDescriptorSpec, MediaType, Result, DEFAULT_ALIGNMENT};
 
 #[cfg(any(feature = "audio", feature = "video"))]
 const DEFAULT_MAX_PLANES: usize = 8;
@@ -242,7 +237,7 @@ pub(crate) type PlaneVec<T> = SmallVec<[T; DEFAULT_MAX_PLANES]>;
 #[derive(Copy, Clone)]
 pub(crate) enum PlaneDescriptor {
     #[cfg(feature = "audio")]
-    Audio(usize, usize), // allocated size, used bytes
+    Audio(usize, usize), // plane_size, actual_bytes
     #[cfg(feature = "video")]
     Video(usize, u32), // stride, height
 }
@@ -262,7 +257,7 @@ impl<T: Clone> Data<'_, T> {
     }
 
     #[cfg(any(feature = "audio", feature = "video"))]
-    fn as_ref(&self) -> &[T] {
+    pub(crate) fn as_ref(&self) -> &[T] {
         match self {
             Data::Borrowed(slice) => slice,
             Data::Owned(vec) => vec.as_slice(),
@@ -303,9 +298,8 @@ impl MemoryData<'_> {
     pub(crate) fn truncate(&mut self, len: usize) -> Result<()> {
         for plane in &mut self.planes {
             match plane {
-                PlaneDescriptor::Audio(stride, actual_bytes) => {
-                    let plane_size = *stride;
-                    if len > plane_size || len == 0 {
+                PlaneDescriptor::Audio(plane_size, actual_bytes) => {
+                    if len > *plane_size || len == 0 {
                         return Err(crate::invalid_param_error!(len));
                     }
 
@@ -425,12 +419,12 @@ impl DataMappable for MemoryData<'_> {
 
     fn planes(&self) -> Option<MappedPlanes<'_>> {
         let mut data_slice = self.data.as_ref();
-        let mut planes = SmallVec::new();
+        let mut planes = SmallVec::with_capacity(DEFAULT_MAX_PLANES);
 
         for plane in &self.planes {
             let plane_size = match plane {
                 #[cfg(feature = "audio")]
-                PlaneDescriptor::Audio(stride, _) => *stride,
+                PlaneDescriptor::Audio(plane_size, _) => *plane_size,
                 #[cfg(feature = "video")]
                 PlaneDescriptor::Video(stride, height) => stride * (*height as usize),
             };
@@ -439,7 +433,6 @@ impl DataMappable for MemoryData<'_> {
                 return None;
             }
 
-            #[allow(unused_variables)]
             let (plane_data, rest) = data_slice.split_at(plane_size);
 
             let mapped_plane = match plane {
@@ -470,13 +463,12 @@ impl DataMappable for MemoryData<'_> {
             Data::Owned(vec) => vec.as_mut_slice(),
             Data::Borrowed(_) => return None,
         };
-        let mut planes = SmallVec::new();
+        let mut planes = SmallVec::with_capacity(DEFAULT_MAX_PLANES);
 
         for plane in &self.planes {
-            #[allow(unreachable_patterns)]
             let plane_size = match plane {
                 #[cfg(feature = "audio")]
-                PlaneDescriptor::Audio(stride, _) => *stride,
+                PlaneDescriptor::Audio(plane_size, _) => *plane_size,
                 #[cfg(feature = "video")]
                 PlaneDescriptor::Video(stride, height) => stride * (*height as usize),
             };
@@ -485,7 +477,6 @@ impl DataMappable for MemoryData<'_> {
                 return None;
             }
 
-            #[allow(unused_variables)]
             let (plane_data, rest) = data_slice.split_at_mut(plane_size);
 
             let mapped_plane = match plane {
@@ -533,7 +524,7 @@ impl DataMappable for SeparateMemoryData<'_> {
     }
 
     fn planes(&self) -> Option<MappedPlanes<'_>> {
-        let mut planes = SmallVec::new();
+        let mut planes = SmallVec::with_capacity(DEFAULT_MAX_PLANES);
 
         for (slice, stride, height) in &self.planes {
             let mapped_plane = MappedPlane::Video {
@@ -576,12 +567,12 @@ impl DataMappable for BufferData {
 
     fn planes(&self) -> Option<MappedPlanes<'_>> {
         let data = self.data.data();
-        let mut planes = SmallVec::new();
+        let mut planes = SmallVec::with_capacity(DEFAULT_MAX_PLANES);
 
         for plane in &self.planes {
             let (offset, plane_size) = match plane.1 {
                 #[cfg(feature = "audio")]
-                PlaneDescriptor::Audio(stride, _) => (plane.0, stride),
+                PlaneDescriptor::Audio(plane_size, _) => (plane.0, plane_size),
                 #[cfg(feature = "video")]
                 PlaneDescriptor::Video(stride, height) => (plane.0, stride * (height as usize)),
             };
@@ -696,8 +687,8 @@ impl DataMappable for FrameData<'_> {
 }
 
 #[derive(Clone)]
-pub struct Frame<'a> {
-    pub(crate) desc: FrameDescriptor,
+pub struct Frame<'a, D: FrameDescriptorSpec = FrameDescriptor> {
+    pub(crate) desc: D,
     pub source: Option<String>,
     pub pts: Option<i64>,
     pub dts: Option<i64>,
@@ -710,10 +701,10 @@ pub struct Frame<'a> {
 #[deprecated = "Use 'Frame' directly"]
 pub type MediaFrame<'a> = Frame<'a>;
 
-impl Frame<'_> {
-    pub fn with_descriptor<T>(desc: T) -> Result<Frame<'static>>
+impl Frame<'_, FrameDescriptor> {
+    pub fn new_with_generic_descriptor<D>(desc: D) -> Result<Frame<'static>>
     where
-        T: Into<FrameDescriptor> + Clone,
+        D: Into<FrameDescriptor> + Clone,
     {
         let desc = desc.into();
         match desc {
@@ -725,10 +716,7 @@ impl Frame<'_> {
         }
     }
 
-    pub(crate) fn from_data<'a, T>(desc: FrameDescriptor, data: T) -> Frame<'a>
-    where
-        T: Into<FrameData<'a>>,
-    {
+    pub(crate) fn from_data<'a>(desc: FrameDescriptor, data: FrameData<'a>) -> Frame<'a> {
         Frame {
             desc,
             source: None,
@@ -737,39 +725,12 @@ impl Frame<'_> {
             duration: None,
             time_base: None,
             metadata: None,
-            data: data.into(),
+            data,
         }
     }
 
     pub fn media_type(&self) -> MediaType {
         self.desc.media_type()
-    }
-
-    pub fn into_owned(self) -> Frame<'static> {
-        Frame {
-            desc: self.desc,
-            source: self.source,
-            pts: self.pts,
-            dts: self.dts,
-            duration: self.duration,
-            time_base: self.time_base,
-            metadata: self.metadata,
-            data: self.data.into_owned(),
-        }
-    }
-
-    pub fn descriptor(&self) -> &FrameDescriptor {
-        &self.desc
-    }
-
-    #[cfg(any(feature = "audio", feature = "video"))]
-    pub fn map(&self) -> Result<MappedGuard<'_>> {
-        self.data.map()
-    }
-
-    #[cfg(any(feature = "audio", feature = "video"))]
-    pub fn map_mut(&mut self) -> Result<MappedGuard<'_>> {
-        self.data.map_mut()
     }
 
     #[cfg(any(feature = "audio", feature = "video"))]
@@ -784,47 +745,101 @@ impl Frame<'_> {
     }
 }
 
-#[derive(Clone)]
-pub struct SharedFrame<T = RwLock<Frame<'static>>> {
-    inner: Arc<T>,
-    pub(crate) pool: Option<Weak<FramePool<T>>>,
+impl<D: FrameDescriptorSpec> Frame<'_, D> {
+    pub(crate) fn from_data_with_generic_descriptor<'a>(desc: D, data: FrameData<'a>) -> Frame<'a, D> {
+        Frame {
+            desc,
+            source: None,
+            pts: None,
+            dts: None,
+            duration: None,
+            time_base: None,
+            metadata: None,
+            data,
+        }
+    }
+
+    pub fn descriptor(&self) -> &D {
+        &self.desc
+    }
+
+    pub fn into_owned(self) -> Frame<'static, D> {
+        Frame {
+            desc: self.desc,
+            source: self.source,
+            pts: self.pts,
+            dts: self.dts,
+            duration: self.duration,
+            time_base: self.time_base,
+            metadata: self.metadata,
+            data: self.data.into_owned(),
+        }
+    }
+
+    #[cfg(any(feature = "audio", feature = "video"))]
+    pub fn map(&self) -> Result<MappedGuard<'_>> {
+        self.data.map()
+    }
+
+    #[cfg(any(feature = "audio", feature = "video"))]
+    pub fn map_mut(&mut self) -> Result<MappedGuard<'_>> {
+        self.data.map_mut()
+    }
 }
 
-impl SharedFrame<RwLock<Frame<'static>>> {
-    pub fn new(frame: Frame<'_>) -> Self {
+pub trait SharedFrameInner {
+    type Descriptor: FrameDescriptorSpec;
+}
+
+impl<D: FrameDescriptorSpec> SharedFrameInner for RwLock<Frame<'_, D>> {
+    type Descriptor = D;
+}
+
+impl<D: FrameDescriptorSpec> SharedFrameInner for Frame<'_, D> {
+    type Descriptor = D;
+}
+
+#[derive(Clone)]
+pub struct SharedFrame<F: SharedFrameInner = RwLock<Frame<'static>>> {
+    inner: Arc<F>,
+    pub(crate) pool: Option<Weak<FramePool<F>>>,
+}
+
+impl<D: FrameDescriptorSpec> SharedFrame<RwLock<Frame<'static, D>>> {
+    pub fn new(frame: Frame<'_, D>) -> Self {
         Self {
             inner: Arc::new(RwLock::new(frame.into_owned())),
             pool: None,
         }
     }
 
-    pub fn read(&self) -> LockResult<RwLockReadGuard<'_, Frame<'static>>> {
+    pub fn read(&self) -> LockResult<RwLockReadGuard<'_, Frame<'static, D>>> {
         self.inner.read()
     }
 
-    pub fn write(&self) -> LockResult<RwLockWriteGuard<'_, Frame<'static>>> {
+    pub fn write(&self) -> LockResult<RwLockWriteGuard<'_, Frame<'static, D>>> {
         self.inner.write()
     }
 }
 
-impl SharedFrame<Frame<'static>> {
-    pub fn new(frame: Frame<'_>) -> Self {
+impl<D: FrameDescriptorSpec> SharedFrame<Frame<'static, D>> {
+    pub fn new(frame: Frame<'_, D>) -> Self {
         Self {
             inner: Arc::new(frame.into_owned()),
             pool: None,
         }
     }
 
-    pub fn read(&self) -> &Frame<'static> {
+    pub fn read(&self) -> &Frame<'static, D> {
         &self.inner
     }
 
-    pub fn write(&mut self) -> Option<&mut Frame<'static>> {
+    pub fn write(&mut self) -> Option<&mut Frame<'static, D>> {
         Arc::get_mut(&mut self.inner)
     }
 }
 
-impl<T> Drop for SharedFrame<T> {
+impl<F: SharedFrameInner> Drop for SharedFrame<F> {
     fn drop(&mut self) {
         if let Some(pool) = &self.pool {
             if let Some(pool) = pool.upgrade() {

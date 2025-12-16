@@ -12,10 +12,10 @@ use strum::EnumCount;
 use crate::{
     align_to, ceil_rshift,
     error::Error,
-    frame::{PlaneDescriptor, PlaneVec},
+    frame::{Frame, PlaneDescriptor, PlaneVec},
     invalid_param_error,
-    media::FrameDescriptor,
-    Result,
+    video::VideoFrame,
+    FrameDescriptor, FrameDescriptorSpec, MediaType, Result,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1108,7 +1108,10 @@ impl VideoFrameDescriptor {
     pub fn new(format: PixelFormat, width: NonZeroU32, height: NonZeroU32) -> Self {
         Self {
             format,
-            dimensions: Dimensions { width, height },
+            dimensions: Dimensions {
+                width,
+                height,
+            },
             color_range: ColorRange::default(),
             color_matrix: ColorMatrix::default(),
             color_primaries: ColorPrimaries::default(),
@@ -1157,5 +1160,15 @@ impl TryFrom<FrameDescriptor> for VideoFrameDescriptor {
             FrameDescriptor::Video(desc) => Ok(desc),
             _ => Err(invalid_param_error!(value)),
         }
+    }
+}
+
+impl FrameDescriptorSpec for VideoFrameDescriptor {
+    fn media_type(&self) -> MediaType {
+        MediaType::Video
+    }
+
+    fn create_frame(&self) -> Result<Frame<'static, Self>> {
+        VideoFrame::new_with_descriptor(self.clone())
     }
 }

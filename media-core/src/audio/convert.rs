@@ -1,11 +1,14 @@
 use bytemuck::Pod;
 use strum::EnumCount;
 
-use super::audio::SampleFormat;
+use super::{
+    audio::{AudioFrameDescriptor, SampleFormat},
+    frame::AudioFrame,
+};
 use crate::{
     error::Error,
-    frame::{Frame, MappedPlanes},
-    Result,
+    frame::{DataMappable, Frame, FrameData, MappedPlanes},
+    FrameDescriptor, Result,
 };
 
 macro_rules! impl_convert {
@@ -156,13 +159,21 @@ fn data_convert(
 
 impl Frame<'_> {
     pub fn convert_audio_to(&self, dst: &mut Frame) -> Result<()> {
-        if self.media_type() != dst.media_type() || !self.is_audio() {
-            return Err(Error::Unsupported("media type mismatch".to_string()));
-        }
+        let (FrameDescriptor::Audio(src_desc), FrameDescriptor::Audio(dst_desc)) = (&self.desc, &dst.desc) else {
+            return Err(Error::Invalid("not audio frame".to_string()));
+        };
 
-        let src_desc = self.audio_descriptor().ok_or_else(|| Error::Invalid("not audio frame".to_string()))?;
-        let dst_desc = dst.audio_descriptor().cloned().ok_or_else(|| Error::Invalid("not audio frame".to_string()))?;
+        AudioFrame::convert_audio_to_internal(src_desc, &self.data, dst_desc, &mut dst.data)
+    }
+}
 
+impl AudioFrame<'_> {
+    fn convert_audio_to_internal(
+        src_desc: &AudioFrameDescriptor,
+        src_data: &FrameData,
+        dst_desc: &AudioFrameDescriptor,
+        dst_data: &mut FrameData,
+    ) -> Result<()> {
         if src_desc.samples != dst_desc.samples {
             return Err(Error::Unsupported("samples mismatch".to_string()));
         }
@@ -174,8 +185,8 @@ impl Frame<'_> {
             return Err(Error::Unsupported("channels mismatch".to_string()));
         }
 
-        let guard = self.map().map_err(|_| Error::Invalid("cannot read source frame".into()))?;
-        let mut dst_guard = dst.map_mut().map_err(|_| Error::Invalid("cannot write destination frame".into()))?;
+        let guard = src_data.map().map_err(|_| Error::Invalid("not readable".into()))?;
+        let mut dst_guard = dst_data.map_mut().map_err(|_| Error::Invalid("not writable".into()))?;
         let src_planes = guard.planes().unwrap();
         let mut dst_planes = dst_guard.planes_mut().unwrap();
 
@@ -190,5 +201,9 @@ impl Frame<'_> {
         } else {
             data_convert(&src_planes, &mut dst_planes, src_format, dst_format, src_channels, src_desc.samples.get())
         }
+    }
+
+    pub fn convert_to(&self, dst: &mut AudioFrame) -> Result<()> {
+        Self::convert_audio_to_internal(&self.desc, &self.data, &dst.desc, &mut dst.data)
     }
 }
