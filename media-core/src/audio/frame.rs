@@ -9,10 +9,10 @@ use super::audio::{AudioFrameDescriptor, SampleFormat};
 use crate::{
     error::Error,
     frame::{Data, Frame, FrameData, MemoryData},
-    invalid_param_error,
-    media::FrameDescriptor,
-    Result, DEFAULT_ALIGNMENT,
+    invalid_param_error, unsupported_error, FrameDescriptor, Result, DEFAULT_ALIGNMENT,
 };
+
+pub type AudioFrame<'a> = Frame<'a, AudioFrameDescriptor>;
 
 pub struct AudioDataCreator;
 
@@ -114,17 +114,106 @@ impl Frame<'_> {
 
     pub fn truncate(&mut self, samples: u32) -> Result<()> {
         let FrameDescriptor::Audio(desc) = &mut self.desc else {
-            return Err(Error::Unsupported(format!("frame descriptor: {:?}", self.desc)));
+            return Err(unsupported_error!(self.desc));
         };
 
+        AudioFrame::truncate_internal(desc, &mut self.data, samples)
+    }
+}
+
+impl AudioFrame<'_> {
+    pub fn new(format: SampleFormat, channels: u8, samples: u32, sample_rate: u32) -> Result<Self> {
+        let desc = AudioFrameDescriptor::try_new(format, channels, samples, sample_rate)?;
+
+        Self::new_with_descriptor(desc)
+    }
+
+    pub fn new_with_descriptor(desc: AudioFrameDescriptor) -> Result<Self> {
+        let data = AudioDataCreator::create(desc.format, desc.channels(), desc.samples)?;
+
+        Ok(Frame::from_data_with_generic_descriptor(desc, FrameData::Memory(data)))
+    }
+
+    pub fn from_buffer<'a, T>(format: SampleFormat, channels: u8, samples: u32, sample_rate: u32, buffer: T) -> Result<AudioFrame<'a>>
+    where
+        T: Into<Cow<'a, [u8]>>,
+    {
+        let desc = AudioFrameDescriptor::try_new(format, channels, samples, sample_rate)?;
+
+        Self::from_buffer_with_descriptor(desc, buffer)
+    }
+
+    pub fn from_buffer_with_descriptor<'a, T>(desc: AudioFrameDescriptor, buffer: T) -> Result<AudioFrame<'a>>
+    where
+        T: Into<Cow<'a, [u8]>>,
+    {
+        let data = AudioDataCreator::create_from_buffer(desc.format, desc.channels(), desc.samples, buffer)?;
+
+        Ok(Frame::from_data_with_generic_descriptor(desc, FrameData::Memory(data)))
+    }
+
+    pub fn new_empty(format: SampleFormat, channels: u8, samples: u32, sample_rate: u32) -> Result<Self> {
+        let desc = AudioFrameDescriptor::try_new(format, channels, samples, sample_rate)?;
+
+        Self::new_empty_with_descriptor(desc)
+    }
+
+    pub fn new_empty_with_descriptor(desc: AudioFrameDescriptor) -> Result<Self> {
+        let data = FrameData::Empty;
+
+        Ok(Frame::from_data_with_generic_descriptor(desc, data))
+    }
+
+    fn truncate_internal(desc: &mut AudioFrameDescriptor, data: &mut FrameData, samples: u32) -> Result<()> {
         if desc.samples.get() < samples || samples == 0 {
             return Err(invalid_param_error!(samples));
         }
 
         let actual_bytes = desc.format.calc_plane_size(desc.channels().get(), samples);
-        self.data.truncate(actual_bytes)?;
+        data.truncate(actual_bytes)?;
 
         desc.samples = NonZeroU32::new(samples).unwrap();
+
         Ok(())
+    }
+
+    pub fn truncate(&mut self, samples: u32) -> Result<()> {
+        Self::truncate_internal(&mut self.desc, &mut self.data, samples)
+    }
+}
+
+impl<'a> From<AudioFrame<'a>> for Frame<'a> {
+    fn from(frame: AudioFrame<'a>) -> Self {
+        Frame {
+            desc: FrameDescriptor::Audio(frame.desc),
+            source: frame.source,
+            pts: frame.pts,
+            dts: frame.dts,
+            duration: frame.duration,
+            time_base: frame.time_base,
+            metadata: frame.metadata,
+            data: frame.data,
+        }
+    }
+}
+
+impl<'a> TryFrom<Frame<'a>> for AudioFrame<'a> {
+    type Error = crate::Error;
+
+    fn try_from(frame: Frame<'a>) -> Result<Self> {
+        if let FrameDescriptor::Audio(desc) = frame.desc {
+            Ok(Frame {
+                desc,
+                source: frame.source,
+                pts: frame.pts,
+                dts: frame.dts,
+                duration: frame.duration,
+                time_base: frame.time_base,
+                metadata: frame.metadata,
+                data: frame.data,
+            })
+        } else {
+            Err(crate::Error::Invalid("not audio frame".to_string()))
+        }
     }
 }

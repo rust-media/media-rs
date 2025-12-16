@@ -7,12 +7,14 @@ use yuv::{
     YuvPackedImageMut, YuvPlanarImage, YuvPlanarImageMut, YuvRange, YuvStandardMatrix,
 };
 
-use super::video::{ColorMatrix, ColorRange, PixelFormat};
+use super::{
+    frame::VideoFrame,
+    video::{ColorMatrix, ColorRange, PixelFormat, VideoFrameDescriptor},
+};
 use crate::{
     error::Error,
-    frame::{Frame, MappedPlanes},
-    media::FrameDescriptor,
-    Result,
+    frame::{DataMappable, Frame, FrameData, MappedPlanes},
+    FrameDescriptor, Result,
 };
 
 fn into_yuv_planar_image<'a, T>(src: &'a MappedPlanes, width: NonZeroU32, height: NonZeroU32) -> Result<YuvPlanarImage<'a, T>>
@@ -577,20 +579,27 @@ fn data_copy(src: &MappedPlanes, dst: &mut MappedPlanes, format: PixelFormat, wi
 
 impl Frame<'_> {
     pub fn convert_video_to(&self, dst: &mut Frame) -> Result<()> {
-        if self.media_type() != dst.media_type() || !self.is_video() {
-            return Err(Error::Unsupported("media type".to_string()));
-        }
-
-        let (FrameDescriptor::Video(src_desc), FrameDescriptor::Video(dst_desc)) = (&self.desc, &dst.desc.clone()) else {
+        let (FrameDescriptor::Video(src_desc), FrameDescriptor::Video(dst_desc)) = (&self.desc, &dst.desc) else {
             return Err(Error::Invalid("not video frame".to_string()));
         };
 
+        VideoFrame::convert_video_to_internal(src_desc, &self.data, dst_desc, &mut dst.data)
+    }
+}
+
+impl VideoFrame<'_> {
+    fn convert_video_to_internal(
+        src_desc: &VideoFrameDescriptor,
+        src_data: &FrameData,
+        dst_desc: &VideoFrameDescriptor,
+        dst_data: &mut FrameData,
+    ) -> Result<()> {
         if src_desc.dimensions != dst_desc.dimensions {
             return Err(Error::Invalid("video frame dimensions mismatch".to_string()));
         }
 
-        let guard = self.map().map_err(|_| Error::Invalid("not readable".into()))?;
-        let mut dst_guard = dst.map_mut().map_err(|_| Error::Invalid("not writable".into()))?;
+        let guard = src_data.map().map_err(|_| Error::Invalid("not readable".into()))?;
+        let mut dst_guard = dst_data.map_mut().map_err(|_| Error::Invalid("not writable".into()))?;
         let src_planes = guard.planes().unwrap();
         let mut dst_planes = dst_guard.planes_mut().unwrap();
 
@@ -602,5 +611,9 @@ impl Frame<'_> {
             .ok_or_else(|| Error::Unsupported("video format conversion".to_string()))?;
 
         convert(&src_planes, &mut dst_planes, src_desc.color_range, src_desc.color_matrix, src_desc.width(), src_desc.height())
+    }
+
+    pub fn convert_to(&self, dst: &mut VideoFrame) -> Result<()> {
+        Self::convert_video_to_internal(&self.desc, &self.data, &dst.desc, &mut dst.data)
     }
 }

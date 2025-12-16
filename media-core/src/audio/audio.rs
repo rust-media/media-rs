@@ -8,11 +8,10 @@ use strum::EnumCount;
 pub use super::channel_layout::*;
 use crate::{
     align_to,
+    audio::AudioFrame,
     error::Error,
-    frame::{PlaneDescriptor, PlaneVec},
-    invalid_param_error,
-    media::FrameDescriptor,
-    time, Result,
+    frame::{Frame, PlaneDescriptor, PlaneVec},
+    invalid_param_error, time, FrameDescriptor, FrameDescriptorSpec, MediaType, Result,
 };
 
 pub const SAMPLE_RATE_TELEPHONE: u32 = 8000;
@@ -244,5 +243,26 @@ impl AudioFrameDescriptor {
 impl From<AudioFrameDescriptor> for FrameDescriptor {
     fn from(desc: AudioFrameDescriptor) -> Self {
         FrameDescriptor::Audio(desc)
+    }
+}
+
+impl TryFrom<FrameDescriptor> for AudioFrameDescriptor {
+    type Error = Error;
+
+    fn try_from(value: FrameDescriptor) -> Result<Self> {
+        match value {
+            FrameDescriptor::Audio(desc) => Ok(desc),
+            _ => Err(invalid_param_error!(value)),
+        }
+    }
+}
+
+impl FrameDescriptorSpec for AudioFrameDescriptor {
+    fn media_type(&self) -> crate::MediaType {
+        MediaType::Audio
+    }
+
+    fn create_frame(&self) -> Result<Frame<'static, Self>> {
+        AudioFrame::new_with_descriptor(self.clone())
     }
 }

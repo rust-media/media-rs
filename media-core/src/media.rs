@@ -1,14 +1,19 @@
 #[cfg(feature = "audio")]
 use crate::audio::AudioFrameDescriptor;
-use crate::data::DataFrameDescriptor;
 #[cfg(feature = "video")]
 use crate::video::VideoFrameDescriptor;
+use crate::{data::DataFrameDescriptor, frame::Frame, Result};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MediaType {
     Audio = 0,
     Video,
     Data,
+}
+
+pub trait FrameDescriptorSpec: Clone + PartialEq + Send + Sync + Into<FrameDescriptor> + 'static {
+    fn media_type(&self) -> MediaType;
+    fn create_frame(&self) -> Result<Frame<'static, Self>>;
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -32,6 +37,32 @@ impl FrameDescriptor {
     }
 
     #[cfg(feature = "audio")]
+    pub fn as_audio(&self) -> Option<&AudioFrameDescriptor> {
+        if let FrameDescriptor::Audio(desc) = self {
+            Some(desc)
+        } else {
+            None
+        }
+    }
+
+    #[cfg(feature = "video")]
+    pub fn as_video(&self) -> Option<&VideoFrameDescriptor> {
+        if let FrameDescriptor::Video(desc) = self {
+            Some(desc)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_data(&self) -> Option<&DataFrameDescriptor> {
+        if let FrameDescriptor::Data(desc) = self {
+            Some(desc)
+        } else {
+            None
+        }
+    }
+
+    #[cfg(feature = "audio")]
     pub fn is_audio(&self) -> bool {
         matches!(self, FrameDescriptor::Audio(_))
     }
@@ -43,6 +74,16 @@ impl FrameDescriptor {
 
     pub fn is_data(&self) -> bool {
         matches!(self, FrameDescriptor::Data(_))
+    }
+}
+
+impl FrameDescriptorSpec for FrameDescriptor {
+    fn media_type(&self) -> MediaType {
+        self.media_type()
+    }
+
+    fn create_frame(&self) -> Result<Frame<'static, Self>> {
+        Frame::new_with_generic_descriptor(self.clone())
     }
 }
 

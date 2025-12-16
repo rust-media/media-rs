@@ -9,7 +9,7 @@ use std::{
 use media_core::audio::{ChannelLayout, SampleFormat};
 #[cfg(feature = "video")]
 use media_core::video::{ChromaLocation, ColorMatrix, ColorPrimaries, ColorRange, ColorTransferCharacteristics, PixelFormat};
-use media_core::{error::Error, invalid_param_error, variant::Variant, MediaType, Result};
+use media_core::{error::Error, invalid_param_error, variant::Variant, FrameDescriptorSpec, MediaType, Result};
 #[cfg(feature = "video")]
 use num_rational::Rational64;
 
@@ -140,7 +140,9 @@ impl CodecParameters {
     }
 }
 
-pub trait CodecConfig: Clone + Send + Sync + 'static {
+pub trait CodecSpec: Clone + Send + Sync + 'static {
+    type FrameDescriptor: FrameDescriptorSpec;
+
     fn media_type() -> MediaType;
     fn codec_type() -> CodecType;
     fn from_parameters(params: &CodecParameters) -> Result<Self>;
@@ -295,17 +297,17 @@ pub trait CodecInformation {
     fn name(&self) -> &'static str;
 }
 
-pub trait Codec<T: CodecConfig>: CodecInformation {
+pub trait Codec<T: CodecSpec>: CodecInformation {
     fn configure(&mut self, params: Option<&CodecParameters>, options: Option<&Variant>) -> Result<()>;
     fn set_option(&mut self, key: &str, value: &Variant) -> Result<()>;
 }
 
-pub trait CodecBuilder<T: CodecConfig>: Any + Send + Sync {
+pub trait CodecBuilder<T: CodecSpec>: Any + Send + Sync {
     fn id(&self) -> CodecID;
     fn name(&self) -> &'static str;
 }
 
-pub(crate) struct CodecList<T: CodecConfig> {
+pub(crate) struct CodecList<T: CodecSpec> {
     pub(crate) codecs: HashMap<CodecID, Vec<Arc<dyn CodecBuilder<T>>>>,
 }
 
@@ -313,7 +315,7 @@ pub(crate) type LazyCodecList<T> = LazyLock<RwLock<CodecList<T>>>;
 
 pub(crate) fn register_codec<T>(codec_list: &LazyCodecList<T>, builder: Arc<dyn CodecBuilder<T>>, default: bool) -> Result<()>
 where
-    T: CodecConfig,
+    T: CodecSpec,
 {
     let mut codec_list = codec_list.write().map_err(|err| Error::Invalid(err.to_string()))?;
     let entry = codec_list.codecs.entry(builder.id()).or_default();
@@ -329,7 +331,7 @@ where
 
 pub(crate) fn find_codec<T>(codec_list: &LazyCodecList<T>, id: CodecID) -> Result<Arc<dyn CodecBuilder<T>>>
 where
-    T: CodecConfig,
+    T: CodecSpec,
 {
     let codec_list = codec_list.read().map_err(|err| Error::Invalid(err.to_string()))?;
 
@@ -344,7 +346,7 @@ where
 
 pub(crate) fn find_codec_by_name<T>(codec_list: &LazyCodecList<T>, name: &str) -> Result<Arc<dyn CodecBuilder<T>>>
 where
-    T: CodecConfig,
+    T: CodecSpec,
 {
     let codec_list = codec_list.read().map_err(|err| Error::Invalid(err.to_string()))?;
 

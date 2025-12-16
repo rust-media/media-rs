@@ -311,7 +311,7 @@ impl ChannelLayout {
     }
 
     pub fn is_valid(&self) -> bool {
-        if self.channels.get() <= 0 {
+        if self.channels.get() == 0 {
             return false;
         }
 

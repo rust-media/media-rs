@@ -7,3 +7,4 @@ pub mod channel_layout;
 pub mod circular_buffer;
 
 pub use audio::*;
+pub use frame::*;

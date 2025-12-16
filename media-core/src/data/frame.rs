@@ -1,10 +1,11 @@
 use super::data::{DataFormat, DataFrameDescriptor};
 use crate::{
     frame::{Frame, FrameData},
-    media::FrameDescriptor,
     variant::Variant,
-    Result,
+    FrameDescriptor, FrameDescriptorSpec, Result,
 };
+
+pub type DataFrame<'a> = Frame<'a, DataFrameDescriptor>;
 
 pub struct DataFrameCreator;
 
@@ -21,6 +22,24 @@ impl DataFrameCreator {
 
     pub fn create_from_variant(&self, variant: &Variant) -> Result<Frame<'static>> {
         Ok(Frame::from_data(FrameDescriptor::Data(DataFrameDescriptor::new(DataFormat::Variant)), FrameData::Variant(variant.clone())))
+    }
+}
+
+impl<D: FrameDescriptorSpec> Frame<'_, D> {
+    pub fn data(&self) -> Option<&Variant> {
+        if let FrameData::Variant(v) = &self.data {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn data_mut(&mut self) -> Option<&mut Variant> {
+        if let FrameData::Variant(v) = &mut self.data {
+            Some(v)
+        } else {
+            None
+        }
     }
 }
 
@@ -41,20 +60,50 @@ impl Frame<'_> {
     pub fn is_data(&self) -> bool {
         self.desc.is_data()
     }
+}
 
-    pub fn data(&self) -> Option<&Variant> {
-        if let FrameData::Variant(v) = &self.data {
-            Some(v)
-        } else {
-            None
-        }
+impl DataFrame<'_> {
+    pub fn new(format: DataFormat) -> DataFrame<'static> {
+        Self::new_with_descriptor(DataFrameDescriptor::new(format))
     }
 
-    pub fn data_mut(&mut self) -> Option<&mut Variant> {
-        if let FrameData::Variant(v) = &mut self.data {
-            Some(v)
+    pub fn new_with_descriptor(desc: DataFrameDescriptor) -> DataFrame<'static> {
+        Frame::from_data_with_generic_descriptor(desc, FrameData::Variant(Variant::new()))
+    }
+}
+
+impl<'a> From<DataFrame<'a>> for Frame<'a> {
+    fn from(frame: DataFrame<'a>) -> Self {
+        Frame {
+            desc: FrameDescriptor::Data(frame.desc),
+            source: frame.source,
+            pts: frame.pts,
+            dts: frame.dts,
+            duration: frame.duration,
+            time_base: frame.time_base,
+            metadata: frame.metadata,
+            data: frame.data,
+        }
+    }
+}
+
+impl<'a> TryFrom<Frame<'a>> for DataFrame<'a> {
+    type Error = crate::Error;
+
+    fn try_from(frame: Frame<'a>) -> Result<Self> {
+        if let FrameDescriptor::Data(desc) = frame.desc {
+            Ok(Frame {
+                desc,
+                source: frame.source,
+                pts: frame.pts,
+                dts: frame.dts,
+                duration: frame.duration,
+                time_base: frame.time_base,
+                metadata: frame.metadata,
+                data: frame.data,
+            })
         } else {
-            None
+            Err(crate::Error::Invalid("not data frame".to_string()))
         }
     }
 }

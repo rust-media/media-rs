@@ -20,10 +20,8 @@ use super::super::frame::VideoFrameCreator;
 use crate::{
     error::Error,
     frame::*,
-    invalid_param_error,
-    media::FrameDescriptor,
-    none_param_error,
-    video::{ColorMatrix, ColorPrimaries, ColorRange, ColorTransferCharacteristics, PixelFormat, VideoFrameDescriptor},
+    invalid_param_error, none_param_error,
+    video::{ColorMatrix, ColorPrimaries, ColorRange, ColorTransferCharacteristics, PixelFormat, VideoFrame, VideoFrameDescriptor},
     Result,
 };
 
@@ -379,12 +377,26 @@ fn from_cv_color_transfer_function(color_transfer_function: &CFString, gamma: Op
 
 impl VideoFrameCreator {
     pub fn create_pixel_buffer(&self, format: PixelFormat, width: u32, height: u32) -> Result<Frame<'static>> {
-        let desc = VideoFrameDescriptor::try_new(format, width, height)?;
-
-        self.create_pixel_buffer_with_descriptor(desc)
+        VideoFrame::new_pixel_buffer(format, width, height).map(|frame| frame.into())
     }
 
     pub fn create_pixel_buffer_with_descriptor(&self, desc: VideoFrameDescriptor) -> Result<Frame<'static>> {
+        VideoFrame::new_pixel_buffer_with_descriptor(desc).map(|frame| frame.into())
+    }
+
+    pub fn create_from_pixel_buffer(&self, pixel_buffer: &CVPixelBuffer) -> Result<Frame<'static>> {
+        VideoFrame::from_pixel_buffer(pixel_buffer).map(|frame| frame.into())
+    }
+}
+
+impl VideoFrame<'_> {
+    pub fn new_pixel_buffer(format: PixelFormat, width: u32, height: u32) -> Result<VideoFrame<'static>> {
+        let desc = VideoFrameDescriptor::try_new(format, width, height)?;
+
+        Self::new_pixel_buffer_with_descriptor(desc)
+    }
+
+    pub fn new_pixel_buffer_with_descriptor(desc: VideoFrameDescriptor) -> Result<VideoFrame<'static>> {
         let pixel_format = into_cv_format(desc.format, desc.color_range);
         #[cfg(target_os = "macos")]
         let compatibility_key: CFString = {
@@ -409,8 +421,8 @@ impl VideoFrameCreator {
             (compatibility_key, CFBoolean::true_value().as_CFType()),
         ]);
 
-        let width = desc.width.get() - desc.crop_left - desc.crop_right;
-        let height = desc.height.get() - desc.crop_top - desc.crop_bottom;
+        let width = desc.width().get() - desc.crop_left - desc.crop_right;
+        let height = desc.height().get() - desc.crop_top - desc.crop_bottom;
         let pixel_buffer = CVPixelBuffer::new(pixel_format, width as usize, height as usize, Some(&options))
             .map_err(|_| Error::CreationFailed(stringify!(CVPixelBuffer).to_string()))?;
 
@@ -442,10 +454,10 @@ impl VideoFrameCreator {
             buffer.set_attachment(&CVImageBufferKeys::GammaLevel.into(), &gamma.as_CFType(), kCVAttachmentMode_ShouldPropagate);
         }
 
-        Ok(Frame::from_data(FrameDescriptor::Video(desc), FrameData::PixelBuffer(PixelBuffer(pixel_buffer))))
+        Ok(Frame::from_data_with_generic_descriptor(desc, FrameData::PixelBuffer(PixelBuffer(pixel_buffer))))
     }
 
-    pub fn create_from_pixel_buffer(&self, pixel_buffer: &CVPixelBuffer) -> Result<Frame<'static>> {
+    pub fn from_pixel_buffer(pixel_buffer: &CVPixelBuffer) -> Result<Self> {
         let width = pixel_buffer.get_width() as u32;
         let width = NonZeroU32::new(width).ok_or_else(|| invalid_param_error!(width))?;
         let height = pixel_buffer.get_height() as u32;
@@ -518,7 +530,7 @@ impl VideoFrameCreator {
             }
         }
 
-        Ok(Frame::from_data(FrameDescriptor::Video(desc), FrameData::PixelBuffer(PixelBuffer(pixel_buffer.clone()))))
+        Ok(Frame::from_data_with_generic_descriptor(desc, FrameData::PixelBuffer(PixelBuffer(pixel_buffer.clone()))))
     }
 }
 
