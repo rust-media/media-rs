@@ -29,9 +29,11 @@ impl TryFrom<FrameDescriptor> for DataFrameDescriptor {
     type Error = Error;
 
     fn try_from(value: FrameDescriptor) -> Result<Self> {
-        match value {
-            FrameDescriptor::Data(desc) => Ok(desc),
-            _ => Err(invalid_param_error!(value)),
+        #[allow(irrefutable_let_patterns)]
+        if let FrameDescriptor::Data(desc) = value {
+            Ok(desc)
+        } else {
+            Err(invalid_param_error!(value))
         }
     }
 }

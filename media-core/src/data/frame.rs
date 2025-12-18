@@ -91,6 +91,7 @@ impl<'a> TryFrom<Frame<'a>> for DataFrame<'a> {
     type Error = crate::Error;
 
     fn try_from(frame: Frame<'a>) -> Result<Self> {
+        #[allow(irrefutable_let_patterns)]
         if let FrameDescriptor::Data(desc) = frame.desc {
             Ok(Frame {
                 desc,
