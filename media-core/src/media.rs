@@ -55,6 +55,7 @@ impl FrameDescriptor {
     }
 
     pub fn as_data(&self) -> Option<&DataFrameDescriptor> {
+        #[allow(irrefutable_let_patterns)]
         if let FrameDescriptor::Data(desc) = self {
             Some(desc)
         } else {
