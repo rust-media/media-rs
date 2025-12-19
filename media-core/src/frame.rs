@@ -698,9 +698,6 @@ pub struct Frame<'a, D: FrameDescriptorSpec = FrameDescriptor> {
     pub(crate) data: FrameData<'a>,
 }
 
-#[deprecated = "Use 'Frame' directly"]
-pub type MediaFrame<'a> = Frame<'a>;
-
 impl Frame<'_, FrameDescriptor> {
     pub fn new_with_generic_descriptor<D>(desc: D) -> Result<Frame<'static>>
     where

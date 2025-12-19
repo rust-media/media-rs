@@ -42,9 +42,6 @@ pub enum Error {
     WriteFailed(String),
 }
 
-#[deprecated = "Use 'Error' directly"]
-pub type MediaError = Error;
-
 #[macro_export]
 macro_rules! invalid_param_error {
     ($param:expr) => {
