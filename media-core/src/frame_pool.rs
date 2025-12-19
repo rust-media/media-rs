@@ -37,7 +37,6 @@ impl<D: FrameDescriptorSpec> FrameCreator<D> for DefaultFrameCreator<D> {
 
 impl<D: FrameDescriptorSpec> From<DefaultFrameCreator<D>> for Arc<dyn FrameCreator<D>>
 where
-    D: FrameDescriptorSpec,
     DefaultFrameCreator<D>: FrameCreator<D>,
 {
     fn from(creator: DefaultFrameCreator<D>) -> Self {

@@ -8,8 +8,8 @@ use aligned_vec::avec;
 use super::audio::{AudioFrameDescriptor, SampleFormat};
 use crate::{
     error::Error,
-    frame::{Data, Frame, FrameData, MemoryData},
-    invalid_param_error, unsupported_error, FrameDescriptor, Result, DEFAULT_ALIGNMENT,
+    frame::{Data, Frame, FrameData, FrameSpec, MemoryData},
+    invalid_param_error, unsupported_error, FrameDescriptor, MediaType, Result, DEFAULT_ALIGNMENT,
 };
 
 pub type AudioFrame<'a> = Frame<'a, AudioFrameDescriptor>;
@@ -198,7 +198,7 @@ impl<'a> From<AudioFrame<'a>> for Frame<'a> {
 }
 
 impl<'a> TryFrom<Frame<'a>> for AudioFrame<'a> {
-    type Error = crate::Error;
+    type Error = Error;
 
     fn try_from(frame: Frame<'a>) -> Result<Self> {
         if let FrameDescriptor::Audio(desc) = frame.desc {
@@ -213,7 +213,17 @@ impl<'a> TryFrom<Frame<'a>> for AudioFrame<'a> {
                 data: frame.data,
             })
         } else {
-            Err(crate::Error::Invalid("not audio frame".to_string()))
+            Err(Error::Invalid("not audio frame".to_string()))
         }
+    }
+}
+
+impl FrameSpec<AudioFrameDescriptor> for AudioFrame<'_> {
+    fn new_with_descriptor(desc: AudioFrameDescriptor) -> Result<Frame<'static, AudioFrameDescriptor>> {
+        AudioFrame::new_with_descriptor(desc)
+    }
+
+    fn media_type(&self) -> MediaType {
+        MediaType::Audio
     }
 }

@@ -1171,4 +1171,8 @@ impl FrameDescriptorSpec for VideoFrameDescriptor {
     fn create_frame(&self) -> Result<Frame<'static, Self>> {
         VideoFrame::new_with_descriptor(self.clone())
     }
+
+    fn as_video(&self) -> Option<&VideoFrameDescriptor> {
+        Some(self)
+    }
 }

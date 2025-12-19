@@ -14,6 +14,17 @@ pub enum MediaType {
 pub trait FrameDescriptorSpec: Clone + PartialEq + Send + Sync + Into<FrameDescriptor> + 'static {
     fn media_type(&self) -> MediaType;
     fn create_frame(&self) -> Result<Frame<'static, Self>>;
+    #[cfg(feature = "audio")]
+    fn as_audio(&self) -> Option<&AudioFrameDescriptor> {
+        None
+    }
+    #[cfg(feature = "video")]
+    fn as_video(&self) -> Option<&VideoFrameDescriptor> {
+        None
+    }
+    fn as_data(&self) -> Option<&DataFrameDescriptor> {
+        None
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -85,5 +96,19 @@ impl FrameDescriptorSpec for FrameDescriptor {
 
     fn create_frame(&self) -> Result<Frame<'static, Self>> {
         Frame::new_with_generic_descriptor(self.clone())
+    }
+
+    #[cfg(feature = "audio")]
+    fn as_audio(&self) -> Option<&AudioFrameDescriptor> {
+        self.as_audio()
+    }
+
+    #[cfg(feature = "video")]
+    fn as_video(&self) -> Option<&VideoFrameDescriptor> {
+        self.as_video()
+    }
+
+    fn as_data(&self) -> Option<&DataFrameDescriptor> {
+        self.as_data()
     }
 }

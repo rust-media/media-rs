@@ -686,6 +686,11 @@ impl DataMappable for FrameData<'_> {
     }
 }
 
+pub trait FrameSpec<D: FrameDescriptorSpec> {
+    fn new_with_descriptor(desc: D) -> Result<Frame<'static, D>>;
+    fn media_type(&self) -> MediaType;
+}
+
 #[derive(Clone)]
 pub struct Frame<'a, D: FrameDescriptorSpec = FrameDescriptor> {
     pub(crate) desc: D,
@@ -781,6 +786,16 @@ impl<D: FrameDescriptorSpec> Frame<'_, D> {
     #[cfg(any(feature = "audio", feature = "video"))]
     pub fn map_mut(&mut self) -> Result<MappedGuard<'_>> {
         self.data.map_mut()
+    }
+}
+
+impl FrameSpec<FrameDescriptor> for Frame<'_, FrameDescriptor> {
+    fn new_with_descriptor(desc: FrameDescriptor) -> Result<Frame<'static>> {
+        Frame::new_with_generic_descriptor(desc)
+    }
+
+    fn media_type(&self) -> MediaType {
+        self.media_type()
     }
 }
 
