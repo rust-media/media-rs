@@ -1,8 +1,8 @@
 use super::data::{DataFormat, DataFrameDescriptor};
 use crate::{
-    frame::{Frame, FrameData},
+    frame::{Frame, FrameData, FrameSpec},
     variant::Variant,
-    FrameDescriptor, FrameDescriptorSpec, Result,
+    Error, FrameDescriptor, FrameDescriptorSpec, MediaType, Result,
 };
 
 pub type DataFrame<'a> = Frame<'a, DataFrameDescriptor>;
@@ -88,7 +88,7 @@ impl<'a> From<DataFrame<'a>> for Frame<'a> {
 }
 
 impl<'a> TryFrom<Frame<'a>> for DataFrame<'a> {
-    type Error = crate::Error;
+    type Error = Error;
 
     fn try_from(frame: Frame<'a>) -> Result<Self> {
         #[allow(irrefutable_let_patterns)]
@@ -104,7 +104,17 @@ impl<'a> TryFrom<Frame<'a>> for DataFrame<'a> {
                 data: frame.data,
             })
         } else {
-            Err(crate::Error::Invalid("not data frame".to_string()))
+            Err(Error::Invalid("not data frame".to_string()))
         }
+    }
+}
+
+impl FrameSpec<DataFrameDescriptor> for DataFrame<'_> {
+    fn new_with_descriptor(desc: DataFrameDescriptor) -> Result<Frame<'static, DataFrameDescriptor>> {
+        Ok(DataFrame::new_with_descriptor(desc))
+    }
+
+    fn media_type(&self) -> MediaType {
+        MediaType::Data
     }
 }

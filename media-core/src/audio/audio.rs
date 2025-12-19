@@ -265,4 +265,8 @@ impl FrameDescriptorSpec for AudioFrameDescriptor {
     fn create_frame(&self) -> Result<Frame<'static, Self>> {
         AudioFrame::new_with_descriptor(self.clone())
     }
+
+    fn as_audio(&self) -> Option<&AudioFrameDescriptor> {
+        Some(self)
+    }
 }

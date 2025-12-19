@@ -46,4 +46,8 @@ impl FrameDescriptorSpec for DataFrameDescriptor {
     fn create_frame(&self) -> Result<Frame<'static, Self>> {
         Ok(DataFrame::new_with_descriptor(self.clone()))
     }
+
+    fn as_data(&self) -> Option<&DataFrameDescriptor> {
+        Some(self)
+    }
 }

@@ -6,8 +6,8 @@ use super::video::{PixelFormat, VideoFrameDescriptor};
 use crate::{
     buffer::Buffer,
     error::Error,
-    frame::{BufferData, Data, Frame, FrameData, MemoryData, PlaneDescriptor, PlaneVec, SeparateMemoryData},
-    invalid_param_error, FrameDescriptor, Result, DEFAULT_ALIGNMENT,
+    frame::{BufferData, Data, Frame, FrameData, FrameSpec, MemoryData, PlaneDescriptor, PlaneVec, SeparateMemoryData},
+    invalid_param_error, FrameDescriptor, MediaType, Result, DEFAULT_ALIGNMENT,
 };
 
 pub type VideoFrame<'a> = Frame<'a, VideoFrameDescriptor>;
@@ -504,7 +504,7 @@ impl<'a> From<VideoFrame<'a>> for Frame<'a> {
 }
 
 impl<'a> TryFrom<Frame<'a>> for VideoFrame<'a> {
-    type Error = crate::Error;
+    type Error = Error;
 
     fn try_from(frame: Frame<'a>) -> Result<Self> {
         if let FrameDescriptor::Video(desc) = frame.desc {
@@ -519,7 +519,17 @@ impl<'a> TryFrom<Frame<'a>> for VideoFrame<'a> {
                 data: frame.data,
             })
         } else {
-            Err(crate::Error::Invalid("not video frame".to_string()))
+            Err(Error::Invalid("not video frame".to_string()))
         }
+    }
+}
+
+impl FrameSpec<VideoFrameDescriptor> for VideoFrame<'_> {
+    fn new_with_descriptor(desc: VideoFrameDescriptor) -> Result<Frame<'static, VideoFrameDescriptor>> {
+        VideoFrame::new_with_descriptor(desc)
+    }
+
+    fn media_type(&self) -> MediaType {
+        MediaType::Video
     }
 }
