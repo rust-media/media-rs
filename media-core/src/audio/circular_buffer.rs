@@ -1,4 +1,4 @@
-use crate::{audio::SampleFormat, circular_buffer::CircularBuffer, frame::Frame, Error, Result};
+use crate::{audio::SampleFormat, circular_buffer::CircularBuffer, frame::Frame, Error, FrameDescriptorSpec, Result};
 
 pub struct AudioCircularBuffer {
     buffers: Vec<CircularBuffer>,
@@ -67,8 +67,11 @@ impl AudioCircularBuffer {
         Ok(())
     }
 
-    fn validate_frame(&self, frame: &Frame) -> Result<u32> {
-        let desc = frame.audio_descriptor().ok_or_else(|| Error::Invalid("not audio frame".to_string()))?;
+    fn validate_frame<D>(&self, frame: &Frame<D>) -> Result<u32>
+    where
+        D: FrameDescriptorSpec,
+    {
+        let desc = frame.descriptor().as_audio().ok_or_else(|| Error::Invalid("not audio frame".to_string()))?;
 
         if desc.format != self.format {
             return Err(Error::Invalid("sample format mismatch".to_string()));
@@ -81,7 +84,10 @@ impl AudioCircularBuffer {
         Ok(desc.samples.get())
     }
 
-    pub fn write(&mut self, frame: &Frame) -> Result<usize> {
+    pub fn write<D>(&mut self, frame: &Frame<D>) -> Result<usize>
+    where
+        D: FrameDescriptorSpec,
+    {
         let samples = self.validate_frame(frame)?;
 
         if self.available() < samples {
@@ -106,7 +112,10 @@ impl AudioCircularBuffer {
         Ok(samples as usize)
     }
 
-    pub fn read(&mut self, frame: &mut Frame) -> Result<usize> {
+    pub fn read<D>(&mut self, frame: &mut Frame<D>) -> Result<usize>
+    where
+        D: FrameDescriptorSpec,
+    {
         let samples = self.validate_frame(frame)?.min(self.len);
 
         let mut guard = frame.map_mut().map_err(|_| Error::Invalid("cannot write destination frame".into()))?;

@@ -1,7 +1,4 @@
-use media_core::{
-    audio::{circular_buffer::AudioCircularBuffer, *},
-    frame::Frame,
-};
+use media_core::audio::{circular_buffer::AudioCircularBuffer, AudioFrame, SampleFormat};
 
 #[test]
 fn test_read_write() {
@@ -11,7 +8,7 @@ fn test_read_write() {
     assert_eq!(audio_buf.len(), 0);
     assert_eq!(audio_buf.available(), 960);
 
-    let mut input_frame = Frame::audio_creator().create(SampleFormat::F32P, 2, 960, 48000).unwrap();
+    let mut input_frame = AudioFrame::new(SampleFormat::F32P, 2, 960, 48000).unwrap();
 
     if let Ok(mut guard) = input_frame.map_mut() {
         if let Some(planes) = guard.planes_mut() {
@@ -26,7 +23,7 @@ fn test_read_write() {
     assert_eq!(audio_buf.len(), 960);
     assert_eq!(audio_buf.available(), 0);
 
-    let mut output_frame = Frame::audio_creator().create(SampleFormat::F32P, 2, 240, 48000).unwrap();
+    let mut output_frame = AudioFrame::new(SampleFormat::F32P, 2, 240, 48000).unwrap();
     for i in 0..4 {
         assert_eq!(audio_buf.read(&mut output_frame).unwrap(), 240);
         assert_eq!(audio_buf.len(), 960 - (i + 1) * 240);
