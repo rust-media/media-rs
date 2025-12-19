@@ -87,6 +87,3 @@ impl FrameDescriptorSpec for FrameDescriptor {
         Frame::new_with_generic_descriptor(self.clone())
     }
 }
-
-#[deprecated = "Use 'FrameDescriptor' directly"]
-pub type MediaFrameDescriptor = FrameDescriptor;

@@ -106,10 +106,6 @@ pub struct AudioEncoder {
 }
 
 #[cfg(feature = "audio")]
-#[deprecated = "Use 'AudioEncoder' instead"]
-pub type AudioEncoderConfiguration = AudioEncoder;
-
-#[cfg(feature = "audio")]
 impl CodecSpec for AudioEncoder {
     type FrameDescriptor = AudioFrameDescriptor;
 
@@ -185,10 +181,6 @@ pub struct VideoEncoder {
     pub video: VideoParameters,
     pub encoder: EncoderParameters,
 }
-
-#[cfg(feature = "video")]
-#[deprecated = "Use 'VideoEncoder' instead"]
-pub type VideoEncoderConfiguration = VideoEncoder;
 
 #[cfg(feature = "video")]
 impl CodecSpec for VideoEncoder {
