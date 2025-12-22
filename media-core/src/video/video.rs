@@ -13,7 +13,7 @@ use crate::{
     align_to, ceil_rshift,
     error::Error,
     frame::{Frame, PlaneDescriptor, PlaneVec},
-    invalid_param_error,
+    invalid_error, invalid_param_error,
     video::VideoFrame,
     FrameDescriptor, FrameDescriptorSpec, MediaType, Result,
 };
@@ -1014,9 +1014,9 @@ impl TryFrom<u32> for VideoFormat {
     fn try_from(value: u32) -> Result<Self> {
         if value & COMPRESSION_MASK != 0 {
             let format_value = value & !COMPRESSION_MASK;
-            CompressionFormat::try_from(format_value as u8).map(VideoFormat::Compression).map_err(|e| Error::Invalid(e.to_string()))
+            CompressionFormat::try_from(format_value as u8).map(VideoFormat::Compression).map_err(|e| invalid_error!(e.to_string()))
         } else {
-            PixelFormat::try_from(value as u8).map(VideoFormat::Pixel).map_err(|e| Error::Invalid(e.to_string()))
+            PixelFormat::try_from(value as u8).map(VideoFormat::Pixel).map_err(|e| invalid_error!(e.to_string()))
         }
     }
 }

@@ -6,9 +6,8 @@ use std::{
 use crossbeam_queue::SegQueue;
 
 use crate::{
-    error::Error,
     frame::{Frame, SharedFrame, SharedFrameInner},
-    FrameDescriptorSpec, Result,
+    invalid_error, FrameDescriptorSpec, Result,
 };
 
 pub trait FrameCreator<D: FrameDescriptorSpec>: Send + Sync {
@@ -127,7 +126,7 @@ impl<F: SharedFrameInner> FramePool<F> {
             if let Some(desc) = config.desc.clone() {
                 (desc, config.creator.clone())
             } else {
-                return Err(Error::Invalid("frame descriptor".to_string()));
+                return Err(invalid_error!("frame descriptor"));
             }
         };
 

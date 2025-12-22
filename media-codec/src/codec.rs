@@ -9,7 +9,7 @@ use std::{
 use media_core::audio::{ChannelLayout, SampleFormat};
 #[cfg(feature = "video")]
 use media_core::video::{ChromaLocation, ColorMatrix, ColorPrimaries, ColorRange, ColorTransferCharacteristics, PixelFormat};
-use media_core::{error::Error, invalid_param_error, variant::Variant, FrameDescriptorSpec, MediaType, Result};
+use media_core::{error::Error, invalid_error, invalid_param_error, not_found_error, variant::Variant, FrameDescriptorSpec, MediaType, Result};
 #[cfg(feature = "video")]
 use num_rational::Rational64;
 
@@ -317,7 +317,7 @@ pub(crate) fn register_codec<T>(codec_list: &LazyCodecList<T>, builder: Arc<dyn 
 where
     T: CodecSpec,
 {
-    let mut codec_list = codec_list.write().map_err(|err| Error::Invalid(err.to_string()))?;
+    let mut codec_list = codec_list.write().map_err(|err| invalid_error!(err.to_string()))?;
     let entry = codec_list.codecs.entry(builder.id()).or_default();
 
     if default {
@@ -333,7 +333,7 @@ pub(crate) fn find_codec<T>(codec_list: &LazyCodecList<T>, id: CodecID) -> Resul
 where
     T: CodecSpec,
 {
-    let codec_list = codec_list.read().map_err(|err| Error::Invalid(err.to_string()))?;
+    let codec_list = codec_list.read().map_err(|err| invalid_error!(err.to_string()))?;
 
     if let Some(builders) = codec_list.codecs.get(&id) {
         if let Some(builder) = builders.first() {
@@ -341,14 +341,14 @@ where
         }
     }
 
-    Err(Error::NotFound(format!("codec: {:?}", id)))
+    Err(not_found_error!(format!("codec: {:?}", id)))
 }
 
 pub(crate) fn find_codec_by_name<T>(codec_list: &LazyCodecList<T>, name: &str) -> Result<Arc<dyn CodecBuilder<T>>>
 where
     T: CodecSpec,
 {
-    let codec_list = codec_list.read().map_err(|err| Error::Invalid(err.to_string()))?;
+    let codec_list = codec_list.read().map_err(|err| invalid_error!(err.to_string()))?;
 
     for builders in codec_list.codecs.values() {
         for builder in builders {
@@ -358,5 +358,5 @@ where
         }
     }
 
-    Err(Error::NotFound(format!("codec: {}", name)))
+    Err(not_found_error!(format!("codec: {}", name)))
 }

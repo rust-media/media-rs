@@ -12,9 +12,11 @@ use std::{
 
 use media_core::{
     error::Error,
+    failed_error,
     frame::Frame,
     none_param_error, not_found_error,
     time::NSEC_PER_MSEC,
+    unsupported_error,
     variant::Variant,
     video::{ColorRange, CompressionFormat, Origin, PixelFormat, VideoFormat, VideoFrameDescriptor},
     Result,
@@ -60,8 +62,10 @@ impl DeviceManager for MediaFoundationDeviceManager {
         Self: Sized,
     {
         unsafe {
-            CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE).ok().map_err(|err| Error::InitializationFailed(err.message()))?;
-            MFStartup(MF_VERSION, MFSTARTUP_LITE).map_err(|err| Error::InitializationFailed(err.message()))?;
+            CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE)
+                .ok()
+                .map_err(|err| Error::InitializationFailed(err.message().into()))?;
+            MFStartup(MF_VERSION, MFSTARTUP_LITE).map_err(|err| Error::InitializationFailed(err.message().into()))?;
         }
         Ok(Self {
             devices: None,
@@ -143,21 +147,21 @@ impl MediaFoundationDeviceManager {
     fn get_device_sources() -> Result<Vec<IMFActivate>> {
         let attributes: IMFAttributes = unsafe {
             let mut attributes: Option<IMFAttributes> = None;
-            MFCreateAttributes(&mut attributes, 1).map_err(|err| Error::CreationFailed(err.message()))?;
+            MFCreateAttributes(&mut attributes, 1).map_err(|err| Error::CreationFailed(err.message().into()))?;
             attributes.ok_or_else(|| none_param_error!(attributes))?
         };
 
         unsafe {
             attributes
                 .SetGUID(&MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, &MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID)
-                .map_err(|err| Error::SetFailed(err.message()))?;
+                .map_err(|err| Error::SetFailed(err.message().into()))?;
         }
 
         let mut source_activate_ptr: MaybeUninit<*mut Option<IMFActivate>> = MaybeUninit::uninit();
         let mut source_activate_count: u32 = 0;
         unsafe {
             MFEnumDeviceSources(&attributes, source_activate_ptr.as_mut_ptr(), &mut source_activate_count)
-                .map_err(|err| Error::Failed(err.message()))?;
+                .map_err(|err| failed_error!(err.message()))?;
         }
 
         let mut device_sources = vec![];
@@ -181,13 +185,13 @@ impl DeviceInformation {
         unsafe {
             activate
                 .GetAllocatedString(&MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, &mut symbolic_link_ptr, &mut symbolic_link_len)
-                .map_err(|err| Error::Failed(err.message()))?;
+                .map_err(|err| failed_error!(err.message()))?;
         }
         if symbolic_link_ptr.is_null() {
             return Err(none_param_error!(symbolic_link_ptr));
         }
         let id = unsafe {
-            let symbolic_link = symbolic_link_ptr.to_string().map_err(|err| Error::Failed(err.to_string()));
+            let symbolic_link = symbolic_link_ptr.to_string().map_err(|err| failed_error!(err.to_string()));
             CoTaskMemFree(Some(symbolic_link_ptr.as_ptr() as _));
             symbolic_link?
         };
@@ -197,13 +201,13 @@ impl DeviceInformation {
         unsafe {
             activate
                 .GetAllocatedString(&MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME, &mut friendly_name_ptr, &mut friendly_name_len)
-                .map_err(|err| Error::Failed(err.message()))?;
+                .map_err(|err| failed_error!(err.message()))?;
         }
         if friendly_name_ptr.is_null() {
             return Err(none_param_error!(friendly_name_ptr));
         }
         let name = unsafe {
-            let name = friendly_name_ptr.to_string().map_err(|err| Error::Failed(err.to_string()));
+            let name = friendly_name_ptr.to_string().map_err(|err| failed_error!(err.to_string()));
             CoTaskMemFree(Some(friendly_name_ptr.as_ptr() as _));
             name?
         };
@@ -460,7 +464,7 @@ fn get_radio(media_type: &IMFMediaType, key: &GUID) -> Result<f32> {
             let denominator = value as u32;
             (numerator, denominator)
         }
-        Err(err) => return Err(Error::GetFailed(err.message())),
+        Err(err) => return Err(Error::GetFailed(err.message().into())),
     };
 
     Ok(numerator as f32 / denominator as f32)
@@ -531,8 +535,8 @@ fn get_formats(source_reader: &IMFSourceReader) -> Result<Vec<CameraFormat>> {
 
 fn get_current_format(source_reader: &IMFSourceReader) -> Result<CameraFormat> {
     let media_type = unsafe { source_reader.GetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32) };
-    let media_type = media_type.map_err(|err| Error::GetFailed(err.message()))?;
-    let camera_format = from_mf_media_type(&media_type).ok_or_else(|| Error::Unsupported(stringify!(media_type).to_string()))?;
+    let media_type = media_type.map_err(|err| Error::GetFailed(err.message().into()))?;
+    let camera_format = from_mf_media_type(&media_type).ok_or_else(|| unsupported_error!(media_type))?;
     Ok(camera_format)
 }
 
@@ -578,13 +582,13 @@ fn stop_internal(source_reader: &IMFSourceReader, callback: &mut SourceReaderCal
     let wait = unsafe {
         match source_reader.Flush(MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32) {
             Ok(()) => true,
-            Err(err) => return Err(Error::StopFailed(err.message())),
+            Err(err) => return Err(Error::StopFailed(err.message().into())),
         }
     };
 
     if wait {
         let (lock, condvar) = &*signal;
-        let flushed = lock.lock().map_err(|err| Error::StopFailed(err.to_string()))?;
+        let flushed = lock.lock().map_err(|err| Error::StopFailed(err.to_string().into()))?;
         if !*flushed {
             condvar.wait_timeout(flushed, Duration::from_secs(TIMEOUT_SECONDS)).ok();
         }
@@ -670,7 +674,7 @@ impl Device for MediaFoundationDevice {
         let (running, current_format, formats) = {
             let camera_format = self.current_format.clone();
             let (source_reader, callback) = self.get_source_reader()?;
-            let source_reader = source_reader.lock().map_err(|err| Error::StartFailed(err.to_string()))?;
+            let source_reader = source_reader.lock().map_err(|err| Error::StartFailed(err.to_string().into()))?;
 
             if let Some(camera_format) = camera_format {
                 let media_type = match_supported_format(
@@ -705,7 +709,7 @@ impl Device for MediaFoundationDevice {
 
         {
             let (source_reader, callback) = self.get_source_reader()?;
-            let source_reader = source_reader.lock().map_err(|err| Error::StopFailed(err.to_string()))?;
+            let source_reader = source_reader.lock().map_err(|err| Error::StopFailed(err.to_string().into()))?;
 
             stop_internal(&source_reader, callback)?;
         }
@@ -728,7 +732,7 @@ impl Device for MediaFoundationDevice {
 
         let camera_format = if self.running {
             let (source_reader, callback) = self.get_source_reader()?;
-            let source_reader = source_reader.lock().map_err(|err| Error::SetFailed(err.to_string()))?;
+            let source_reader = source_reader.lock().map_err(|err| Error::SetFailed(err.to_string().into()))?;
             let media_type = match_supported_format(&source_reader, width, height, video_format, frame_rate);
 
             if let Some(media_type) = media_type {
@@ -740,10 +744,10 @@ impl Device for MediaFoundationDevice {
                         start_internal(&source_reader, callback, &camera_format);
                         Some(camera_format)
                     }
-                    None => return Err(Error::Unsupported("format".to_string())),
+                    None => return Err(unsupported_error!("format")),
                 }
             } else {
-                return Err(Error::Unsupported("format".to_string()));
+                return Err(unsupported_error!("format"));
             }
         } else {
             Some(CameraFormat {
@@ -770,10 +774,10 @@ impl Device for MediaFoundationDevice {
 
     fn formats(&self) -> Result<Variant> {
         if !self.running {
-            return Err(Error::NotRunning(self.info.name.clone()));
+            return Err(Error::NotRunning(self.info.name.clone().into()));
         }
 
-        let video_formats = self.formats.as_ref().ok_or_else(|| Error::NotFound("video formats".to_string()))?;
+        let video_formats = self.formats.as_ref().ok_or_else(|| not_found_error!("video formats"))?;
         let mut formats = Variant::new_array();
         for video_format in video_formats {
             let mut format = Variant::new_dict();
@@ -815,27 +819,28 @@ impl MediaFoundationDevice {
         if self.source_reader.is_none() {
             let device_sources = MediaFoundationDeviceManager::get_device_sources()?;
             let activate = device_sources.get(self.index).ok_or_else(|| not_found_error!(self.index))?;
-            let media_source = unsafe { activate.ActivateObject::<IMFMediaSource>().map_err(|err| Error::OpenFailed(err.message()))? };
+            let media_source = unsafe { activate.ActivateObject::<IMFMediaSource>().map_err(|err| Error::OpenFailed(err.message().into()))? };
 
             let attributes: IMFAttributes = unsafe {
                 let mut attributes: Option<IMFAttributes> = None;
-                MFCreateAttributes(&mut attributes, 1).map_err(|err| Error::CreationFailed(err.message()))?;
+                MFCreateAttributes(&mut attributes, 1).map_err(|err| Error::CreationFailed(err.message().into()))?;
                 attributes.ok_or_else(|| none_param_error!(attributes))?
             };
 
             unsafe {
-                attributes.SetUINT32(&MF_READWRITE_DISABLE_CONVERTERS, true as u32).map_err(|err| Error::SetFailed(err.message()))?;
+                attributes.SetUINT32(&MF_READWRITE_DISABLE_CONVERTERS, true as u32).map_err(|err| Error::SetFailed(err.message().into()))?;
             }
 
             let handler = self.handler.as_ref().ok_or_else(|| none_param_error!(output_handler))?;
             let callback: IMFSourceReaderCallback = SourceReaderCallback::new(self.info.clone(), handler.clone()).into();
 
             unsafe {
-                attributes.SetUnknown(&MF_SOURCE_READER_ASYNC_CALLBACK, &callback).map_err(|err| Error::SetFailed(err.message()))?;
+                attributes.SetUnknown(&MF_SOURCE_READER_ASYNC_CALLBACK, &callback).map_err(|err| Error::SetFailed(err.message().into()))?;
             }
 
-            let source_reader =
-                unsafe { MFCreateSourceReaderFromMediaSource(&media_source, &attributes).map_err(|err| Error::CreationFailed(err.message()))? };
+            let source_reader = unsafe {
+                MFCreateSourceReaderFromMediaSource(&media_source, &attributes).map_err(|err| Error::CreationFailed(err.message().into()))?
+            };
 
             #[allow(clippy::arc_with_non_send_sync)]
             let source_reader = Arc::new(Mutex::new(source_reader));

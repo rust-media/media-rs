@@ -31,7 +31,7 @@ use dispatch2::Queue;
 use media_core::{
     error::Error,
     frame::Frame,
-    none_param_error, not_found_error,
+    invalid_error, none_param_error, not_found_error,
     time::MSEC_PER_SEC,
     variant::Variant,
     video::{ColorRange, PixelFormat, VideoFormat},
@@ -454,7 +454,7 @@ impl Device for AVFoundationCaptureDevice {
             let id = NSString::from_str(self.info.id.as_str());
             let device = AVCaptureDevice::device_with_unique_id(&id).ok_or_else(|| not_found_error!(id))?;
             let output = AVCaptureVideoDataOutput::new();
-            let input = AVCaptureDeviceInput::from_device(&device).map_err(|err| Error::Invalid(err.to_string()))?;
+            let input = AVCaptureDeviceInput::from_device(&device).map_err(|err| invalid_error!(err.to_string()))?;
             let mut delegate = OutputDelegate::new();
             let queue = Queue::new("com.x-device.video-capture", dispatch2::QueueAttribute::Serial);
             let handler = self.handler.as_ref().ok_or_else(|| none_param_error!(handler))?;
@@ -470,7 +470,7 @@ impl Device for AVFoundationCaptureDevice {
                 session.add_input(&input);
                 session.add_output(&output);
             } else {
-                return Err(Error::Invalid("cannot add input or output".to_string()));
+                return Err(invalid_error!("cannot add input or output"));
             }
 
             session.begin_configuration();
@@ -513,7 +513,7 @@ impl Device for AVFoundationCaptureDevice {
 
     fn stop(&mut self) -> Result<()> {
         if !self.running {
-            return Err(Error::NotRunning(self.info.name.clone()));
+            return Err(Error::NotRunning(self.info.name.clone().into()));
         }
 
         self.running = false;
@@ -587,10 +587,10 @@ impl Device for AVFoundationCaptureDevice {
 
     fn formats(&self) -> Result<Variant> {
         if !self.running {
-            return Err(Error::NotRunning(self.info.name.clone()));
+            return Err(Error::NotRunning(self.info.name.clone().into()));
         }
 
-        let video_formats = self.formats.as_ref().ok_or_else(|| Error::NotFound(String::from("video formats")))?;
+        let video_formats = self.formats.as_ref().ok_or_else(|| not_found_error!("video formats"))?;
         let mut formats = Variant::new_array();
         for video_format in video_formats {
             let mut format = Variant::new_dict();

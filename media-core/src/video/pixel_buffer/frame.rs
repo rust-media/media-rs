@@ -19,6 +19,7 @@ use strum::EnumCount;
 use super::super::frame::VideoFrameCreator;
 use crate::{
     error::Error,
+    failed_error,
     frame::*,
     invalid_param_error, none_param_error,
     video::{ColorMatrix, ColorPrimaries, ColorRange, ColorTransferCharacteristics, PixelFormat, VideoFrame, VideoFrameDescriptor},
@@ -424,7 +425,7 @@ impl VideoFrame<'_> {
         let width = desc.width().get() - desc.crop_left - desc.crop_right;
         let height = desc.height().get() - desc.crop_top - desc.crop_bottom;
         let pixel_buffer = CVPixelBuffer::new(pixel_format, width as usize, height as usize, Some(&options))
-            .map_err(|_| Error::CreationFailed(stringify!(CVPixelBuffer).to_string()))?;
+            .map_err(|_| Error::CreationFailed(stringify!(CVPixelBuffer).into()))?;
 
         let buffer = pixel_buffer.as_buffer();
 
@@ -543,7 +544,7 @@ unsafe impl Sync for PixelBuffer {}
 impl DataMappable for PixelBuffer {
     fn map(&self) -> Result<MappedGuard<'_>> {
         if self.0.lock_base_address(kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess {
-            return Err(Error::Failed("lock base address".to_string()));
+            return Err(failed_error!("lock base address"));
         }
 
         Ok(MappedGuard {
@@ -553,7 +554,7 @@ impl DataMappable for PixelBuffer {
 
     fn map_mut(&mut self) -> Result<MappedGuard<'_>> {
         if self.0.lock_base_address(0) != kCVReturnSuccess {
-            return Err(Error::Failed("lock base address".to_string()));
+            return Err(failed_error!("lock base address"));
         }
 
         Ok(MappedGuard {
@@ -563,14 +564,14 @@ impl DataMappable for PixelBuffer {
 
     fn unmap(&self) -> Result<()> {
         if self.0.unlock_base_address(kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess {
-            return Err(Error::Failed("unlock base address".to_string()));
+            return Err(failed_error!("unlock base address"));
         }
         Ok(())
     }
 
     fn unmap_mut(&mut self) -> Result<()> {
         if self.0.unlock_base_address(0) != kCVReturnSuccess {
-            return Err(Error::Failed("unlock base address".to_string()));
+            return Err(failed_error!("unlock base address"));
         }
         Ok(())
     }

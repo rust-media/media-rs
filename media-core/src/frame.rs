@@ -15,12 +15,10 @@ use num_rational::Rational64;
 #[cfg(any(feature = "audio", feature = "video"))]
 use smallvec::SmallVec;
 
-#[cfg(any(feature = "audio", feature = "video"))]
-use crate::buffer::Buffer;
-#[cfg(any(feature = "audio", feature = "video"))]
-use crate::error::Error;
 #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
 use crate::video::pixel_buffer::frame::PixelBuffer;
+#[cfg(any(feature = "audio", feature = "video"))]
+use crate::{buffer::Buffer, unsupported_error};
 use crate::{frame_pool::FramePool, variant::Variant, FrameDescriptor, FrameDescriptorSpec, MediaType, Result, DEFAULT_ALIGNMENT};
 
 #[cfg(any(feature = "audio", feature = "video"))]
@@ -305,7 +303,7 @@ impl MemoryData<'_> {
 
                     *actual_bytes = len;
                 }
-                _ => return Err(Error::Unsupported("truncate for video planes".to_string())),
+                _ => return Err(unsupported_error!("truncate for non-audio plane")),
             }
         }
 
@@ -380,7 +378,7 @@ impl FrameData<'_> {
     pub(crate) fn truncate(&mut self, len: usize) -> Result<()> {
         match self {
             FrameData::Memory(data) => data.truncate(len),
-            _ => Err(Error::Unsupported("truncate for non-memory data".to_string())),
+            _ => Err(unsupported_error!("truncate for non-memory data")),
         }
     }
 }
@@ -512,7 +510,7 @@ impl DataMappable for SeparateMemoryData<'_> {
     }
 
     fn map_mut(&mut self) -> Result<MappedGuard<'_>> {
-        Err(Error::Unsupported("map".to_string()))
+        Err(unsupported_error!("map"))
     }
 
     fn unmap(&self) -> Result<()> {
@@ -520,7 +518,7 @@ impl DataMappable for SeparateMemoryData<'_> {
     }
 
     fn unmap_mut(&mut self) -> Result<()> {
-        Err(Error::Unsupported("unmap".to_string()))
+        Err(unsupported_error!("unmap"))
     }
 
     fn planes(&self) -> Option<MappedPlanes<'_>> {
@@ -554,7 +552,7 @@ impl DataMappable for BufferData {
     }
 
     fn map_mut(&mut self) -> Result<MappedGuard<'_>> {
-        Err(Error::Unsupported("map".to_string()))
+        Err(unsupported_error!("map"))
     }
 
     fn unmap(&self) -> Result<()> {
@@ -562,7 +560,7 @@ impl DataMappable for BufferData {
     }
 
     fn unmap_mut(&mut self) -> Result<()> {
-        Err(Error::Unsupported("unmap".to_string()))
+        Err(unsupported_error!("unmap"))
     }
 
     fn planes(&self) -> Option<MappedPlanes<'_>> {
@@ -621,7 +619,7 @@ impl DataMappable for FrameData<'_> {
             FrameData::Buffer(data) => data.map(),
             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(data) => data.map(),
-            _ => Err(Error::Unsupported("frame data".to_string())),
+            _ => Err(unsupported_error!("frame data")),
         }
     }
 
@@ -633,7 +631,7 @@ impl DataMappable for FrameData<'_> {
             FrameData::Buffer(data) => data.map_mut(),
             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(data) => data.map_mut(),
-            _ => Err(Error::Unsupported("frame data".to_string())),
+            _ => Err(unsupported_error!("frame data")),
         }
     }
 
@@ -645,7 +643,7 @@ impl DataMappable for FrameData<'_> {
             FrameData::Buffer(data) => data.unmap(),
             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(data) => data.unmap(),
-            _ => Err(Error::Unsupported("frame data".to_string())),
+            _ => Err(unsupported_error!("frame data")),
         }
     }
 
@@ -657,7 +655,7 @@ impl DataMappable for FrameData<'_> {
             FrameData::Buffer(data) => data.unmap_mut(),
             #[cfg(all(feature = "video", any(target_os = "macos", target_os = "ios")))]
             FrameData::PixelBuffer(data) => data.unmap_mut(),
-            _ => Err(Error::Unsupported("frame data".to_string())),
+            _ => Err(unsupported_error!("frame data")),
         }
     }
 
@@ -742,7 +740,7 @@ impl Frame<'_, FrameDescriptor> {
             MediaType::Audio => self.convert_audio_to(dst),
             #[cfg(feature = "video")]
             MediaType::Video => self.convert_video_to(dst),
-            _ => Err(Error::Unsupported("media type".to_string())),
+            _ => Err(unsupported_error!("media type")),
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::{audio::SampleFormat, circular_buffer::CircularBuffer, frame::Frame, Error, FrameDescriptorSpec, Result};
+use crate::{audio::SampleFormat, circular_buffer::CircularBuffer, frame::Frame, invalid_error, FrameDescriptorSpec, Result};
 
 pub struct AudioCircularBuffer {
     buffers: Vec<CircularBuffer>,
@@ -71,14 +71,14 @@ impl AudioCircularBuffer {
     where
         D: FrameDescriptorSpec,
     {
-        let desc = frame.descriptor().as_audio().ok_or_else(|| Error::Invalid("not audio frame".to_string()))?;
+        let desc = frame.descriptor().as_audio().ok_or_else(|| invalid_error!("not audio frame"))?;
 
         if desc.format != self.format {
-            return Err(Error::Invalid("sample format mismatch".to_string()));
+            return Err(invalid_error!("sample format mismatch"));
         }
 
         if desc.channels().get() != self.channels {
-            return Err(Error::Invalid("channel count mismatch".to_string()));
+            return Err(invalid_error!("channel count mismatch"));
         }
 
         Ok(desc.samples.get())
@@ -94,11 +94,11 @@ impl AudioCircularBuffer {
             self.grow(self.len + samples)?;
         }
 
-        let guard = frame.map().map_err(|_| Error::Invalid("cannot read source frame".into()))?;
+        let guard = frame.map().map_err(|_| invalid_error!("not readable"))?;
         let planes = guard.planes().unwrap();
 
         if planes.len() != self.buffers.len() {
-            return Err(Error::Invalid("plane count mismatch".to_string()));
+            return Err(invalid_error!("plane count mismatch"));
         }
 
         planes.iter().enumerate().try_for_each(|(i, plane)| {
@@ -118,11 +118,11 @@ impl AudioCircularBuffer {
     {
         let samples = self.validate_frame(frame)?.min(self.len);
 
-        let mut guard = frame.map_mut().map_err(|_| Error::Invalid("cannot write destination frame".into()))?;
+        let mut guard = frame.map_mut().map_err(|_| invalid_error!("not writable"))?;
         let mut planes = guard.planes_mut().unwrap();
 
         if planes.len() != self.buffers.len() {
-            return Err(Error::Invalid("plane count mismatch".to_string()));
+            return Err(invalid_error!("plane count mismatch"));
         }
 
         planes.iter_mut().enumerate().try_for_each(|(i, plane)| {
