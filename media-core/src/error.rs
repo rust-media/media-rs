@@ -1,71 +1,99 @@
+use std::borrow::Cow;
+
 use thiserror::Error;
 
 #[derive(Clone, Debug, Error)]
 pub enum Error {
     #[error("Failed: {0}")]
-    Failed(String),
+    Failed(Cow<'static, str>),
     #[error("Invalid: {0}")]
-    Invalid(String),
+    Invalid(Cow<'static, str>),
     #[error("Again: {0}")]
-    Again(String),
+    Again(Cow<'static, str>),
     #[error("Canceled: {0}")]
-    Canceled(String),
+    Canceled(Cow<'static, str>),
     #[error("Creation failed: {0}")]
-    CreationFailed(String),
+    CreationFailed(Cow<'static, str>),
     #[error("Invalid parameter: {0} {1}")]
-    InvalidParameter(String, String),
+    InvalidParameter(Cow<'static, str>, Cow<'static, str>),
     #[error("Not implemented")]
     NotImplemented,
     #[error("Not found: {0}")]
-    NotFound(String),
+    NotFound(Cow<'static, str>),
     #[error("Unsupported: {0}")]
-    Unsupported(String),
+    Unsupported(Cow<'static, str>),
     #[error("Initialization failed: {0}")]
-    InitializationFailed(String),
+    InitializationFailed(Cow<'static, str>),
     #[error("Open failed: {0}")]
-    OpenFailed(String),
+    OpenFailed(Cow<'static, str>),
     #[error("Close failed: {0}")]
-    CloseFailed(String),
+    CloseFailed(Cow<'static, str>),
     #[error("Start failed: {0}")]
-    StartFailed(String),
+    StartFailed(Cow<'static, str>),
     #[error("Stop failed: {0}")]
-    StopFailed(String),
+    StopFailed(Cow<'static, str>),
     #[error("Not running: {0}")]
-    NotRunning(String),
+    NotRunning(Cow<'static, str>),
     #[error("Get failed: {0}")]
-    GetFailed(String),
+    GetFailed(Cow<'static, str>),
     #[error("Set failed: {0}")]
-    SetFailed(String),
+    SetFailed(Cow<'static, str>),
     #[error("Read failed: {0}")]
-    ReadFailed(String),
+    ReadFailed(Cow<'static, str>),
     #[error("Write failed: {0}")]
-    WriteFailed(String),
+    WriteFailed(Cow<'static, str>),
+}
+
+#[macro_export]
+macro_rules! invalid_error {
+    ($param:literal) => {
+        $crate::error::Error::Invalid($param.into())
+    };
+    ($param:expr) => {
+        $crate::error::Error::Invalid(format!("{:?}", $param).into())
+    };
+}
+
+#[macro_export]
+macro_rules! failed_error {
+    ($param:literal) => {
+        $crate::error::Error::Failed($param.into())
+    };
+    ($param:expr) => {
+        $crate::error::Error::Failed(format!("{:?}", $param).into())
+    };
 }
 
 #[macro_export]
 macro_rules! invalid_param_error {
     ($param:expr) => {
-        Error::InvalidParameter(stringify!($param).to_string(), format!("{:?}", $param).to_string())
+        $crate::error::Error::InvalidParameter(stringify!($param).into(), format!("{:?}", $param).into())
     };
 }
 
 #[macro_export]
 macro_rules! none_param_error {
     ($param:expr) => {
-        Error::InvalidParameter(stringify!($param).to_string(), stringify!(None).to_string())
+        $crate::error::Error::InvalidParameter(stringify!($param).into(), stringify!(None).into())
     };
 }
 
 #[macro_export]
 macro_rules! not_found_error {
+    ($param:literal) => {
+        $crate::error::Error::NotFound($param.into())
+    };
     ($param:expr) => {
-        Error::NotFound(format!("{:?}", $param).to_string())
+        $crate::error::Error::NotFound(format!("{:?}", $param).into())
     };
 }
 
 #[macro_export]
 macro_rules! unsupported_error {
+    ($param:literal) => {
+        $crate::error::Error::Unsupported($param.into())
+    };
     ($param:expr) => {
-        Error::Unsupported(format!("{:?}", $param).to_string())
+        $crate::error::Error::Unsupported(format!("{:?}", $param).into())
     };
 }

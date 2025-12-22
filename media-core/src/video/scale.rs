@@ -8,9 +8,8 @@ use super::{
     video::{PixelFormat, ScaleFilter, VideoFrameDescriptor},
 };
 use crate::{
-    error::Error,
     frame::{DataMappable, Frame, FrameData, MappedPlane},
-    FrameDescriptor, Result,
+    invalid_error, FrameDescriptor, Result,
 };
 
 impl From<ScaleFilter> for ResamplingFunction {
@@ -56,7 +55,7 @@ where
 impl Frame<'_> {
     pub fn scale_to(&self, dst: &mut Frame<'_>, scale_filter: ScaleFilter) -> Result<()> {
         let (FrameDescriptor::Video(src_desc), FrameDescriptor::Video(dst_desc)) = (&self.desc, &dst.desc) else {
-            return Err(Error::Invalid("not video frame".to_string()));
+            return Err(invalid_error!("not video frame"));
         };
 
         VideoFrame::scale_to_internal(src_desc, &self.data, dst_desc, &mut dst.data, scale_filter)
@@ -72,11 +71,11 @@ impl VideoFrame<'_> {
         scale_filter: ScaleFilter,
     ) -> Result<()> {
         if src_desc.format != dst_desc.format {
-            return Err(Error::Invalid("pixel format mismatch".to_string()));
+            return Err(invalid_error!("pixel format mismatch"));
         }
 
-        let guard = src_data.map().map_err(|_| Error::Invalid("not readable".into()))?;
-        let mut dst_guard = dst_data.map_mut().map_err(|_| Error::Invalid("not writable".into()))?;
+        let guard = src_data.map().map_err(|_| invalid_error!("not readable"))?;
+        let mut dst_guard = dst_data.map_mut().map_err(|_| invalid_error!("not writable"))?;
         let src_planes = guard.planes().unwrap();
         let mut dst_planes = dst_guard.planes_mut().unwrap();
 
@@ -88,12 +87,12 @@ impl VideoFrame<'_> {
             PixelFormat::ARGB32 | PixelFormat::BGRA32 | PixelFormat::ABGR32 | PixelFormat::RGBA32 => {
                 let src = into_image_store::<u8, 4>(&src_planes.planes[0], src_desc.width().get(), src_desc.height().get())?;
                 let mut dst = into_image_store_mut::<u8, 4>(&mut dst_planes.planes[0], dst_desc.width().get(), dst_desc.height().get())?;
-                scaler.resize_rgba(&src, &mut dst, true).map_err(|e| Error::Invalid(e.to_string()))
+                scaler.resize_rgba(&src, &mut dst, true).map_err(|e| invalid_error!(e.to_string()))
             }
             PixelFormat::RGB24 | PixelFormat::BGR24 => {
                 let src = into_image_store::<u8, 3>(&src_planes.planes[0], src_desc.width().get(), src_desc.height().get())?;
                 let mut dst = into_image_store_mut::<u8, 3>(&mut dst_planes.planes[0], dst_desc.width().get(), dst_desc.height().get())?;
-                scaler.resize_rgb(&src, &mut dst).map_err(|e| Error::Invalid(e.to_string()))
+                scaler.resize_rgb(&src, &mut dst).map_err(|e| invalid_error!(e.to_string()))
             }
             PixelFormat::I420 |
             PixelFormat::I422 |
@@ -108,11 +107,11 @@ impl VideoFrame<'_> {
                 let src_u = into_image_store::<u8, 1>(&src_planes.planes[1], src_chroma_width, src_chroma_height)?;
                 let src_v = into_image_store::<u8, 1>(&src_planes.planes[2], src_chroma_width, src_chroma_height)?;
                 let mut dst_y = into_image_store_mut::<u8, 1>(&mut dst_planes.planes[0], dst_desc.width().get(), dst_desc.height().get())?;
-                scaler.resize_plane(&src_y, &mut dst_y).map_err(|e| Error::Invalid(e.to_string()))?;
+                scaler.resize_plane(&src_y, &mut dst_y).map_err(|e| invalid_error!(e.to_string()))?;
                 let mut dst_u = into_image_store_mut::<u8, 1>(&mut dst_planes.planes[1], dst_chroma_width, dst_chroma_height)?;
-                scaler.resize_plane(&src_u, &mut dst_u).map_err(|e| Error::Invalid(e.to_string()))?;
+                scaler.resize_plane(&src_u, &mut dst_u).map_err(|e| invalid_error!(e.to_string()))?;
                 let mut dst_v = into_image_store_mut::<u8, 1>(&mut dst_planes.planes[2], dst_chroma_width, dst_chroma_height)?;
-                scaler.resize_plane(&src_v, &mut dst_v).map_err(|e| Error::Invalid(e.to_string()))?;
+                scaler.resize_plane(&src_v, &mut dst_v).map_err(|e| invalid_error!(e.to_string()))?;
                 Ok(())
             }
             PixelFormat::NV12 | PixelFormat::NV21 | PixelFormat::NV16 | PixelFormat::NV61 | PixelFormat::NV24 | PixelFormat::NV42 => {
@@ -121,15 +120,15 @@ impl VideoFrame<'_> {
                 let src_y = into_image_store::<u8, 1>(&src_planes.planes[0], src_desc.width().get(), src_desc.height().get())?;
                 let src_uv = into_image_store::<u8, 2>(&src_planes.planes[1], src_chroma_width, src_chroma_height)?;
                 let mut dst_y = into_image_store_mut::<u8, 1>(&mut dst_planes.planes[0], dst_desc.width().get(), dst_desc.height().get())?;
-                scaler.resize_plane(&src_y, &mut dst_y).map_err(|e| Error::Invalid(e.to_string()))?;
+                scaler.resize_plane(&src_y, &mut dst_y).map_err(|e| invalid_error!(e.to_string()))?;
                 let mut dst_uv = into_image_store_mut::<u8, 2>(&mut dst_planes.planes[1], dst_chroma_width, dst_chroma_height)?;
-                scaler.resize_cbcr8(&src_uv, &mut dst_uv).map_err(|e| Error::Invalid(e.to_string()))?;
+                scaler.resize_cbcr8(&src_uv, &mut dst_uv).map_err(|e| invalid_error!(e.to_string()))?;
                 Ok(())
             }
             PixelFormat::ARGB64 | PixelFormat::BGRA64 | PixelFormat::ABGR64 | PixelFormat::RGBA64 => {
                 let src = into_image_store::<u16, 4>(&src_planes.planes[0], src_desc.width().get(), src_desc.height().get())?;
                 let mut dst = into_image_store_mut::<u16, 4>(&mut dst_planes.planes[0], dst_desc.width().get(), dst_desc.height().get())?;
-                scaler.resize_rgba_u16(&src, &mut dst, true).map_err(|e| Error::Invalid(e.to_string()))
+                scaler.resize_rgba_u16(&src, &mut dst, true).map_err(|e| invalid_error!(e.to_string()))
             }
             PixelFormat::I010 |
             PixelFormat::I210 |
@@ -149,11 +148,11 @@ impl VideoFrame<'_> {
                 let src_u = into_image_store::<u16, 1>(&src_planes.planes[1], src_chroma_width, src_chroma_height)?;
                 let src_v = into_image_store::<u16, 1>(&src_planes.planes[2], src_chroma_width, src_chroma_height)?;
                 let mut dst_y = into_image_store_mut::<u16, 1>(&mut dst_planes.planes[0], dst_desc.width().get(), dst_desc.height().get())?;
-                scaler.resize_plane_u16(&src_y, &mut dst_y).map_err(|e| Error::Invalid(e.to_string()))?;
+                scaler.resize_plane_u16(&src_y, &mut dst_y).map_err(|e| invalid_error!(e.to_string()))?;
                 let mut dst_u = into_image_store_mut::<u16, 1>(&mut dst_planes.planes[1], dst_chroma_width, dst_chroma_height)?;
-                scaler.resize_plane_u16(&src_u, &mut dst_u).map_err(|e| Error::Invalid(e.to_string()))?;
+                scaler.resize_plane_u16(&src_u, &mut dst_u).map_err(|e| invalid_error!(e.to_string()))?;
                 let mut dst_v = into_image_store_mut::<u16, 1>(&mut dst_planes.planes[2], dst_chroma_width, dst_chroma_height)?;
-                scaler.resize_plane_u16(&src_v, &mut dst_v).map_err(|e| Error::Invalid(e.to_string()))?;
+                scaler.resize_plane_u16(&src_v, &mut dst_v).map_err(|e| invalid_error!(e.to_string()))?;
                 Ok(())
             }
             PixelFormat::P010 |
@@ -170,23 +169,23 @@ impl VideoFrame<'_> {
                 let src_y = into_image_store::<u16, 1>(&src_planes.planes[0], src_desc.width().get(), src_desc.height().get())?;
                 let src_uv = into_image_store::<u16, 2>(&src_planes.planes[1], src_chroma_width, src_chroma_height)?;
                 let mut dst_y = into_image_store_mut::<u16, 1>(&mut dst_planes.planes[0], dst_desc.width().get(), dst_desc.height().get())?;
-                scaler.resize_plane_u16(&src_y, &mut dst_y).map_err(|e| Error::Invalid(e.to_string()))?;
+                scaler.resize_plane_u16(&src_y, &mut dst_y).map_err(|e| invalid_error!(e.to_string()))?;
                 let mut dst_uv = into_image_store_mut::<u16, 2>(&mut dst_planes.planes[1], dst_chroma_width, dst_chroma_height)?;
-                scaler.resize_cbcr_u16(&src_uv, &mut dst_uv).map_err(|e| Error::Invalid(e.to_string()))?;
+                scaler.resize_cbcr_u16(&src_uv, &mut dst_uv).map_err(|e| invalid_error!(e.to_string()))?;
                 Ok(())
             }
             PixelFormat::Y8 => {
                 let src = into_image_store::<u8, 1>(&src_planes.planes[0], src_desc.width().get(), src_desc.height().get())?;
                 let mut dst = into_image_store_mut::<u8, 1>(&mut dst_planes.planes[0], dst_desc.width().get(), dst_desc.height().get())?;
-                scaler.resize_plane(&src, &mut dst).map_err(|e| Error::Invalid(e.to_string()))
+                scaler.resize_plane(&src, &mut dst).map_err(|e| invalid_error!(e.to_string()))
             }
             PixelFormat::YA8 => {
                 let src = into_image_store::<u8, 2>(&src_planes.planes[0], src_desc.width().get(), src_desc.height().get())?;
                 let mut dst = into_image_store_mut::<u8, 2>(&mut dst_planes.planes[0], dst_desc.width().get(), dst_desc.height().get())?;
                 // similar to UV component interleaving
-                scaler.resize_cbcr8(&src, &mut dst).map_err(|e| Error::Invalid(e.to_string()))
+                scaler.resize_cbcr8(&src, &mut dst).map_err(|e| invalid_error!(e.to_string()))
             }
-            _ => Err(Error::Invalid("unsupported pixel format".to_string())),
+            _ => Err(invalid_error!("unsupported pixel format".to_string())),
         }
     }
 

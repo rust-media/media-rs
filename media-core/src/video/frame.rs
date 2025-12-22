@@ -7,7 +7,7 @@ use crate::{
     buffer::Buffer,
     error::Error,
     frame::{BufferData, Data, Frame, FrameData, FrameSpec, MemoryData, PlaneDescriptor, PlaneVec, SeparateMemoryData},
-    invalid_param_error, FrameDescriptor, MediaType, Result, DEFAULT_ALIGNMENT,
+    invalid_error, invalid_param_error, unsupported_error, FrameDescriptor, MediaType, Result, DEFAULT_ALIGNMENT,
 };
 
 pub type VideoFrame<'a> = Frame<'a, VideoFrameDescriptor>;
@@ -32,7 +32,7 @@ impl VideoDataCreator {
         let buffer = buffer.into();
 
         if buffer.len() != size {
-            return Err(Error::Invalid("buffer size".to_string()));
+            return Err(invalid_error!("buffer size"));
         }
 
         Ok(MemoryData {
@@ -49,7 +49,7 @@ impl VideoDataCreator {
         let buffer = buffer.into();
 
         if buffer.len() != size {
-            return Err(Error::Invalid("buffer size".to_string()));
+            return Err(invalid_error!("buffer size"));
         }
 
         let data = MemoryData {
@@ -65,13 +65,13 @@ impl VideoDataCreator {
         T: Into<Cow<'a, [u8]>>,
     {
         if !format.is_packed() {
-            return Err(Error::Unsupported("format".to_string()));
+            return Err(unsupported_error!("format"));
         }
 
         let buffer = buffer.into();
 
         if buffer.len() != (stride.get() * height.get()) as usize {
-            return Err(Error::Invalid("buffer size".to_string()));
+            return Err(invalid_error!("buffer size"));
         }
 
         let planes = PlaneVec::from_slice(&[PlaneDescriptor::Video(stride.get() as usize, height.get())]);
@@ -96,7 +96,7 @@ impl VideoDataCreator {
             let height = format.calc_plane_height(i, height.get());
 
             if *offset + (*stride as usize * height as usize) > buffer.len() {
-                return Err(Error::Invalid("buffer length".to_string()));
+                return Err(invalid_error!("buffer length"));
             }
 
             planes.push((*offset, PlaneDescriptor::Video(*stride as usize, height)));
@@ -123,7 +123,7 @@ impl BufferData {
             let height = format.calc_plane_height(i, height.get());
 
             if *offset + (*stride as usize * height as usize) > buffer.len() {
-                return Err(Error::Invalid("buffer length".to_string()));
+                return Err(invalid_error!("buffer length"));
             }
 
             planes.push((*offset, PlaneDescriptor::Video(*stride as usize, height)));
@@ -268,7 +268,7 @@ impl<'a> SeparateMemoryData<'a> {
             let height = format.calc_plane_height(i, height.get());
 
             if buffer.len() != (*stride as usize * height as usize) {
-                return Err(Error::Invalid("buffer size".to_string()));
+                return Err(invalid_error!("buffer size"));
             }
 
             data_vec.push((*buffer, *stride as usize, height));
@@ -325,7 +325,7 @@ impl Frame<'_> {
                 self.data = FrameData::Buffer(buffer_data);
             }
             _ => {
-                return Err(Error::Invalid("frame data type".to_string()));
+                return Err(invalid_error!("frame data type"));
             }
         }
 
@@ -478,7 +478,7 @@ impl VideoFrame<'_> {
                 self.data = FrameData::Buffer(buffer_data);
             }
             _ => {
-                return Err(Error::Invalid("frame data type".to_string()));
+                return Err(invalid_error!("frame data type"));
             }
         }
 
@@ -519,7 +519,7 @@ impl<'a> TryFrom<Frame<'a>> for VideoFrame<'a> {
                 data: frame.data,
             })
         } else {
-            Err(Error::Invalid("not video frame".to_string()))
+            Err(invalid_error!("not video frame"))
         }
     }
 }

@@ -1,6 +1,7 @@
 use super::data::{DataFormat, DataFrameDescriptor};
 use crate::{
     frame::{Frame, FrameData, FrameSpec},
+    invalid_error,
     variant::Variant,
     Error, FrameDescriptor, FrameDescriptorSpec, MediaType, Result,
 };
@@ -104,7 +105,7 @@ impl<'a> TryFrom<Frame<'a>> for DataFrame<'a> {
                 data: frame.data,
             })
         } else {
-            Err(Error::Invalid("not data frame".to_string()))
+            Err(invalid_error!("not data frame"))
         }
     }
 }

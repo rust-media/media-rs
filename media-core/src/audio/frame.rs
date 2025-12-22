@@ -9,7 +9,7 @@ use super::audio::{AudioFrameDescriptor, SampleFormat};
 use crate::{
     error::Error,
     frame::{Data, Frame, FrameData, FrameSpec, MemoryData},
-    invalid_param_error, unsupported_error, FrameDescriptor, MediaType, Result, DEFAULT_ALIGNMENT,
+    invalid_error, invalid_param_error, unsupported_error, FrameDescriptor, MediaType, Result, DEFAULT_ALIGNMENT,
 };
 
 pub type AudioFrame<'a> = Frame<'a, AudioFrameDescriptor>;
@@ -39,7 +39,7 @@ impl AudioDataCreator {
         let buffer = buffer.into();
 
         if buffer.len() != size {
-            return Err(Error::Invalid("buffer size".to_string()));
+            return Err(invalid_error!("buffer size"));
         }
 
         Ok(MemoryData {
@@ -114,7 +114,7 @@ impl Frame<'_> {
 
     pub fn truncate(&mut self, samples: u32) -> Result<()> {
         let FrameDescriptor::Audio(desc) = &mut self.desc else {
-            return Err(unsupported_error!(self.desc));
+            return Err(unsupported_error!("truncate for non-audio frame"));
         };
 
         AudioFrame::truncate_internal(desc, &mut self.data, samples)
@@ -213,7 +213,7 @@ impl<'a> TryFrom<Frame<'a>> for AudioFrame<'a> {
                 data: frame.data,
             })
         } else {
-            Err(Error::Invalid("not audio frame".to_string()))
+            Err(invalid_error!("not audio frame"))
         }
     }
 }

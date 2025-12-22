@@ -13,7 +13,7 @@ use media_core::{
     buffer::BufferPool,
     error::Error,
     frame::{Frame, SharedFrame},
-    invalid_param_error,
+    invalid_param_error, unsupported_error,
     variant::Variant,
     MediaType, Result,
 };
@@ -269,7 +269,7 @@ pub fn register_encoder<T: CodecSpec>(builder: Arc<dyn EncoderBuilder<T>>, defau
             let builder = unsafe { mem::transmute::<Arc<dyn EncoderBuilder<T>>, Arc<dyn CodecBuilder<VideoEncoder>>>(builder) };
             register_codec(&VIDEO_ENCODER_LIST, builder, default)
         }
-        _ => Err(Error::Unsupported("codec parameters type".to_string())),
+        _ => Err(unsupported_error!("codec parameters type")),
     }
 }
 
@@ -285,7 +285,7 @@ pub(crate) fn find_encoder<T: CodecSpec>(id: CodecID) -> Result<Arc<dyn EncoderB
             let builder = find_codec(&VIDEO_ENCODER_LIST, id)?;
             unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<VideoEncoder>>, Arc<dyn EncoderBuilder<T>>>(builder)) }
         }
-        _ => Err(Error::Unsupported("codec parameters type".to_string())),
+        _ => Err(unsupported_error!("codec parameters type")),
     }
 }
 
@@ -301,7 +301,7 @@ pub(crate) fn find_encoder_by_name<T: CodecSpec>(name: &str) -> Result<Arc<dyn E
             let builder = find_codec_by_name(&VIDEO_ENCODER_LIST, name)?;
             unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<VideoEncoder>>, Arc<dyn EncoderBuilder<T>>>(builder)) }
         }
-        _ => Err(Error::Unsupported("codec parameters type".to_string())),
+        _ => Err(unsupported_error!("codec parameters type")),
     }
 }
 

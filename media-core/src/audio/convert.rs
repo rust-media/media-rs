@@ -6,9 +6,8 @@ use super::{
     frame::AudioFrame,
 };
 use crate::{
-    error::Error,
     frame::{DataMappable, Frame, FrameData, MappedPlanes},
-    FrameDescriptor, Result,
+    invalid_error, unsupported_error, FrameDescriptor, Result,
 };
 
 macro_rules! impl_convert {
@@ -104,8 +103,8 @@ fn convert_samples<S: Pod, D: Pod>(
     for ch in 0..channels as usize {
         let src_i = ch * src_plane_index_step;
         let dst_i = ch * dst_plane_index_step;
-        let src_data = src_planes.plane_data(src_i).ok_or_else(|| Error::Invalid(format!("out of range: src index {}", src_i)))?;
-        let dst_data = dst_planes.plane_data_mut(dst_i).ok_or_else(|| Error::Invalid(format!("out of range: dst index {}", dst_i)))?;
+        let src_data = src_planes.plane_data(src_i).ok_or_else(|| invalid_error!(format!("out of range: src index {}", src_i)))?;
+        let dst_data = dst_planes.plane_data_mut(dst_i).ok_or_else(|| invalid_error!(format!("out of range: dst index {}", dst_i)))?;
 
         let src_data: &[S] = bytemuck::cast_slice(src_data);
         let dst_data: &mut [D] = bytemuck::cast_slice_mut(dst_data);
@@ -122,7 +121,7 @@ fn data_copy(src_planes: &MappedPlanes, dst_planes: &mut MappedPlanes) -> Result
     for (src_plane, dst_plane) in src_planes.iter().zip(dst_planes.iter_mut()) {
         if let (Some(src), Some(dst)) = (src_plane.data(), dst_plane.data_mut()) {
             if src.len() != dst.len() {
-                return Err(Error::Invalid("plane size mismatch".to_string()));
+                return Err(invalid_error!("plane size mismatch"));
             }
             dst.copy_from_slice(src);
         }
@@ -160,7 +159,7 @@ fn data_convert(
 impl Frame<'_> {
     pub fn convert_audio_to(&self, dst: &mut Frame) -> Result<()> {
         let (FrameDescriptor::Audio(src_desc), FrameDescriptor::Audio(dst_desc)) = (&self.desc, &dst.desc) else {
-            return Err(Error::Invalid("not audio frame".to_string()));
+            return Err(invalid_error!("not audio frame"));
         };
 
         AudioFrame::convert_audio_to_internal(src_desc, &self.data, dst_desc, &mut dst.data)
@@ -175,18 +174,18 @@ impl AudioFrame<'_> {
         dst_data: &mut FrameData,
     ) -> Result<()> {
         if src_desc.samples != dst_desc.samples {
-            return Err(Error::Unsupported("samples mismatch".to_string()));
+            return Err(unsupported_error!("samples mismatch"));
         }
 
         let src_channels = src_desc.channels().get();
         let dst_channels = dst_desc.channels().get();
 
         if src_channels != dst_channels {
-            return Err(Error::Unsupported("channels mismatch".to_string()));
+            return Err(unsupported_error!("channels mismatch"));
         }
 
-        let guard = src_data.map().map_err(|_| Error::Invalid("not readable".into()))?;
-        let mut dst_guard = dst_data.map_mut().map_err(|_| Error::Invalid("not writable".into()))?;
+        let guard = src_data.map().map_err(|_| invalid_error!("not readable"))?;
+        let mut dst_guard = dst_data.map_mut().map_err(|_| invalid_error!("not writable"))?;
         let src_planes = guard.planes().unwrap();
         let mut dst_planes = dst_guard.planes_mut().unwrap();
 

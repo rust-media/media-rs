@@ -4,7 +4,7 @@ use std::{
 };
 
 use bitflags::bitflags;
-use media_core::{buffer::Buffer, error::Error, invalid_param_error, Result};
+use media_core::{buffer::Buffer, invalid_error, invalid_param_error, Result};
 use num_rational::Rational64;
 
 bitflags! {
@@ -173,7 +173,7 @@ impl<'a> Packet<'a> {
                 vec.truncate(len);
             }
             PacketData::Buffer(buffer) => {
-                let buffer = Arc::get_mut(buffer).ok_or_else(|| Error::Invalid("buffer is shared".to_string()))?;
+                let buffer = Arc::get_mut(buffer).ok_or_else(|| invalid_error!("buffer is shared"))?;
                 buffer.resize(len);
             }
         }

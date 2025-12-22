@@ -71,7 +71,7 @@ impl<T: Default + Copy> CircularBuffer<T> {
 
     pub fn write(&mut self, buf: &[T]) -> Result<usize> {
         if buf.is_empty() {
-            return Err(Error::WriteFailed("input buffer is empty".to_string()));
+            return Err(Error::WriteFailed("input buffer is empty".into()));
         }
 
         if self.available() < buf.len() {
@@ -98,7 +98,7 @@ impl<T: Default + Copy> CircularBuffer<T> {
 
     pub fn read(&mut self, buf: &mut [T]) -> Result<usize> {
         if buf.is_empty() {
-            return Err(Error::ReadFailed("output buffer is empty".to_string()));
+            return Err(Error::ReadFailed("output buffer is empty".into()));
         }
 
         let read_len = buf.len().min(self.len);
@@ -129,7 +129,7 @@ impl<T: Default + Copy> CircularBuffer<T> {
 
     pub fn peek(&self, buf: &mut [T]) -> Result<usize> {
         if buf.is_empty() {
-            return Err(Error::ReadFailed("output buffer is empty".to_string()));
+            return Err(Error::ReadFailed("output buffer is empty".into()));
         }
 
         let peek_len = buf.len().min(self.len);
