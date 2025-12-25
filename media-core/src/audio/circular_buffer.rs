@@ -94,7 +94,7 @@ impl AudioCircularBuffer {
             self.grow(self.len + samples)?;
         }
 
-        let guard = frame.map().map_err(|_| invalid_error!("not readable"))?;
+        let guard = frame.map()?;
         let planes = guard.planes().unwrap();
 
         if planes.len() != self.buffers.len() {
@@ -118,7 +118,7 @@ impl AudioCircularBuffer {
     {
         let samples = self.validate_frame(frame)?.min(self.len);
 
-        let mut guard = frame.map_mut().map_err(|_| invalid_error!("not writable"))?;
+        let mut guard = frame.map_mut()?;
         let mut planes = guard.planes_mut().unwrap();
 
         if planes.len() != self.buffers.len() {

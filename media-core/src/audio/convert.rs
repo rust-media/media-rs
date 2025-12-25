@@ -184,8 +184,8 @@ impl AudioFrame<'_> {
             return Err(unsupported_error!("channels mismatch"));
         }
 
-        let guard = src_data.map().map_err(|_| invalid_error!("not readable"))?;
-        let mut dst_guard = dst_data.map_mut().map_err(|_| invalid_error!("not writable"))?;
+        let guard = src_data.map()?;
+        let mut dst_guard = dst_data.map_mut()?;
         let src_planes = guard.planes().unwrap();
         let mut dst_planes = dst_guard.planes_mut().unwrap();
 
