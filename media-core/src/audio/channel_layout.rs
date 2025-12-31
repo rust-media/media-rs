@@ -4,7 +4,7 @@ use bitflags::bitflags;
 use smallvec::SmallVec;
 use strum::EnumCount;
 
-use crate::{error::Error, invalid_param_error, Result};
+use crate::{audio::DEFAULT_MAX_CHANNELS, error::Error, invalid_param_error, Result};
 
 #[derive(Clone, Copy, Debug, EnumCount, Eq, PartialEq)]
 #[repr(u8)]
@@ -201,8 +201,6 @@ define_channel_layouts! {
     SURROUND_7_1_4_BACK: ["7.1.4", Surround_7_1_4_BACK(12)],
     SURROUND_9_1_4_BACK: ["9.1.4", Surround_9_1_4_BACK(14)],
 }
-
-const DEFAULT_MAX_CHANNELS: usize = 16;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ChannelLayoutSpec {

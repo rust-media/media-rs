@@ -14,6 +14,8 @@ use crate::{
     invalid_param_error, time, FrameDescriptor, FrameDescriptorSpec, MediaType, Result,
 };
 
+pub const DEFAULT_MAX_CHANNELS: usize = 16;
+
 pub const SAMPLE_RATE_TELEPHONE: u32 = 8000;
 pub const SAMPLE_RATE_VOIP: u32 = 16000;
 pub const SAMPLE_RATE_CD: u32 = 44100;
@@ -130,6 +132,10 @@ impl SampleFormat {
 
     pub fn bytes(&self) -> u8 {
         self.bits() >> 3
+    }
+
+    pub fn is_float(&self) -> bool {
+        matches!(*self, SampleFormat::F32 | SampleFormat::F64 | SampleFormat::F32P | SampleFormat::F64P)
     }
 
     pub fn is_planar(&self) -> bool {
