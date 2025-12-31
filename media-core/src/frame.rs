@@ -8,7 +8,7 @@ use std::{
     slice::{Iter, IterMut},
 };
 
-use aligned_vec::{AVec, ConstAlign};
+use aligned_vec::{avec, AVec, ConstAlign};
 #[cfg(any(feature = "audio", feature = "video"))]
 use bytemuck::Pod;
 use num_rational::Rational64;
@@ -240,33 +240,69 @@ pub(crate) enum PlaneDescriptor {
     Video(usize, u32), // stride, height
 }
 
-#[derive(Clone)]
-pub(crate) enum Data<'a, T: Clone = u8> {
+pub(crate) enum Data<'a, T: Pod = u8> {
     Borrowed(&'a [T]),
+    BorrowedMut(&'a mut [T]),
     Owned(AVec<T, ConstAlign<DEFAULT_ALIGNMENT>>),
 }
 
-impl<T: Clone> Data<'_, T> {
-    fn into_owned(self) -> Data<'static, T> {
+impl<T: Pod> Data<'_, T> {
+    pub(crate) fn new(len: usize, initial_value: T) -> Data<'static, T> {
+        Data::Owned(avec![[DEFAULT_ALIGNMENT]| initial_value; len])
+    }
+
+    pub(crate) fn into_owned(self) -> Data<'static, T> {
         match self {
             Data::Borrowed(slice) => Data::Owned(AVec::from_slice(DEFAULT_ALIGNMENT, slice)),
+            Data::BorrowedMut(slice) => Data::Owned(AVec::from_slice(DEFAULT_ALIGNMENT, slice)),
             Data::Owned(vec) => Data::Owned(vec),
         }
     }
 
-    #[cfg(any(feature = "audio", feature = "video"))]
+    pub(crate) fn len(&self) -> usize {
+        match self {
+            Data::Borrowed(slice) => slice.len(),
+            Data::BorrowedMut(slice) => slice.len(),
+            Data::Owned(vec) => vec.len(),
+        }
+    }
+
     pub(crate) fn as_ref(&self) -> &[T] {
         match self {
             Data::Borrowed(slice) => slice,
+            Data::BorrowedMut(slice) => slice,
             Data::Owned(vec) => vec.as_slice(),
+        }
+    }
+
+    pub(crate) fn as_mut(&mut self) -> Option<&mut [T]> {
+        match self {
+            Data::Borrowed(_) => None,
+            Data::BorrowedMut(slice) => Some(slice),
+            Data::Owned(vec) => Some(vec.as_mut_slice()),
+        }
+    }
+
+    pub(crate) fn as_ptr(&self) -> *const T {
+        self.as_ref().as_ptr()
+    }
+
+    pub(crate) fn as_mut_ptr(&mut self) -> Option<*mut T> {
+        self.as_mut().map(|slice| slice.as_mut_ptr())
+    }
+}
+
+impl<'a, T: Pod> Clone for Data<'a, T> {
+    fn clone(&self) -> Self {
+        match self {
+            Data::Borrowed(slice) => Data::Borrowed(slice),
+            Data::BorrowedMut(slice) => Data::Owned(AVec::from_slice(DEFAULT_ALIGNMENT, slice)),
+            Data::Owned(vec) => Data::Owned(vec.clone()),
         }
     }
 }
 
-impl<'a, T> From<Cow<'a, [T]>> for Data<'a, T>
-where
-    T: Clone,
-{
+impl<'a, T: Pod> From<Cow<'a, [T]>> for Data<'a, T> {
     fn from(cow: Cow<'a, [T]>) -> Self {
         match cow {
             Cow::Borrowed(slice) => Data::Borrowed(slice),
@@ -457,10 +493,7 @@ impl DataMappable for MemoryData<'_> {
     }
 
     fn planes_mut(&mut self) -> Option<MappedPlanes<'_>> {
-        let mut data_slice = match &mut self.data {
-            Data::Owned(vec) => vec.as_mut_slice(),
-            Data::Borrowed(_) => return None,
-        };
+        let mut data_slice = self.data.as_mut()?;
         let mut planes = SmallVec::with_capacity(DEFAULT_MAX_PLANES);
 
         for plane in &self.planes {
