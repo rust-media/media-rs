@@ -12,28 +12,9 @@ use crate::{
 
 macro_rules! impl_convert {
     ($func_name:ident, $src_type:ty, $dst_type:ty, $convert_expr:expr) => {
-        #[allow(clippy::too_many_arguments)]
-        fn $func_name(
-            src_planes: &MappedPlanes,
-            dst_planes: &mut MappedPlanes,
-            src_plane_index_step: usize,
-            dst_plane_index_step: usize,
-            src_data_step: usize,
-            dst_data_step: usize,
-            channels: u8,
-            samples: u32,
-        ) -> Result<()> {
-            convert_samples::<$src_type, $dst_type>(
-                src_planes,
-                dst_planes,
-                src_plane_index_step,
-                dst_plane_index_step,
-                src_data_step,
-                dst_data_step,
-                channels,
-                samples,
-                |src_val| $convert_expr(src_val),
-            )
+        #[inline(always)]
+        fn $func_name(src_buffer: &[u8], dst_buffer: &mut [u8], src_data_step: usize, dst_data_step: usize, samples: u32) {
+            convert_samples::<$src_type, $dst_type>(src_buffer, dst_buffer, src_data_step, dst_data_step, samples, |src_val| $convert_expr(src_val))
         }
     };
 }
@@ -75,11 +56,11 @@ impl_convert!(f64_to_s64, f64, i64, |x: f64| (x * (1u64 << 63) as f64).round() a
 impl_convert!(f64_to_f32, f64, f32, |x: f64| x as f32);
 impl_convert!(f64_to_f64, f64, f64, |x: f64| x);
 
-type SampleFormatConvertFunc = fn(&MappedPlanes, &mut MappedPlanes, usize, usize, usize, usize, u8, u32) -> Result<()>;
+type SampleFormatConvertFn = fn(&[u8], &mut [u8], usize, usize, u32);
 
-const AUDIO_SAMPLE_FORMAT_MAX: usize = SampleFormat::COUNT / 2; // Only handle packed formats
+const SAMPLE_FORMAT_MAX: usize = SampleFormat::COUNT / 2; // Only handle packed formats
 
-static AUDIO_SAMPLE_CONVERT_FUNCS: [[SampleFormatConvertFunc; AUDIO_SAMPLE_FORMAT_MAX]; AUDIO_SAMPLE_FORMAT_MAX] = [
+static SAMPLE_CONVERT_TABLE: [[SampleFormatConvertFn; SAMPLE_FORMAT_MAX]; SAMPLE_FORMAT_MAX] = [
     [u8_to_u8, u8_to_s16, u8_to_s32, u8_to_s64, u8_to_f32, u8_to_f64],
     [s16_to_u8, s16_to_s16, s16_to_s32, s16_to_s64, s16_to_f32, s16_to_f64],
     [s32_to_u8, s32_to_s16, s32_to_s32, s32_to_s64, s32_to_f32, s32_to_f64],
@@ -88,33 +69,21 @@ static AUDIO_SAMPLE_CONVERT_FUNCS: [[SampleFormatConvertFunc; AUDIO_SAMPLE_FORMA
     [f64_to_u8, f64_to_s16, f64_to_s32, f64_to_s64, f64_to_f32, f64_to_f64],
 ];
 
-#[allow(clippy::too_many_arguments)]
+#[inline(always)]
 fn convert_samples<S: Pod, D: Pod>(
-    src_planes: &MappedPlanes,
-    dst_planes: &mut MappedPlanes,
-    src_plane_index_step: usize,
-    dst_plane_index_step: usize,
+    src_buffer: &[u8],
+    dst_buffer: &mut [u8],
     src_data_step: usize,
     dst_data_step: usize,
-    channels: u8,
     samples: u32,
     convert: impl Fn(S) -> D,
-) -> Result<()> {
-    for ch in 0..channels as usize {
-        let src_i = ch * src_plane_index_step;
-        let dst_i = ch * dst_plane_index_step;
-        let src_data = src_planes.plane_data(src_i).ok_or_else(|| invalid_error!(format!("out of range: src index {}", src_i)))?;
-        let dst_data = dst_planes.plane_data_mut(dst_i).ok_or_else(|| invalid_error!(format!("out of range: dst index {}", dst_i)))?;
+) {
+    let src_data: &[S] = bytemuck::cast_slice(src_buffer);
+    let dst_data: &mut [D] = bytemuck::cast_slice_mut(dst_buffer);
 
-        let src_data: &[S] = bytemuck::cast_slice(src_data);
-        let dst_data: &mut [D] = bytemuck::cast_slice_mut(dst_data);
-
-        for i in 0..samples as usize {
-            dst_data[i * dst_data_step] = convert(src_data[i * src_data_step]);
-        }
+    for i in 0..samples as usize {
+        dst_data[i * dst_data_step] = convert(src_data[i * src_data_step]);
     }
-
-    Ok(())
 }
 
 fn data_copy(src_planes: &MappedPlanes, dst_planes: &mut MappedPlanes) -> Result<()> {
@@ -139,7 +108,7 @@ fn data_convert(
     samples: u32,
 ) -> Result<()> {
     // Get conversion function from table
-    let convert = AUDIO_SAMPLE_CONVERT_FUNCS[src_format.packed_sample_format() as usize][dst_format.packed_sample_format() as usize];
+    let convert = SAMPLE_CONVERT_TABLE[src_format.packed_sample_format() as usize][dst_format.packed_sample_format() as usize];
 
     let (src_plane_index_step, src_data_step) = if src_format.is_planar() {
         (1, 1)
@@ -153,7 +122,16 @@ fn data_convert(
         (0, channels as usize)
     };
 
-    convert(src_planes, dst_planes, src_plane_index_step, dst_plane_index_step, src_data_step, dst_data_step, channels, samples)
+    for ch in 0..channels as usize {
+        let src_i = ch * src_plane_index_step;
+        let dst_i = ch * dst_plane_index_step;
+        let src_data = src_planes.plane_data(src_i).ok_or_else(|| invalid_error!(format!("out of range: src index {}", src_i)))?;
+        let dst_data = dst_planes.plane_data_mut(dst_i).ok_or_else(|| invalid_error!(format!("out of range: dst index {}", dst_i)))?;
+
+        convert(src_data, dst_data, src_data_step, dst_data_step, samples)
+    }
+
+    Ok(())
 }
 
 impl Frame<'_> {
