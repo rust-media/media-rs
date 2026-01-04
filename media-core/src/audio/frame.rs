@@ -3,8 +3,6 @@ use std::{
     num::{NonZeroU32, NonZeroU8},
 };
 
-use aligned_vec::avec;
-
 use super::audio::{AudioFrameDescriptor, SampleFormat};
 use crate::{
     error::Error,
@@ -26,7 +24,7 @@ impl AudioDataCreator {
         };
 
         Ok(MemoryData {
-            data: Data::Owned(avec![[DEFAULT_ALIGNMENT]| initial_value; size]),
+            data: Data::new(size, initial_value),
             planes,
         })
     }

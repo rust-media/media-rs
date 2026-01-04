@@ -251,6 +251,18 @@ impl<T: Pod> Data<'_, T> {
         Data::Owned(avec![[DEFAULT_ALIGNMENT]| initial_value; len])
     }
 
+    pub(crate) fn from_slice<'a>(slice: &'a [T]) -> Data<'a, T> {
+        Data::Borrowed(slice)
+    }
+
+    pub(crate) fn from_slice_mut<'a>(slice: &'a mut [T]) -> Data<'a, T> {
+        Data::BorrowedMut(slice)
+    }
+
+    pub(crate) fn copy_from_slice(slice: &[T]) -> Data<'static, T> {
+        Data::Owned(AVec::from_slice(DEFAULT_ALIGNMENT, slice))
+    }
+
     pub(crate) fn into_owned(self) -> Data<'static, T> {
         match self {
             Data::Borrowed(slice) => Data::Owned(AVec::from_slice(DEFAULT_ALIGNMENT, slice)),
@@ -295,8 +307,8 @@ impl<T: Pod> Data<'_, T> {
 impl<'a, T: Pod> Clone for Data<'a, T> {
     fn clone(&self) -> Self {
         match self {
-            Data::Borrowed(slice) => Data::Borrowed(slice),
-            Data::BorrowedMut(slice) => Data::Owned(AVec::from_slice(DEFAULT_ALIGNMENT, slice)),
+            Data::Borrowed(slice) => Data::from_slice(slice),
+            Data::BorrowedMut(slice) => Data::copy_from_slice(slice),
             Data::Owned(vec) => Data::Owned(vec.clone()),
         }
     }
@@ -305,8 +317,8 @@ impl<'a, T: Pod> Clone for Data<'a, T> {
 impl<'a, T: Pod> From<Cow<'a, [T]>> for Data<'a, T> {
     fn from(cow: Cow<'a, [T]>) -> Self {
         match cow {
-            Cow::Borrowed(slice) => Data::Borrowed(slice),
-            Cow::Owned(vec) => Data::Owned(AVec::from_slice(DEFAULT_ALIGNMENT, &vec)),
+            Cow::Borrowed(slice) => Data::from_slice(slice),
+            Cow::Owned(vec) => Data::copy_from_slice(&vec),
         }
     }
 }
