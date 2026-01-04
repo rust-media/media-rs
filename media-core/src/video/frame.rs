@@ -1,7 +1,5 @@
 use std::{borrow::Cow, num::NonZeroU32, sync::Arc};
 
-use aligned_vec::avec;
-
 use super::video::{PixelFormat, VideoFrameDescriptor};
 use crate::{
     buffer::Buffer,
@@ -19,7 +17,7 @@ impl VideoDataCreator {
         let (size, planes) = format.calc_data_size(width.get(), height.get(), DEFAULT_ALIGNMENT as u32);
 
         Ok(MemoryData {
-            data: Data::Owned(avec![[DEFAULT_ALIGNMENT]| 0u8; size]),
+            data: Data::new(size, 0u8),
             planes,
         })
     }
