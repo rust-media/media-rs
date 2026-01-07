@@ -9,7 +9,6 @@ use std::{
 };
 
 use aligned_vec::{avec, AVec, ConstAlign};
-#[cfg(any(feature = "audio", feature = "video"))]
 use bytemuck::Pod;
 use num_rational::Rational64;
 #[cfg(any(feature = "audio", feature = "video"))]
@@ -240,12 +239,14 @@ pub(crate) enum PlaneDescriptor {
     Video(usize, u32), // stride, height
 }
 
+#[allow(unused)]
 pub(crate) enum Data<'a, T: Pod = u8> {
     Borrowed(&'a [T]),
     BorrowedMut(&'a mut [T]),
     Owned(AVec<T, ConstAlign<DEFAULT_ALIGNMENT>>),
 }
 
+#[allow(unused)]
 impl<T: Pod> Data<'_, T> {
     pub(crate) fn new(len: usize, initial_value: T) -> Data<'static, T> {
         Data::Owned(avec![[DEFAULT_ALIGNMENT]| initial_value; len])
