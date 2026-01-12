@@ -100,7 +100,6 @@ impl BufferPool {
             if buffer_capacity == buffer.capacity() {
                 if let Some(buffer_mut) = Arc::get_mut(&mut buffer) {
                     buffer_mut.resize(buffer_capacity);
-                    buffer_mut.data_mut().fill(0);
                     return buffer;
                 }
             }
@@ -121,7 +120,6 @@ impl BufferPool {
             if buffer_capacity == buffer.capacity() {
                 if let Some(buffer_mut) = Arc::get_mut(&mut buffer) {
                     buffer_mut.resize(len);
-                    buffer_mut.data_mut().fill(0);
                     return buffer;
                 }
             }
