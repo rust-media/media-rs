@@ -101,7 +101,7 @@ impl AudioCircularBuffer {
             return Err(invalid_error!("plane count mismatch"));
         }
 
-        planes.iter().enumerate().try_for_each(|(i, plane)| {
+        planes.iter().enumerate().try_for_each::<_, Result<()>>(|(i, plane)| {
             let buffer = &mut self.buffers[i];
             buffer.write(plane.data().unwrap())?;
             Ok(())
@@ -125,7 +125,7 @@ impl AudioCircularBuffer {
             return Err(invalid_error!("plane count mismatch"));
         }
 
-        planes.iter_mut().enumerate().try_for_each(|(i, plane)| {
+        planes.iter_mut().enumerate().try_for_each::<_, Result<()>>(|(i, plane)| {
             let buffer = &mut self.buffers[i];
             buffer.read(plane.data_mut().unwrap())?;
             Ok(())
