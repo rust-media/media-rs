@@ -8,6 +8,8 @@ use std::{
 
 use crossbeam_queue::SegQueue;
 
+const DEFAULT_BUFFER_CAPACITY: usize = 1024;
+
 pub struct Buffer {
     data: Box<[u8]>,
     available: usize,
@@ -76,6 +78,12 @@ pub struct BufferPool {
 
 impl BufferPool {
     pub fn new(buffer_capacity: usize) -> Arc<Self> {
+        let buffer_capacity = if buffer_capacity == 0 {
+            DEFAULT_BUFFER_CAPACITY
+        } else {
+            buffer_capacity
+        };
+
         Arc::new(Self {
             queue: SegQueue::new(),
             buffer_capacity: AtomicUsize::new(buffer_capacity),
@@ -87,7 +95,7 @@ impl BufferPool {
     }
 
     pub fn get_buffer(self: &Arc<Self>) -> Arc<Buffer> {
-        let buffer_capacity = self.buffer_capacity.load(Ordering::Relaxed);
+        let buffer_capacity = self.buffer_capacity.load(Ordering::Acquire);
         if let Some(mut buffer) = self.queue.pop() {
             if buffer_capacity == buffer.capacity() {
                 if let Some(buffer_mut) = Arc::get_mut(&mut buffer) {
@@ -102,8 +110,12 @@ impl BufferPool {
     }
 
     pub fn get_buffer_with_length(self: &Arc<Self>, len: usize) -> Arc<Buffer> {
-        let buffer_capacity = self.buffer_capacity.load(Ordering::Relaxed);
-        let len = len.min(buffer_capacity);
+        let mut buffer_capacity = self.buffer_capacity.load(Ordering::Acquire);
+
+        if len > buffer_capacity {
+            self.set_buffer_capacity(len);
+            buffer_capacity = len;
+        }
 
         if let Some(mut buffer) = self.queue.pop() {
             if buffer_capacity == buffer.capacity() {
@@ -119,7 +131,7 @@ impl BufferPool {
     }
 
     pub fn recycle_buffer(&self, buffer: Arc<Buffer>) {
-        if buffer.capacity() == self.buffer_capacity.load(Ordering::Relaxed) {
+        if buffer.capacity() == self.buffer_capacity.load(Ordering::Acquire) {
             self.queue.push(buffer);
         }
     }
@@ -129,7 +141,7 @@ impl BufferPool {
     }
 
     pub fn set_buffer_capacity(&self, buffer_capacity: usize) {
-        self.buffer_capacity.store(buffer_capacity, Ordering::Relaxed);
+        self.buffer_capacity.store(buffer_capacity, Ordering::Release);
         while self.queue.pop().is_some() {}
     }
 }
