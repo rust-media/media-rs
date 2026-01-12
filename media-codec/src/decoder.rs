@@ -207,7 +207,7 @@ pub trait Decoder<T: CodecSpec>: Codec<T> + Send + Sync {
     fn init(&mut self, _config: &T) -> Result<()> {
         Ok(())
     }
-    fn send_packet(&mut self, config: &T, pool: Option<&Arc<FramePool<Frame<'static, T::FrameDescriptor>>>>, packet: Packet) -> Result<()>;
+    fn send_packet(&mut self, config: &T, pool: Option<&Arc<FramePool<Frame<'static, T::FrameDescriptor>>>>, packet: &Packet) -> Result<()>;
     fn receive_frame(
         &mut self,
         config: &T,
@@ -346,7 +346,7 @@ impl<T: CodecSpec> DecoderContext<T> {
         self.decoder.set_option(key, value)
     }
 
-    pub fn send_packet(&mut self, packet: Packet) -> Result<()> {
+    pub fn send_packet(&mut self, packet: &Packet) -> Result<()> {
         self.decoder.send_packet(&self.config, self.pool.as_ref(), packet)
     }
 
