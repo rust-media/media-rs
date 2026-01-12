@@ -8,10 +8,10 @@ use std::{
 #[cfg(feature = "audio")]
 use media_core::audio::{ChannelLayout, SampleFormat};
 #[cfg(feature = "video")]
+use media_core::rational::Rational64;
+#[cfg(feature = "video")]
 use media_core::video::{ChromaLocation, ColorMatrix, ColorPrimaries, ColorRange, ColorTransferCharacteristics, PixelFormat};
 use media_core::{error::Error, invalid_error, invalid_param_error, not_found_error, variant::Variant, FrameDescriptorSpec, MediaType, Result};
-#[cfg(feature = "video")]
-use num_rational::Rational64;
 
 use crate::{decoder::DecoderParameters, encoder::EncoderParameters};
 
