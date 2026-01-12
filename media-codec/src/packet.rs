@@ -4,8 +4,7 @@ use std::{
 };
 
 use bitflags::bitflags;
-use media_core::{buffer::Buffer, invalid_error, invalid_param_error, Result};
-use num_rational::Rational64;
+use media_core::{buffer::Buffer, invalid_error, invalid_param_error, rational::Rational64, Result};
 
 bitflags! {
     #[repr(transparent)]

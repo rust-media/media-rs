@@ -10,7 +10,6 @@ use std::{
 
 use aligned_vec::{avec, AVec, ConstAlign};
 use bytemuck::Pod;
-use num_rational::Rational64;
 #[cfg(any(feature = "audio", feature = "video"))]
 use smallvec::SmallVec;
 
@@ -18,7 +17,9 @@ use smallvec::SmallVec;
 use crate::video::pixel_buffer::frame::PixelBuffer;
 #[cfg(any(feature = "audio", feature = "video"))]
 use crate::{buffer::Buffer, unsupported_error};
-use crate::{frame_pool::FramePool, variant::Variant, FrameDescriptor, FrameDescriptorSpec, MediaType, Result, DEFAULT_ALIGNMENT};
+use crate::{
+    frame_pool::FramePool, rational::Rational64, variant::Variant, FrameDescriptor, FrameDescriptorSpec, MediaType, Result, DEFAULT_ALIGNMENT,
+};
 
 #[cfg(any(feature = "audio", feature = "video"))]
 const DEFAULT_MAX_PLANES: usize = 8;
