@@ -91,7 +91,7 @@ pub struct Packet<'a> {
     pub time_base: Option<Rational64>,
     pub flags: PacketFlags,
     pub pos: Option<usize>,
-    pub stream_index: Option<usize>,
+    pub track_index: Option<usize>,
     data: PacketData<'a>,
 }
 
@@ -104,7 +104,7 @@ impl<'a> Packet<'a> {
             time_base: None,
             flags: PacketFlags::empty(),
             pos: None,
-            stream_index: None,
+            track_index: None,
             data,
         }
     }
@@ -133,7 +133,7 @@ impl<'a> Packet<'a> {
             time_base: self.time_base,
             flags: self.flags,
             pos: self.pos,
-            stream_index: self.stream_index,
+            track_index: self.track_index,
             data: self.data.into_owned(),
         }
     }
