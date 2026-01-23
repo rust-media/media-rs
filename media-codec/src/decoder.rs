@@ -13,7 +13,9 @@ use media_core::{
     error::Error,
     frame::{Frame, SharedFrame},
     frame_pool::{FrameCreator, FramePool},
-    invalid_param_error, unsupported_error,
+    invalid_param_error,
+    rational::Rational64,
+    unsupported_error,
     variant::Variant,
     MediaType, Result,
 };
@@ -23,8 +25,10 @@ use crate::AudioParameters;
 #[cfg(feature = "video")]
 use crate::VideoParameters;
 use crate::{
-    find_codec, find_codec_by_name, packet::Packet, register_codec, Codec, CodecBuilder, CodecID, CodecList, CodecParameters, CodecParametersType,
-    CodecSpec, CodecType, LazyCodecList, MediaParametersType,
+    find_codec, find_codec_by_name,
+    packet::{Packet, PacketProperties},
+    register_codec, Codec, CodecBuilder, CodecID, CodecList, CodecParameters, CodecParametersType, CodecSpec, CodecType, LazyCodecList,
+    MediaParametersType,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -224,6 +228,8 @@ pub struct DecoderContext<T: CodecSpec> {
     pub config: T,
     decoder: Box<dyn Decoder<T>>,
     pool: Option<Arc<FramePool<Frame<'static, T::FrameDescriptor>>>>,
+    pub time_base: Option<Rational64>,
+    last_pkt_props: Option<PacketProperties>,
 }
 
 #[cfg(feature = "audio")]
@@ -308,6 +314,8 @@ impl<T: CodecSpec> DecoderContext<T> {
             config,
             decoder,
             pool: frame_pool,
+            time_base: None,
+            last_pkt_props: None,
         })
     }
 
@@ -347,10 +355,26 @@ impl<T: CodecSpec> DecoderContext<T> {
     }
 
     pub fn send_packet(&mut self, packet: &Packet) -> Result<()> {
-        self.decoder.send_packet(&self.config, self.pool.as_ref(), packet)
+        self.decoder.send_packet(&self.config, self.pool.as_ref(), packet)?;
+        self.last_pkt_props = Some(PacketProperties::from_packet(packet));
+
+        Ok(())
     }
 
     pub fn receive_frame(&mut self) -> Result<SharedFrame<Frame<'static, T::FrameDescriptor>>> {
-        self.decoder.receive_frame(&self.config, self.pool.as_ref())
+        let mut shared_frame = self.decoder.receive_frame(&self.config, self.pool.as_ref())?;
+
+        let frame = shared_frame.write();
+        if let Some(frame) = frame {
+            if let Some(pkt_props) = &self.last_pkt_props {
+                frame.pts = pkt_props.pts;
+                frame.dts = pkt_props.dts;
+                frame.duration = pkt_props.duration;
+            }
+
+            frame.time_base = self.time_base;
+        }
+
+        Ok(shared_frame)
     }
 }
