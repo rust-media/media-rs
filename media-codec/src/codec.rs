@@ -1,6 +1,7 @@
 use std::{
     any::Any,
     collections::HashMap,
+    fmt::{self, Debug, Display, Formatter},
     num::NonZeroU32,
     sync::{Arc, LazyLock, RwLock},
 };
@@ -16,29 +17,52 @@ use media_core::{error::Error, invalid_error, invalid_param_error, not_found_err
 use crate::{decoder::DecoderParameters, encoder::EncoderParameters};
 
 macro_rules! codecs {
-    (@$media_type:ident: $($name:ident),+ $(,)?) => {
-        codecs!(@impl $media_type, 1, $($name),+);
-    };
-
-    (@impl $media_type:ident, $id:expr, $name:ident) => {
+    (@impl $feature:literal, $media_type:ident, $id:expr, $name:ident) => {
+        #[cfg(feature = $feature)]
         pub const $name: CodecID = CodecID(((MediaType::$media_type as u32) << 16) | $id);
     };
 
-    (@impl $media_type:ident, $id:expr, $name:ident, $($rest:ident),+) => {
+    (@impl $feature:literal, $media_type:ident, $id:expr, $name:ident, $($rest:ident),+) => {
+        #[cfg(feature = $feature)]
         pub const $name: CodecID = CodecID(((MediaType::$media_type as u32) << 16) | $id);
-        codecs!(@impl $media_type, $id + 1, $($rest),+);
+        codecs!(@impl $feature, $media_type, $id + 1, $($rest),+);
+    };
+}
+
+macro_rules! define_codecs {
+    ($(
+        #[cfg(feature = $feature:literal)]
+        $media_type:ident: [$($name:ident),+ $(,)?]
+    )+) => {
+        impl CodecID {
+            $(
+                codecs!(@impl $feature, $media_type, 1, $($name),+);
+            )+
+        }
+
+        impl CodecID {
+            pub fn as_str(&self) -> Option<&'static str> {
+                match *self {
+                    $(
+                        $(
+                            #[cfg(feature = $feature)]
+                            CodecID::$name => Some(stringify!($name)),
+                        )+
+                    )+
+                    _ => None,
+                }
+            }
+        }
     };
 }
 
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct CodecID(u32);
 
-// Audio codecs
-#[cfg(feature = "audio")]
-impl CodecID {
-    codecs! {
-        @Audio:
+define_codecs! {
+    #[cfg(feature = "audio")]
+    Audio: [
         MP1,
         MP2,
         MP3,
@@ -57,14 +81,10 @@ impl CodecID {
         WMAVOICE,
         WMAPRO,
         WMALOSSLESS,
-    }
-}
+    ]
 
-// Video codecs
-#[cfg(feature = "video")]
-impl CodecID {
-    codecs! {
-        @Video:
+    #[cfg(feature = "video")]
+    Video: [
         MPEG1,
         MPEG2,
         MPEG4,
@@ -100,6 +120,26 @@ impl CodecID {
         JPEGXL,
         JPEG2000,
         PRORES,
+    ]
+}
+
+impl Debug for CodecID {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if let Some(str) = self.as_str() {
+            write!(f, "CodecID::{}", str)
+        } else {
+            write!(f, "CodecID(0x{:08X})", self.0)
+        }
+    }
+}
+
+impl Display for CodecID {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if let Some(str) = self.as_str() {
+            f.write_str(str)
+        } else {
+            write!(f, "0x{:08X}", self.0)
+        }
     }
 }
 
