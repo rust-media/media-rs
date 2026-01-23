@@ -204,3 +204,46 @@ pub trait WritePacket: Write {
 
 impl<T: Read + ?Sized> ReadPacket for T {}
 impl<T: Write + ?Sized> WritePacket for T {}
+
+#[derive(Clone, Copy, Debug)]
+pub struct PacketProperties {
+    pub pts: Option<i64>,
+    pub dts: Option<i64>,
+    pub duration: Option<i64>,
+    pub time_base: Option<Rational64>,
+    pub flags: PacketFlags,
+    pub pos: Option<usize>,
+    pub track_index: Option<usize>,
+}
+
+impl PacketProperties {
+    pub fn new() -> Self {
+        Self {
+            pts: None,
+            dts: None,
+            duration: None,
+            time_base: None,
+            flags: PacketFlags::empty(),
+            pos: None,
+            track_index: None,
+        }
+    }
+
+    pub fn from_packet(packet: &Packet) -> Self {
+        Self {
+            pts: packet.pts,
+            dts: packet.dts,
+            duration: packet.duration,
+            time_base: packet.time_base,
+            flags: packet.flags,
+            pos: packet.pos,
+            track_index: packet.track_index,
+        }
+    }
+}
+
+impl Default for PacketProperties {
+    fn default() -> Self {
+        Self::new()
+    }
+}
