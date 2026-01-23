@@ -10,6 +10,7 @@ use crossbeam_queue::SegQueue;
 
 const DEFAULT_BUFFER_CAPACITY: usize = 1024;
 
+#[derive(Debug)]
 pub struct Buffer {
     data: Box<[u8]>,
     available: usize,
