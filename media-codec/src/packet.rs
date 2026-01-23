@@ -15,7 +15,7 @@ bitflags! {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum PacketData<'a> {
     Borrowed(&'a [u8]),
     Owned(Vec<u8>),
@@ -83,7 +83,7 @@ impl PacketData<'_> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Packet<'a> {
     pub pts: Option<i64>,
     pub dts: Option<i64>,
