@@ -226,9 +226,9 @@ pub trait DecoderBuilder<T: CodecSpec>: CodecBuilder<T> {
 
 pub struct DecoderContext<T: CodecSpec> {
     pub config: T,
+    pub time_base: Option<Rational64>,
     decoder: Box<dyn Decoder<T>>,
     pool: Option<Arc<FramePool<Frame<'static, T::FrameDescriptor>>>>,
-    pub time_base: Option<Rational64>,
     last_pkt_props: Option<PacketProperties>,
 }
 
@@ -367,12 +367,12 @@ impl<T: CodecSpec> DecoderContext<T> {
         let frame = shared_frame.write();
         if let Some(frame) = frame {
             if let Some(pkt_props) = &self.last_pkt_props {
-                frame.pts = pkt_props.pts;
-                frame.dts = pkt_props.dts;
-                frame.duration = pkt_props.duration;
+                frame.pts = frame.pts.or(pkt_props.pts);
+                frame.dts = frame.dts.or(pkt_props.dts);
+                frame.duration = frame.duration.or(pkt_props.duration);
             }
 
-            frame.time_base = self.time_base;
+            frame.time_base = frame.time_base.or(self.time_base);
         }
 
         Ok(shared_frame)
