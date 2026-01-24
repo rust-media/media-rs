@@ -13,7 +13,9 @@ use media_core::{
     buffer::BufferPool,
     error::Error,
     frame::{Frame, SharedFrame},
-    invalid_param_error, unsupported_error,
+    invalid_param_error,
+    rational::Rational64,
+    unsupported_error,
     variant::Variant,
     MediaType, Result,
 };
@@ -239,6 +241,7 @@ pub trait EncoderBuilder<T: CodecSpec>: CodecBuilder<T> {
 
 pub struct EncoderContext<T: CodecSpec> {
     pub config: T,
+    pub time_base: Option<Rational64>,
     encoder: Box<dyn Encoder<T>>,
     pool: Option<Arc<BufferPool>>,
 }
@@ -323,6 +326,7 @@ impl<T: CodecSpec> EncoderContext<T> {
 
         Ok(Self {
             config,
+            time_base: None,
             encoder,
             pool: buffer_pool,
         })
@@ -352,6 +356,10 @@ impl<T: CodecSpec> EncoderContext<T> {
     }
 
     pub fn receive_packet(&mut self) -> Result<Packet<'static>> {
-        self.encoder.receive_packet(&self.config, self.pool.as_ref())
+        let mut packet = self.encoder.receive_packet(&self.config, self.pool.as_ref())?;
+
+        packet.time_base = packet.time_base.or(self.time_base);
+
+        Ok(packet)
     }
 }
