@@ -309,8 +309,19 @@ pub(crate) fn find_encoder_by_name<T: CodecSpec>(name: &str) -> Result<Arc<dyn E
 }
 
 impl<T: CodecSpec> EncoderContext<T> {
-    fn new_with_builder(builder: Arc<dyn EncoderBuilder<T>>, params: &CodecParameters, options: Option<&Variant>) -> Result<Self> {
-        let encoder = builder.new_encoder(builder.id(), params, options)?;
+    pub fn new(codec_id: CodecID, codec_name: Option<&str>, params: &CodecParameters, options: Option<&Variant>) -> Result<Self> {
+        let builder = if let Some(codec_name) = codec_name {
+            find_encoder_by_name(codec_name)?
+        } else {
+            find_encoder(codec_id)?
+        };
+
+        let encoder = builder.new_encoder(codec_id, params, options)?;
+
+        Self::new_with_encoder(encoder, params)
+    }
+
+    pub fn new_with_encoder(encoder: Box<dyn Encoder<T>>, params: &CodecParameters) -> Result<Self> {
         let config = T::from_parameters(params)?;
 
         let buffer_pool = match &params.codec {
@@ -332,12 +343,12 @@ impl<T: CodecSpec> EncoderContext<T> {
         })
     }
 
-    pub fn from_codec_id(id: CodecID, params: &CodecParameters, options: Option<&Variant>) -> Result<Self> {
-        Self::new_with_builder(find_encoder(id)?, params, options)
+    pub fn codec_id(&self) -> CodecID {
+        self.encoder.id()
     }
 
-    pub fn from_codec_name(name: &str, params: &CodecParameters, options: Option<&Variant>) -> Result<Self> {
-        Self::new_with_builder(find_encoder_by_name(name)?, params, options)
+    pub fn codec_name(&self) -> &'static str {
+        self.encoder.name()
     }
 
     pub fn configure(&mut self, params: Option<&CodecParameters>, options: Option<&Variant>) -> Result<()> {
