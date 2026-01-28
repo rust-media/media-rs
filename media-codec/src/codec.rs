@@ -343,7 +343,7 @@ pub trait Codec<T: CodecSpec>: CodecInformation {
 }
 
 pub trait CodecBuilder<T: CodecSpec>: Any + Send + Sync {
-    fn id(&self) -> CodecID;
+    fn ids(&self) -> &[CodecID];
     fn name(&self) -> &'static str;
 }
 
@@ -358,12 +358,14 @@ where
     T: CodecSpec,
 {
     let mut codec_list = codec_list.write().map_err(|err| invalid_error!(err.to_string()))?;
-    let entry = codec_list.codecs.entry(builder.id()).or_default();
+    for &id in builder.ids() {
+        let list = codec_list.codecs.entry(id).or_default();
 
-    if default {
-        entry.insert(0, builder);
-    } else {
-        entry.push(builder);
+        if default {
+            list.insert(0, builder.clone());
+        } else {
+            list.push(builder.clone());
+        }
     }
 
     Ok(())
