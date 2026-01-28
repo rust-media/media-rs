@@ -2,6 +2,7 @@ use std::{
     any::Any,
     collections::HashMap,
     fmt::{self, Debug, Display, Formatter},
+    marker::PhantomData,
     num::NonZeroU32,
     sync::{Arc, LazyLock, RwLock},
 };
@@ -347,15 +348,17 @@ pub trait CodecBuilder<T: CodecSpec>: Any + Send + Sync {
     fn name(&self) -> &'static str;
 }
 
-pub(crate) struct CodecList<T: CodecSpec> {
-    pub(crate) codecs: HashMap<CodecID, Vec<Arc<dyn CodecBuilder<T>>>>,
+pub(crate) struct CodecList<S: CodecSpec, B: ?Sized + CodecBuilder<S> = dyn CodecBuilder<S>> {
+    pub(crate) codecs: HashMap<CodecID, Vec<Arc<B>>>,
+    pub(crate) _marker: PhantomData<S>,
 }
 
-pub(crate) type LazyCodecList<T> = LazyLock<RwLock<CodecList<T>>>;
+pub(crate) type LazyCodecList<S, B = dyn CodecBuilder<S>> = LazyLock<RwLock<CodecList<S, B>>>;
 
-pub(crate) fn register_codec<T>(codec_list: &LazyCodecList<T>, builder: Arc<dyn CodecBuilder<T>>, default: bool) -> Result<()>
+pub(crate) fn register_codec<S, B>(codec_list: &LazyCodecList<S, B>, builder: Arc<B>, default: bool) -> Result<()>
 where
-    T: CodecSpec,
+    S: CodecSpec,
+    B: ?Sized + CodecBuilder<S>,
 {
     let mut codec_list = codec_list.write().map_err(|err| invalid_error!(err.to_string()))?;
     for &id in builder.ids() {
@@ -371,9 +374,10 @@ where
     Ok(())
 }
 
-pub(crate) fn find_codec<T>(codec_list: &LazyCodecList<T>, id: CodecID) -> Result<Arc<dyn CodecBuilder<T>>>
+pub(crate) fn find_codec<S, B>(codec_list: &LazyCodecList<S, B>, id: CodecID) -> Result<Arc<B>>
 where
-    T: CodecSpec,
+    S: CodecSpec,
+    B: ?Sized + CodecBuilder<S>,
 {
     let codec_list = codec_list.read().map_err(|err| invalid_error!(err.to_string()))?;
 
@@ -386,9 +390,10 @@ where
     Err(not_found_error!(format!("codec: {:?}", id)))
 }
 
-pub(crate) fn find_codec_by_name<T>(codec_list: &LazyCodecList<T>, name: &str) -> Result<Arc<dyn CodecBuilder<T>>>
+pub(crate) fn find_codec_by_name<S, B>(codec_list: &LazyCodecList<S, B>, name: &str) -> Result<Arc<B>>
 where
-    T: CodecSpec,
+    S: CodecSpec,
+    B: ?Sized + CodecBuilder<S>,
 {
     let codec_list = codec_list.read().map_err(|err| invalid_error!(err.to_string()))?;
 
