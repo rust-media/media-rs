@@ -1,7 +1,6 @@
 use std::{
-    any::TypeId,
     collections::HashMap,
-    mem,
+    marker::PhantomData,
     sync::{Arc, LazyLock, RwLock},
 };
 
@@ -15,7 +14,6 @@ use media_core::{
     frame_pool::{FrameCreator, FramePool},
     invalid_param_error,
     rational::Rational64,
-    unsupported_error,
     variant::Variant,
     MediaType, Result,
 };
@@ -224,7 +222,13 @@ pub trait DecoderBuilder<T: CodecSpec>: CodecBuilder<T> {
     fn new_decoder(&self, id: CodecID, params: &CodecParameters, options: Option<&Variant>) -> Result<Box<dyn Decoder<T>>>;
 }
 
-pub struct DecoderContext<T: CodecSpec> {
+pub trait DecoderSpec: CodecSpec {
+    fn register(builder: Arc<dyn DecoderBuilder<Self>>, default: bool) -> Result<()>;
+    fn find(id: CodecID) -> Result<Arc<dyn DecoderBuilder<Self>>>;
+    fn find_by_name(name: &str) -> Result<Arc<dyn DecoderBuilder<Self>>>;
+}
+
+pub struct DecoderContext<T: DecoderSpec> {
     pub config: T,
     pub time_base: Option<Rational64>,
     decoder: Box<dyn Decoder<T>>,
@@ -233,68 +237,64 @@ pub struct DecoderContext<T: CodecSpec> {
 }
 
 #[cfg(feature = "audio")]
-static AUDIO_DECODER_LIST: LazyCodecList<AudioDecoder> = LazyLock::new(|| {
-    RwLock::new(CodecList::<AudioDecoder> {
+static AUDIO_DECODER_LIST: LazyCodecList<AudioDecoder, dyn DecoderBuilder<AudioDecoder>> = LazyLock::new(|| {
+    RwLock::new(CodecList::<AudioDecoder, dyn DecoderBuilder<AudioDecoder>> {
         codecs: HashMap::new(),
+        _marker: PhantomData,
+    })
+});
+
+#[cfg(feature = "audio")]
+impl DecoderSpec for AudioDecoder {
+    fn register(builder: Arc<dyn DecoderBuilder<Self>>, default: bool) -> Result<()> {
+        register_codec(&AUDIO_DECODER_LIST, builder, default)
+    }
+
+    fn find(id: CodecID) -> Result<Arc<dyn DecoderBuilder<Self>>> {
+        find_codec(&AUDIO_DECODER_LIST, id)
+    }
+
+    fn find_by_name(name: &str) -> Result<Arc<dyn DecoderBuilder<Self>>> {
+        find_codec_by_name(&AUDIO_DECODER_LIST, name)
+    }
+}
+
+#[cfg(feature = "video")]
+static VIDEO_DECODER_LIST: LazyCodecList<VideoDecoder, dyn DecoderBuilder<VideoDecoder>> = LazyLock::new(|| {
+    RwLock::new(CodecList::<VideoDecoder, dyn DecoderBuilder<VideoDecoder>> {
+        codecs: HashMap::new(),
+        _marker: PhantomData,
     })
 });
 
 #[cfg(feature = "video")]
-static VIDEO_DECODER_LIST: LazyCodecList<VideoDecoder> = LazyLock::new(|| {
-    RwLock::new(CodecList::<VideoDecoder> {
-        codecs: HashMap::new(),
-    })
-});
+impl DecoderSpec for VideoDecoder {
+    fn register(builder: Arc<dyn DecoderBuilder<Self>>, default: bool) -> Result<()> {
+        register_codec(&VIDEO_DECODER_LIST, builder, default)
+    }
 
-pub fn register_decoder<T: CodecSpec>(builder: Arc<dyn DecoderBuilder<T>>, default: bool) -> Result<()> {
-    match TypeId::of::<T>() {
-        #[cfg(feature = "audio")]
-        id if id == TypeId::of::<AudioDecoder>() => {
-            let builder = unsafe { mem::transmute::<Arc<dyn DecoderBuilder<T>>, Arc<dyn CodecBuilder<AudioDecoder>>>(builder) };
-            register_codec(&AUDIO_DECODER_LIST, builder, default)
-        }
-        #[cfg(feature = "video")]
-        id if id == TypeId::of::<VideoDecoder>() => {
-            let builder = unsafe { mem::transmute::<Arc<dyn DecoderBuilder<T>>, Arc<dyn CodecBuilder<VideoDecoder>>>(builder) };
-            register_codec(&VIDEO_DECODER_LIST, builder, default)
-        }
-        _ => Err(unsupported_error!("codec parameters type")),
+    fn find(id: CodecID) -> Result<Arc<dyn DecoderBuilder<Self>>> {
+        find_codec(&VIDEO_DECODER_LIST, id)
+    }
+
+    fn find_by_name(name: &str) -> Result<Arc<dyn DecoderBuilder<Self>>> {
+        find_codec_by_name(&VIDEO_DECODER_LIST, name)
     }
 }
 
-pub(crate) fn find_decoder<T: CodecSpec>(id: CodecID) -> Result<Arc<dyn DecoderBuilder<T>>> {
-    match TypeId::of::<T>() {
-        #[cfg(feature = "audio")]
-        type_id if type_id == TypeId::of::<AudioDecoder>() => {
-            let builder = find_codec(&AUDIO_DECODER_LIST, id)?;
-            unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<AudioDecoder>>, Arc<dyn DecoderBuilder<T>>>(builder)) }
-        }
-        #[cfg(feature = "video")]
-        type_id if type_id == TypeId::of::<VideoDecoder>() => {
-            let builder = find_codec(&VIDEO_DECODER_LIST, id)?;
-            unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<VideoDecoder>>, Arc<dyn DecoderBuilder<T>>>(builder)) }
-        }
-        _ => Err(unsupported_error!("codec parameters type")),
-    }
+pub fn register_decoder<T: DecoderSpec>(builder: Arc<dyn DecoderBuilder<T>>, default: bool) -> Result<()> {
+    T::register(builder, default)
 }
 
-pub(crate) fn find_decoder_by_name<T: CodecSpec>(name: &str) -> Result<Arc<dyn DecoderBuilder<T>>> {
-    match TypeId::of::<T>() {
-        #[cfg(feature = "audio")]
-        id if id == TypeId::of::<AudioDecoder>() => {
-            let builder = find_codec_by_name(&AUDIO_DECODER_LIST, name)?;
-            unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<AudioDecoder>>, Arc<dyn DecoderBuilder<T>>>(builder)) }
-        }
-        #[cfg(feature = "video")]
-        id if id == TypeId::of::<VideoDecoder>() => {
-            let builder = find_codec_by_name(&VIDEO_DECODER_LIST, name)?;
-            unsafe { Ok(mem::transmute::<Arc<dyn CodecBuilder<VideoDecoder>>, Arc<dyn DecoderBuilder<T>>>(builder)) }
-        }
-        _ => Err(unsupported_error!("codec parameters type")),
-    }
+pub(crate) fn find_decoder<T: DecoderSpec>(id: CodecID) -> Result<Arc<dyn DecoderBuilder<T>>> {
+    T::find(id)
 }
 
-impl<T: CodecSpec> DecoderContext<T> {
+pub(crate) fn find_decoder_by_name<T: DecoderSpec>(name: &str) -> Result<Arc<dyn DecoderBuilder<T>>> {
+    T::find_by_name(name)
+}
+
+impl<T: DecoderSpec> DecoderContext<T> {
     pub fn new(codec_id: CodecID, codec_name: Option<&str>, params: &CodecParameters, options: Option<&Variant>) -> Result<Self> {
         let builder = if let Some(codec_name) = codec_name {
             find_decoder_by_name(codec_name)?
