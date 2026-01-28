@@ -295,8 +295,19 @@ pub(crate) fn find_decoder_by_name<T: CodecSpec>(name: &str) -> Result<Arc<dyn D
 }
 
 impl<T: CodecSpec> DecoderContext<T> {
-    fn new_with_builder(builder: Arc<dyn DecoderBuilder<T>>, params: &CodecParameters, options: Option<&Variant>) -> Result<Self> {
-        let decoder = builder.new_decoder(builder.id(), params, options)?;
+    pub fn new(codec_id: CodecID, codec_name: Option<&str>, params: &CodecParameters, options: Option<&Variant>) -> Result<Self> {
+        let builder = if let Some(codec_name) = codec_name {
+            find_decoder_by_name(codec_name)?
+        } else {
+            find_decoder(codec_id)?
+        };
+
+        let decoder = builder.new_decoder(codec_id, params, options)?;
+
+        Self::new_with_decoder(decoder, params)
+    }
+
+    pub fn new_with_decoder(decoder: Box<dyn Decoder<T>>, params: &CodecParameters) -> Result<Self> {
         let config = T::from_parameters(params)?;
 
         let frame_pool = match &params.codec {
@@ -317,14 +328,6 @@ impl<T: CodecSpec> DecoderContext<T> {
             time_base: None,
             last_pkt_props: None,
         })
-    }
-
-    pub fn from_codec_id(id: CodecID, params: &CodecParameters, options: Option<&Variant>) -> Result<Self> {
-        Self::new_with_builder(find_decoder(id)?, params, options)
-    }
-
-    pub fn from_codec_name(name: &str, params: &CodecParameters, options: Option<&Variant>) -> Result<Self> {
-        Self::new_with_builder(find_decoder_by_name(name)?, params, options)
     }
 
     pub fn with_frame_creator(mut self, creator: Box<dyn FrameCreator<T::FrameDescriptor>>) -> Self {
