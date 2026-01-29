@@ -20,12 +20,12 @@ os-ver.workspace = true
 thiserror.workspace = true
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
-av-foundation = "0.5"
+av-foundation = "0.6.0"
 dispatch2 = "0.1"
-core-audio-types = "0.1"
-core-foundation = "0.10"
-core-media = "0.5"
-core-video = { version = "0.4", default-features = false, features = ["link"] }
+core-audio-types.workspace = true
+core-foundation.workspace = true
+core-media.workspace = true
+core-video.workspace = true
 objc2 = "0.5"
 objc2-foundation = { version = "0.2", features = ["NSArray", "NSDictionary", "NSObject"] }
 
