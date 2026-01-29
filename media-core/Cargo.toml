@@ -30,10 +30,10 @@ x-variant.workspace = true
 yuv = { version = "0.8", features = ["fast_mode"], optional = true}
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
-core-audio-types = "0.1"
-core-foundation = "0.10"
-core-media = "0.5"
-core-video = { version = "0.4", default-features = false, features = ["link"] }
+core-audio-types.workspace = true
+core-foundation.workspace = true
+core-media.workspace = true
+core-video.workspace = true
 
 [features]
 default = ["audio", "video"]
