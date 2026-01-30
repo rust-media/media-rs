@@ -11,26 +11,39 @@ categories = ["multimedia", "multimedia::audio", "multimedia::video", "multimedi
 keywords = ["codec", "encoder", "decoder"]
 edition.workspace = true
 
-[dependencies.media-core]
-workspace = true
-
 [dependencies]
-bitflags.workspace = true
-num-rational.workspace = true
+media-codec-types.workspace = true
+media-core.workspace = true
 
 [features]
-default = ["audio", "audio-enc", "audio-dec", "video", "video-enc", "video-dec"]
-audio = ["media-core/audio"]
-video = ["media-core/video"]
-opus-enc = []
-opus-dec = []
-h264-enc = []
-h264-dec = []
-vpx-enc = []
-vpx-dec = []
-av1-enc = []
-av1-dec = []
-audio-enc = ["audio", "opus-enc"]
-audio-dec = ["audio", "opus-dec"]
-video-enc = ["video", "h264-enc", "vpx-enc", "av1-enc"]
-video-dec = ["video", "h264-dec", "vpx-dec", "av1-dec"]
+default = ["audio-decoder", "audio-encoder", "video-decoder", "video-encoder"]
+audio-decoder = [
+    "audio",
+    "decoder",
+]
+audio-encoder = [
+    "audio",
+    "encoder",
+]
+video-decoder = [
+    "video",
+    "decoder",
+]
+video-encoder = [
+    "video",
+    "encoder",
+]
+audio = [
+    "media-core/audio",
+    "media-codec-types/audio",
+]
+video = [
+    "media-core/video",
+    "media-codec-types/video",
+]
+decoder = [
+    "media-codec-types/decoder",
+]
+encoder = [
+    "media-codec-types/encoder",
+]
