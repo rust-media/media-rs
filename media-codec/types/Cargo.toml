@@ -1,0 +1,27 @@
+[package]
+name = "media-codec-types"
+description = "Defines types for codec implementations"
+homepage.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/media-codec-types"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+categories = ["multimedia", "multimedia::audio", "multimedia::video", "multimedia::encoding"]
+keywords = ["codec", "encoder", "decoder"]
+edition.workspace = true
+
+[dependencies]
+bitflags.workspace = true
+media-core.workspace = true
+
+[features]
+default = ["audio", "video", "decoder", "encoder"]
+audio = [
+    "media-core/audio",
+]
+video = [
+    "media-core/video",
+]
+decoder = []
+encoder = []
