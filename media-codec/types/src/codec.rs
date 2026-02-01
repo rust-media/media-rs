@@ -12,7 +12,10 @@ use media_core::rational::Rational64;
 use media_core::video::{ChromaLocation, ColorMatrix, ColorPrimaries, ColorRange, ColorTransferCharacteristics, PixelFormat};
 use media_core::{error::Error, invalid_param_error, variant::Variant, FrameDescriptorSpec, MediaType, Result};
 
-use crate::{decoder::DecoderParameters, encoder::EncoderParameters};
+#[cfg(feature = "decoder")]
+use crate::decoder::DecoderParameters;
+#[cfg(feature = "encoder")]
+use crate::encoder::EncoderParameters;
 
 macro_rules! codecs {
     (@impl $feature:literal, $media_type:ident, $id:expr, $name:ident) => {
@@ -314,16 +317,20 @@ impl From<VideoParameters> for MediaParametersType {
 
 #[derive(Clone, Debug)]
 pub enum CodecParametersType {
+    #[cfg(feature = "decoder")]
     Decoder(DecoderParameters),
+    #[cfg(feature = "encoder")]
     Encoder(EncoderParameters),
 }
 
+#[cfg(feature = "decoder")]
 impl From<DecoderParameters> for CodecParametersType {
     fn from(params: DecoderParameters) -> Self {
         CodecParametersType::Decoder(params)
     }
 }
 
+#[cfg(feature = "encoder")]
 impl From<EncoderParameters> for CodecParametersType {
     fn from(params: EncoderParameters) -> Self {
         CodecParametersType::Encoder(params)

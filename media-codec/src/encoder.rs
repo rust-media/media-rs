@@ -104,6 +104,7 @@ impl<T: EncoderSpec> EncoderContext<T> {
     pub fn new_with_encoder(encoder: Box<dyn Encoder<T>>, params: &CodecParameters) -> Result<Self> {
         let config = T::from_parameters(params)?;
 
+        #[allow(unreachable_patterns)]
         let buffer_pool = match &params.codec {
             CodecParametersType::Encoder(encoder_params) => {
                 if encoder_params.use_pool.unwrap_or(false) {
