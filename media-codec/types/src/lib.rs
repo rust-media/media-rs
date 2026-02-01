@@ -1,3 +1,4 @@
+#[cfg(any(feature = "decoder", feature = "encoder"))]
 pub mod codec;
 #[cfg(feature = "decoder")]
 pub mod decoder;
@@ -5,4 +6,5 @@ pub mod decoder;
 pub mod encoder;
 pub mod packet;
 
+#[cfg(any(feature = "decoder", feature = "encoder"))]
 pub use codec::*;
