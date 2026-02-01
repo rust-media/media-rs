@@ -108,6 +108,7 @@ impl<T: DecoderSpec> DecoderContext<T> {
     pub fn new_with_decoder(decoder: Box<dyn Decoder<T>>, params: &CodecParameters) -> Result<Self> {
         let config = T::from_parameters(params)?;
 
+        #[allow(unreachable_patterns)]
         let frame_pool = match &params.codec {
             CodecParametersType::Decoder(decoder_params) => {
                 if decoder_params.use_pool.unwrap_or(false) {
