@@ -54,6 +54,7 @@ impl TryFrom<&CodecParametersType> for EncoderParameters {
     type Error = Error;
 
     fn try_from(params: &CodecParametersType) -> Result<Self> {
+        #[allow(unreachable_patterns)]
         match params {
             CodecParametersType::Encoder(params) => Ok(params.clone()),
             _ => Err(invalid_param_error!(params)),
