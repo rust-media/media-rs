@@ -1,9 +1,9 @@
 [package]
-name = "media-filter"
-description = "A generic framework for implementing and applying multimedia filters"
+name = "media-filter-types"
+description = "Defines types for filter implementations"
 homepage.workspace = true
 repository.workspace = true
-documentation = "https://docs.rs/media-filter"
+documentation = "https://docs.rs/media-filter-types"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
