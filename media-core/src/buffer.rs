@@ -67,7 +67,7 @@ impl Buffer {
 impl Drop for Buffer {
     fn drop(&mut self) {
         if let Some(pool) = self.pool.upgrade() {
-            pool.recycle_buffer(Arc::new(Buffer::new(mem::take(&mut self.data), &pool)));
+            pool.recycle_buffer(mem::take(&mut self.data));
         }
     }
 }
@@ -129,9 +129,9 @@ impl BufferPool {
         Arc::new(Buffer::new_with_available(vec![0u8; buffer_capacity].into_boxed_slice(), self, len))
     }
 
-    pub fn recycle_buffer(&self, buffer: Arc<Buffer>) {
-        if buffer.capacity() == self.buffer_capacity.load(Ordering::Acquire) {
-            self.queue.push(buffer);
+    pub fn recycle_buffer(self: &Arc<Self>, buffer_data: Box<[u8]>) {
+        if buffer_data.len() == self.buffer_capacity.load(Ordering::Acquire) {
+            self.queue.push(Arc::new(Buffer::new(buffer_data, self)));
         }
     }
 
