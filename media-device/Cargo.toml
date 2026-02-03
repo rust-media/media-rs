@@ -20,7 +20,7 @@ os-ver.workspace = true
 thiserror.workspace = true
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
-av-foundation = "0.6.0"
+av-foundation = "0.7.0"
 dispatch2 = "0.1"
 core-audio-types.workspace = true
 core-foundation.workspace = true
