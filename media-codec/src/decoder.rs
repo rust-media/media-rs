@@ -179,4 +179,8 @@ impl<T: DecoderSpec> DecoderContext<T> {
 
         Ok(shared_frame)
     }
+
+    pub fn flush(&mut self) -> Result<()> {
+        self.decoder.flush(&self.config)
+    }
 }
