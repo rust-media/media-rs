@@ -154,4 +154,8 @@ impl<T: EncoderSpec> EncoderContext<T> {
 
         Ok(packet)
     }
+
+    pub fn flush(&mut self) -> Result<()> {
+        self.encoder.flush(&self.config)
+    }
 }
