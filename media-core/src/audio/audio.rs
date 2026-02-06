@@ -240,8 +240,8 @@ impl AudioFrameDescriptor {
     }
 
     pub fn duration_equal(&self, other: &AudioFrameDescriptor) -> bool {
-        let duration1 = self.samples.get() as u64 * time::MSEC_PER_SEC / self.sample_rate.get() as u64;
-        let duration2 = other.samples.get() as u64 * time::MSEC_PER_SEC / other.sample_rate.get() as u64;
+        let duration1 = self.samples.get() as i64 * time::MSEC_PER_SEC / self.sample_rate.get() as i64;
+        let duration2 = other.samples.get() as i64 * time::MSEC_PER_SEC / other.sample_rate.get() as i64;
         duration1 == duration2
     }
 }
