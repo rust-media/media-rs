@@ -72,6 +72,7 @@ impl Drop for Buffer {
     }
 }
 
+#[derive(Debug)]
 pub struct BufferPool {
     queue: SegQueue<Arc<Buffer>>,
     buffer_capacity: AtomicUsize,

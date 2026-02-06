@@ -13,34 +13,43 @@ edition.workspace = true
 rust-version.workspace = true
 readme = "../README.md"
 
-[dependencies.media-core]
-workspace = true
-default-features = false
-
-[dependencies.media-codec]
-workspace = true
-default-features = false
-optional = true
-
-[dependencies.media-device]
-workspace = true
-default-features = false
-optional = true
+[dependencies]
+media-core = { workspace = true, default-features = false }
+media-codec = { workspace = true, default-features = false, optional = true }
+media-device = { workspace = true, default-features = false, optional = true}
+media-format = { workspace = true, default-features = false, optional = true}
 
 [features]
-default = ["audio", "video", "codec", "device"]
+default = [
+    "audio",
+    "video",
+    "decoder",
+    "encoder",
+    "demuxer",
+    "muxer",
+    "codec",
+    "device",
+    "format",
+]
 audio = [
     "media-core/audio",
     "media-codec?/audio",
-    "media-device?/audio"
+    "media-device?/audio",
+    "media-format?/audio",
 ]
 video = [
     "media-core/video",
     "media-codec?/video",
-    "media-device?/video"
+    "media-device?/video",
+    "media-format?/video",
 ]
+decoder = ["media-codec?/decoder"]
+encoder = ["media-codec?/encoder"]
+demuxer = ["media-format?/demuxer"]
+muxer = ["media-format?/muxer"]
 codec = ["dep:media-codec"]
 device = ["dep:media-device"]
+format = ["dep:media-format"]
 
 [package.metadata.docs.rs]
 default-target = "x86_64-pc-windows-msvc"

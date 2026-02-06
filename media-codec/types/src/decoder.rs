@@ -19,9 +19,27 @@ use crate::AudioParameters;
 use crate::VideoParameters;
 use crate::{packet::Packet, Codec, CodecBuilder, CodecID, CodecParameters, CodecParametersType, CodecSpec, CodecType, MediaParametersType};
 
+#[derive(Clone, Debug)]
+pub enum ExtraData {
+    Raw(Vec<u8>),
+    #[cfg(feature = "video")]
+    AVC {
+        sps: Vec<Vec<u8>>,
+        pps: Vec<Vec<u8>>,
+        nalu_length_size: u8,
+    },
+    #[cfg(feature = "video")]
+    HEVC {
+        vps: Option<Vec<Vec<u8>>>,
+        sps: Vec<Vec<u8>>,
+        pps: Vec<Vec<u8>>,
+        nalu_length_size: u8,
+    },
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct DecoderParameters {
-    pub extra_data: Option<Vec<u8>>,
+    pub extra_data: Option<ExtraData>,
     pub use_pool: Option<bool>,
 }
 
@@ -35,7 +53,7 @@ impl DecoderParameters {
     fn update_with_option(&mut self, key: &str, value: &Variant) {
         #[allow(clippy::single_match)]
         match key {
-            "extra_data" => self.extra_data = value.get_buffer(),
+            "extra_data" => self.extra_data = value.get_buffer().map(ExtraData::Raw),
             "use_pool" => self.use_pool = value.get_bool(),
             _ => {}
         }
