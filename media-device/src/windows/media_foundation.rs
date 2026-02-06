@@ -410,7 +410,7 @@ impl IMFSourceReaderCallback_Impl for SourceReaderCallback_Impl {
 
                 if let Ok(mut video_frame) = video_frame {
                     video_frame.source = Some(self.info.id.clone());
-                    video_frame.pts = Some(lltimestamp * 100 / NSEC_PER_MSEC as i64); // lltimestamp is in 100ns units
+                    video_frame.pts = Some(lltimestamp * 100 / NSEC_PER_MSEC); // lltimestamp is in 100ns units
                     let handler = self.handler.as_ref();
                     handler(video_frame).ok();
                 }
