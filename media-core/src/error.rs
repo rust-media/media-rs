@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use thiserror::Error;
 
-#[derive(Clone, Debug, Error)]
+#[derive(Debug, Error)]
 pub enum Error {
     #[error("Failed: {0}")]
     Failed(Cow<'static, str>),
@@ -42,6 +42,10 @@ pub enum Error {
     ReadFailed(Cow<'static, str>),
     #[error("Write failed: {0}")]
     WriteFailed(Cow<'static, str>),
+    #[error("More data needed: {0}")]
+    MoreDataNeeded(usize),
+    #[error(transparent)]
+    IO(#[from] std::io::Error),
 }
 
 #[macro_export]
@@ -86,6 +90,9 @@ macro_rules! not_found_error {
     ($param:expr) => {
         $crate::error::Error::NotFound(format!("{:?}", $param).into())
     };
+    ($key:expr, $value:expr) => {
+        $crate::error::Error::Unsupported(format!("{}: {:?}", $key, $value).into())
+    };
 }
 
 #[macro_export]
@@ -95,5 +102,8 @@ macro_rules! unsupported_error {
     };
     ($param:expr) => {
         $crate::error::Error::Unsupported(format!("{:?}", $param).into())
+    };
+    ($key:expr, $value:expr) => {
+        $crate::error::Error::Unsupported(format!("{}: {:?}", $key, $value).into())
     };
 }

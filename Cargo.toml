@@ -6,6 +6,7 @@ members = [
     "media-codec/types",
     "media-device",
     "media-filter",
+    "media-format",
     "media",
 ]
 
@@ -25,6 +26,7 @@ media-core = { version = "0.9.0", default-features = false, path = "./media-core
 media-codec = { version = "0.9.0", default-features = false, path = "./media-codec" }
 media-codec-types = { version = "0.9.0", default-features = false, path = "./media-codec/types" }
 media-device = { version = "0.9.0", default-features = false, path = "./media-device" }
+media-format = { version = "0.9.0", default-features = false, path = "./media-format" }
 aligned-vec = "0.6"
 bitflags = "2.10"
 bytemuck = "1.24"

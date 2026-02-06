@@ -1,0 +1,45 @@
+[package]
+name = "media-format"
+description = "A generic muxing and demuxing framework"
+homepage.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/media-format"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+categories = ["multimedia", "multimedia::audio", "multimedia::video"]
+keywords = ["format", "muxer", "demuxer"]
+edition.workspace = true
+
+[dependencies.media-core]
+workspace = true
+
+[dependencies.media-codec]
+workspace = true
+
+[dependencies]
+bitflags.workspace = true
+mp4-atom = { version = "0.10", features = ["bytes"], optional = true }
+
+[features]
+default = ["audio", "video", "muxer", "demuxer"]
+audio = ["media-core/audio", "media-codec/audio"]
+video = ["media-core/video", "media-codec/video"]
+avi-muxer = []
+avi-demuxer = []
+matroska-muxer = []
+matroska-demuxer = []
+isomp4-muxer = ["dep:mp4-atom"]
+isomp4-demuxer = ["dep:mp4-atom"]
+muxer = [
+    "media-codec/encoder",
+    "avi-muxer",
+    "matroska-muxer",
+    "isomp4-muxer",
+]
+demuxer = [
+    "media-codec/decoder",
+    "avi-demuxer",
+    "matroska-demuxer",
+    "isomp4-demuxer",
+]
