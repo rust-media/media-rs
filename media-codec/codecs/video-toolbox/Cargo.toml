@@ -1,0 +1,26 @@
+[package]
+name = "media-codec-video-toolbox"
+description = "A video codec implementation based on Apple VideoToolbox framework"
+homepage.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/media-codec-video-toolbox"
+version = "0.1.0"
+authors.workspace = true
+license.workspace = true
+categories = ["multimedia::video", "multimedia::encoding"]
+keywords = ["videotoolbox", "video", "codec", "media"]
+edition.workspace = true
+
+[dependencies]
+core-foundation.workspace = true
+core-media.workspace = true
+core-video.workspace = true
+media-codec-types = { workspace = true, default-features = false, features = ["video"] }
+media-core = { workspace = true, features = ["video"] }
+os-ver = "0.2.1"
+video-toolbox = "0.2.1"
+
+[features]
+default = ["decoder", "encoder"]
+decoder = ["media-codec-types/decoder"]
+encoder = ["media-codec-types/encoder"]
