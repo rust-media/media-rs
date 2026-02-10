@@ -66,6 +66,9 @@ macro_rules! failed_error {
     ($param:expr) => {
         $crate::error::Error::Failed(format!("{:?}", $param).into())
     };
+    ($key:expr, $value:expr) => {
+        $crate::error::Error::Failed(format!("{}: {:?}", $key, $value).into())
+    };
 }
 
 #[macro_export]
@@ -91,7 +94,7 @@ macro_rules! not_found_error {
         $crate::error::Error::NotFound(format!("{:?}", $param).into())
     };
     ($key:expr, $value:expr) => {
-        $crate::error::Error::Unsupported(format!("{}: {:?}", $key, $value).into())
+        $crate::error::Error::NotFound(format!("{}: {:?}", $key, $value).into())
     };
 }
 

@@ -12,38 +12,33 @@ keywords = ["codec", "encoder", "decoder"]
 edition.workspace = true
 
 [dependencies]
+ctor = "0.6"
 media-codec-types.workspace = true
 media-core.workspace = true
+media-codec-video-toolbox = { path = "codecs/video-toolbox", optional = true }
 
 [features]
-default = ["audio-decoder", "audio-encoder", "video-decoder", "video-encoder"]
-audio-decoder = [
-    "audio",
-    "decoder",
-]
-audio-encoder = [
-    "audio",
-    "encoder",
-]
-video-decoder = [
-    "video",
-    "decoder",
-]
-video-encoder = [
-    "video",
-    "encoder",
-]
+default = ["audio", "video", "decoder", "encoder"]
 audio = [
     "media-core/audio",
     "media-codec-types/audio",
+    "audio-codec",
 ]
 video = [
     "media-core/video",
     "media-codec-types/video",
+    "video-codec",
 ]
 decoder = [
     "media-codec-types/decoder",
+    "media-codec-video-toolbox?/decoder",
 ]
 encoder = [
     "media-codec-types/encoder",
 ]
+audio-codec = []
+video-codec = [
+    "video-toolbox",
+]
+# Codecs
+video-toolbox = ["dep:media-codec-video-toolbox"]
