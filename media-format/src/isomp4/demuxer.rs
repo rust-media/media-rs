@@ -14,9 +14,9 @@ use media_core::audio::ChannelLayout;
 #[cfg(feature = "video")]
 use media_core::video::ColorRange;
 use media_core::{invalid_error, not_found_error, rational::Rational64, time::USEC_PER_SEC, variant::Variant, MediaType, Result};
-#[cfg(feature = "audio")]
-use mp4_atom::Audio;
 use mp4_atom::{Atom, Codec as Mp4Codec, Ftyp, Header, Mdat, Moov, ReadAtom, ReadFrom, Stbl, StszSamples};
+#[cfg(feature = "audio")]
+use mp4_atom::{Audio, Esds};
 #[cfg(feature = "video")]
 use mp4_atom::{Avcc, Colr, Hvcc, Visual};
 
@@ -91,6 +91,18 @@ impl Mp4Demuxer {
         AudioParameters {
             sample_rate: NonZeroU32::new(audio.sample_rate.integer() as u32),
             channel_layout: ChannelLayout::default_from_channels(audio.channel_count as u8).ok(),
+            ..Default::default()
+        }
+    }
+
+    #[cfg(feature = "audio")]
+    fn make_asc_codec_params(esds: &Esds) -> DecoderParameters {
+        let asc = &esds.es_desc.dec_config.dec_specific;
+        DecoderParameters {
+            extra_data: Some(ExtraData::ASC {
+                object_type: asc.profile,
+                channel_config: asc.chan_conf,
+            }),
             ..Default::default()
         }
     }
@@ -172,7 +184,8 @@ impl Mp4Demuxer {
             #[cfg(feature = "audio")]
             Mp4Codec::Mp4a(mp4a) => {
                 let audio_params = Self::make_audio_params(&mp4a.audio);
-                Some((CodecID::AAC, CodecParameters::new(audio_params, DecoderParameters::default())))
+                let decoder_params = Self::make_asc_codec_params(&mp4a.esds);
+                Some((CodecID::AAC, CodecParameters::new(audio_params, decoder_params)))
             }
             #[cfg(feature = "audio")]
             Mp4Codec::Opus(opus) => {
