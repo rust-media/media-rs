@@ -15,6 +15,8 @@ edition.workspace = true
 ctor = "0.6"
 media-codec-types.workspace = true
 media-core.workspace = true
+
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 media-codec-video-toolbox = { path = "codecs/video-toolbox", optional = true }
 
 [features]
@@ -37,8 +39,6 @@ encoder = [
     "media-codec-types/encoder",
 ]
 audio-codec = []
-video-codec = [
-    "video-toolbox",
-]
+video-codec = ["video-toolbox"]
 # Codecs
 video-toolbox = ["dep:media-codec-video-toolbox"]

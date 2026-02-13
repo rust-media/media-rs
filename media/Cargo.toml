@@ -14,10 +14,10 @@ rust-version.workspace = true
 readme = "../README.md"
 
 [dependencies]
-media-core = { workspace = true, default-features = false }
-media-codec = { workspace = true, default-features = false, optional = true }
-media-device = { workspace = true, default-features = false, optional = true}
-media-format = { workspace = true, default-features = false, optional = true}
+media-core.workspace = true
+media-codec = { workspace = true, optional = true }
+media-device = { workspace = true, optional = true }
+media-format = { workspace = true, optional = true }
 
 [features]
 default = [
