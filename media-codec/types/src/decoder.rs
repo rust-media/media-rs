@@ -22,6 +22,11 @@ use crate::{packet::Packet, Codec, CodecBuilder, CodecID, CodecParameters, Codec
 #[derive(Clone, Debug)]
 pub enum ExtraData {
     Raw(Vec<u8>),
+    #[cfg(feature = "audio")]
+    ASC {
+        object_type: u8,
+        channel_config: u8,
+    },
     #[cfg(feature = "video")]
     AVC {
         sps: Vec<Vec<u8>>,
