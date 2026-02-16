@@ -1,4 +1,4 @@
-use std::io::{BufRead, BufReader, Seek};
+use std::io::{BufRead, BufReader, Read, Seek};
 
 use bitflags::bitflags;
 use media_codec::packet::Packet;
@@ -8,7 +8,7 @@ use crate::{format::Format, stream::StreamCollection, track::TrackCollection};
 
 pub trait Reader: BufRead + Seek {}
 
-impl<R: BufRead + Seek> Reader for BufReader<R> {}
+impl<R: Read + Seek> Reader for BufReader<R> {}
 
 bitflags! {
     #[repr(transparent)]
