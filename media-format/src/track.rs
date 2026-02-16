@@ -42,6 +42,7 @@ impl Track {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct TrackCollection {
     tracks: Vec<Track>,
 }

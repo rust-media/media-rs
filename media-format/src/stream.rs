@@ -2,6 +2,7 @@ use std::slice;
 
 use media_core::variant::Variant;
 
+#[derive(Clone, Debug)]
 pub struct Stream {
     index: usize,
     pub id: i64,
@@ -24,6 +25,7 @@ impl Stream {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct StreamCollection {
     streams: Vec<Stream>,
 }
