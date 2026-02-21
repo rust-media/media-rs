@@ -56,6 +56,9 @@ macro_rules! invalid_error {
     ($param:expr) => {
         $crate::error::Error::Invalid(format!("{:?}", $param).into())
     };
+    ($key:expr, $value:expr) => {
+        $crate::error::Error::Invalid(format!("{}: {:?}", $key, $value).into())
+    };
 }
 
 #[macro_export]
@@ -108,5 +111,15 @@ macro_rules! unsupported_error {
     };
     ($key:expr, $value:expr) => {
         $crate::error::Error::Unsupported(format!("{}: {:?}", $key, $value).into())
+    };
+}
+
+#[macro_export]
+macro_rules! again_error {
+    ($param:literal) => {
+        $crate::error::Error::Again($param.into())
+    };
+    ($param:expr) => {
+        $crate::error::Error::Again(format!("{:?}", $param).into())
     };
 }
