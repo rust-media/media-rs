@@ -93,8 +93,8 @@ define_codecs! {
         H261,
         H263,
         H264,
-        HEVC,
-        VVC,
+        H265,
+        H266,
         VP8,
         VP9,
         AV1,
@@ -127,7 +127,7 @@ define_codecs! {
 impl Debug for CodecID {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if let Some(str) = self.as_str() {
-            write!(f, "CodecID::{}", str)
+            write!(f, "CodecID::{}(0x{:08X})", str, self.0)
         } else {
             write!(f, "CodecID(0x{:08X})", self.0)
         }
@@ -145,6 +145,11 @@ impl Display for CodecID {
 }
 
 impl CodecID {
+    pub const NONE: CodecID = CodecID(0);
+    pub const AVC: CodecID = CodecID::H264;
+    pub const HEVC: CodecID = CodecID::H265;
+    pub const VVC: CodecID = CodecID::H266;
+
     pub fn media_type(&self) -> MediaType {
         match ((self.0) >> 16) as u16 {
             #[cfg(feature = "audio")]
