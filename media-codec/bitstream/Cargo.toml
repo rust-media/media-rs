@@ -1,0 +1,15 @@
+[package]
+name = "media-codec-bitstream"
+description = "A library for reading and writing bits with Exp-Golomb coding support"
+homepage.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/media-codec-bitstream"
+version = "0.1.0"
+authors.workspace = true
+license.workspace = true
+categories = ["multimedia"]
+keywords = ["bitstream", "exp-golomb"]
+edition.workspace = true
+
+[dependencies]
+bitstream-io = "4.9"

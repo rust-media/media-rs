@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "media-core",
     "media-codec",
+    "media-codec/bitstream",
     "media-codec/types",
     "media-device",
     "media-filter",
