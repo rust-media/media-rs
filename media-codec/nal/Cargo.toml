@@ -1,0 +1,15 @@
+[package]
+name = "media-codec-nal"
+description = "NAL unit parser for H.264/H.265 video decoder"
+homepage.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/media-codec-nal"
+version = "0.1.0"
+authors.workspace = true
+license.workspace = true
+categories = ["multimedia::video"]
+keywords = ["nal", "nalu", "video", "codec"]
+edition.workspace = true
+
+[dependencies]
+media-core = { workspace = true, features = ["video"] }
