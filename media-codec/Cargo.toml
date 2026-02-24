@@ -1,6 +1,6 @@
 [package]
 name = "media-codec"
-description = "A generic encoding/decoding framework"
+description = "A generic encoding and decoding framework"
 homepage.workspace = true
 repository.workspace = true
 documentation = "https://docs.rs/media-codec"
@@ -13,11 +13,13 @@ edition.workspace = true
 
 [dependencies]
 ctor = "0.6"
+media-codec-h264 = { version = "0.1.0", path = "codecs/h264", optional = true }
+media-codec-h265 = { version = "0.1.0", path = "codecs/h265", optional = true }
 media-codec-types.workspace = true
 media-core.workspace = true
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
-media-codec-video-toolbox = { path = "codecs/video-toolbox", optional = true }
+media-codec-video-toolbox = { version = "0.1.0", path = "codecs/video-toolbox", optional = true }
 
 [features]
 default = ["audio", "video", "decoder", "encoder"]
@@ -33,12 +35,16 @@ video = [
 ]
 decoder = [
     "media-codec-types/decoder",
+    "media-codec-h264?/decoder",
+    "media-codec-h265?/decoder",
     "media-codec-video-toolbox?/decoder",
 ]
 encoder = [
     "media-codec-types/encoder",
 ]
 audio-codec = []
-video-codec = ["video-toolbox"]
+video-codec = ["h264", "h265", "video-toolbox"]
 # Codecs
+h264 = ["dep:media-codec-h264"]
+h265 = ["dep:media-codec-h265"]
 video-toolbox = ["dep:media-codec-video-toolbox"]

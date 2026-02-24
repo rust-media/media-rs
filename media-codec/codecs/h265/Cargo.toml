@@ -1,0 +1,23 @@
+[package]
+name = "media-codec-h265"
+description = "An H.265 decoder implementation for media-codec"
+homepage.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/media-codec-h265"
+version = "0.1.0"
+authors.workspace = true
+license.workspace = true
+categories = ["multimedia::video"]
+keywords = ["hevc", "video", "codec", "decoder"]
+edition.workspace = true
+
+[dependencies]
+media-codec-bitstream.workspace = true
+media-codec-nal = { path = "../../nal" }
+media-codec-types = { workspace = true, default-features = false, features = ["video"] }
+media-core = { workspace = true, features = ["video"] }
+smallvec.workspace = true
+
+[features]
+default = ["decoder"]
+decoder = ["media-codec-types/decoder"]

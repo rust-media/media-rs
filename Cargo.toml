@@ -4,12 +4,16 @@ members = [
     "media-core",
     "media-codec",
     "media-codec/bitstream",
+    "media-codec/nal",
     "media-codec/types",
     "media-device",
     "media-filter",
     "media-format",
     "media",
     # Codecs
+    "media-codec/codecs/aac",
+    "media-codec/codecs/h264",
+    "media-codec/codecs/h265",
     "media-codec/codecs/video-toolbox",
 ]
 
@@ -27,12 +31,14 @@ rust-version = "1.85.0"
 [workspace.dependencies]
 media-core = { version = "0.9.0", default-features = false, path = "./media-core" }
 media-codec = { version = "0.9.0", default-features = false, path = "./media-codec" }
+media-codec-bitstream = { version = "0.1.0", path = "./media-codec/bitstream" }
+media-codec-nal = { version = "0.1.0", path = "./media-codec/nal" }
 media-codec-types = { version = "0.9.0", default-features = false, path = "./media-codec/types" }
 media-device = { version = "0.9.0", default-features = false, path = "./media-device" }
 media-format = { version = "0.9.0", default-features = false, path = "./media-format" }
 aligned-vec = "0.6"
 bitflags = "2.10"
-bytemuck = "1.24"
+bytemuck = { version = "1.25", features = ["derive"] }
 cfg-if = "1.0"
 core-audio-types = "0.2.0"
 core-foundation = "0.10"

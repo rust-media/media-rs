@@ -1,0 +1,486 @@
+//! H.265/HEVC Picture Parameter Set (PPS) parser
+
+use std::io::Read;
+
+use media_codec_bitstream::{BigEndian, BitReader};
+use media_core::{invalid_data_error, Result};
+use smallvec::SmallVec;
+
+use crate::scaling_list::ScalingListData;
+
+/// Maximum number of tile rows
+pub(crate) const MAX_TILE_ROWS: usize = 22;
+/// Maximum number of tile columns
+pub(crate) const MAX_TILE_COLUMNS: usize = 20;
+
+/// Tile information in PPS
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct TileInfo {
+    /// Number of tile columns minus 1
+    pub num_tile_columns_minus1: u32,
+    /// Number of tile rows minus 1
+    pub num_tile_rows_minus1: u32,
+    /// Uniform spacing flag
+    pub uniform_spacing_flag: bool,
+    /// Column widths minus 1 (if not uniform spacing)
+    pub column_width_minus1: SmallVec<[u32; MAX_TILE_COLUMNS]>,
+    /// Row heights minus 1 (if not uniform spacing)
+    pub row_height_minus1: SmallVec<[u32; MAX_TILE_ROWS]>,
+    /// Loop filter across tiles enabled flag
+    pub loop_filter_across_tiles_enabled_flag: bool,
+}
+
+impl TileInfo {
+    /// Parse TileInfo from a BitReader
+    pub fn parse<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<Self> {
+        let num_tile_columns_minus1 = reader.read_ue()?;
+        let num_tile_rows_minus1 = reader.read_ue()?;
+        let uniform_spacing_flag = reader.read_bit()?;
+
+        let mut column_width_minus1 = SmallVec::new();
+        let mut row_height_minus1 = SmallVec::new();
+
+        if !uniform_spacing_flag {
+            column_width_minus1.reserve(num_tile_columns_minus1 as usize);
+            for _ in 0..num_tile_columns_minus1 {
+                column_width_minus1.push(reader.read_ue()?);
+            }
+
+            row_height_minus1.reserve(num_tile_rows_minus1 as usize);
+            for _ in 0..num_tile_rows_minus1 {
+                row_height_minus1.push(reader.read_ue()?);
+            }
+        }
+
+        let loop_filter_across_tiles_enabled_flag = reader.read_bit()?;
+
+        Ok(Self {
+            num_tile_columns_minus1,
+            num_tile_rows_minus1,
+            uniform_spacing_flag,
+            column_width_minus1,
+            row_height_minus1,
+            loop_filter_across_tiles_enabled_flag,
+        })
+    }
+
+    /// Get number of tile columns
+    #[inline]
+    pub fn num_tile_columns(&self) -> u32 {
+        self.num_tile_columns_minus1 + 1
+    }
+
+    /// Get number of tile rows
+    #[inline]
+    pub fn num_tile_rows(&self) -> u32 {
+        self.num_tile_rows_minus1 + 1
+    }
+
+    /// Get total number of tiles
+    #[inline]
+    pub fn num_tiles(&self) -> u32 {
+        self.num_tile_columns() * self.num_tile_rows()
+    }
+}
+
+/// Deblocking filter override parameters
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct DeblockingFilterParams {
+    /// Deblocking filter override enabled flag
+    pub deblocking_filter_override_enabled_flag: bool,
+    /// PPS deblocking filter disabled flag
+    pub pps_deblocking_filter_disabled_flag: bool,
+    /// PPS beta offset div2
+    pub pps_beta_offset_div2: i32,
+    /// PPS tc offset div2
+    pub pps_tc_offset_div2: i32,
+}
+
+impl DeblockingFilterParams {
+    /// Parse DeblockingFilterParams from a BitReader
+    pub fn parse<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<Self> {
+        let deblocking_filter_override_enabled_flag = reader.read_bit()?;
+        let pps_deblocking_filter_disabled_flag = reader.read_bit()?;
+
+        let (pps_beta_offset_div2, pps_tc_offset_div2) = if !pps_deblocking_filter_disabled_flag {
+            (reader.read_se()?, reader.read_se()?)
+        } else {
+            (0, 0)
+        };
+
+        Ok(Self {
+            deblocking_filter_override_enabled_flag,
+            pps_deblocking_filter_disabled_flag,
+            pps_beta_offset_div2,
+            pps_tc_offset_div2,
+        })
+    }
+
+    /// Get beta offset (actual value)
+    #[inline]
+    pub fn beta_offset(&self) -> i32 {
+        self.pps_beta_offset_div2 * 2
+    }
+
+    /// Get tc offset (actual value)
+    #[inline]
+    pub fn tc_offset(&self) -> i32 {
+        self.pps_tc_offset_div2 * 2
+    }
+}
+
+/// Picture Parameter Set (PPS)
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct Pps {
+    /// PPS ID (0-63)
+    pub pic_parameter_set_id: u8,
+    /// SPS ID that this PPS refers to (0-15)
+    pub seq_parameter_set_id: u8,
+    /// Dependent slice segments enabled flag
+    pub dependent_slice_segments_enabled_flag: bool,
+    /// Output flag present flag
+    pub output_flag_present_flag: bool,
+    /// Number of extra slice header bits
+    pub num_extra_slice_header_bits: u8,
+    /// Sign data hiding enabled flag
+    pub sign_data_hiding_enabled_flag: bool,
+    /// CABAC init present flag
+    pub cabac_init_present_flag: bool,
+    /// Number of reference pictures in list 0 minus 1
+    pub num_ref_idx_l0_default_active_minus1: u32,
+    /// Number of reference pictures in list 1 minus 1
+    pub num_ref_idx_l1_default_active_minus1: u32,
+    /// Initial QP minus 26
+    pub init_qp_minus26: i32,
+    /// Constrained intra prediction flag
+    pub constrained_intra_pred_flag: bool,
+    /// Transform skip enabled flag
+    pub transform_skip_enabled_flag: bool,
+    /// CU QP delta enabled flag
+    pub cu_qp_delta_enabled_flag: bool,
+    /// Diff CU QP delta depth
+    pub diff_cu_qp_delta_depth: u32,
+    /// Cb QP offset
+    pub pps_cb_qp_offset: i32,
+    /// Cr QP offset
+    pub pps_cr_qp_offset: i32,
+    /// PPS slice chroma QP offsets present flag
+    pub pps_slice_chroma_qp_offsets_present_flag: bool,
+    /// Weighted prediction flag
+    pub weighted_pred_flag: bool,
+    /// Weighted biprediction flag
+    pub weighted_bipred_flag: bool,
+    /// Transquant bypass enabled flag
+    pub transquant_bypass_enabled_flag: bool,
+    /// Tiles enabled flag
+    pub tiles_enabled_flag: bool,
+    /// Entropy coding sync enabled flag
+    pub entropy_coding_sync_enabled_flag: bool,
+    /// Tile info (if tiles_enabled_flag)
+    pub tile_info: Option<TileInfo>,
+    /// PPS loop filter across slices enabled flag
+    pub pps_loop_filter_across_slices_enabled_flag: bool,
+    /// Deblocking filter control present flag
+    pub deblocking_filter_control_present_flag: bool,
+    /// Deblocking filter params (if deblocking_filter_control_present_flag)
+    pub deblocking_filter_params: Option<DeblockingFilterParams>,
+    /// PPS scaling list data present flag
+    pub pps_scaling_list_data_present_flag: bool,
+    /// Scaling list data (if pps_scaling_list_data_present_flag)
+    pub scaling_list_data: Option<ScalingListData>,
+    /// Lists modification present flag
+    pub lists_modification_present_flag: bool,
+    /// Log2 parallel merge level minus 2
+    pub log2_parallel_merge_level_minus2: u32,
+    /// Slice segment header extension present flag
+    pub slice_segment_header_extension_present_flag: bool,
+    /// PPS extension present flag
+    pub pps_extension_present_flag: bool,
+    /// PPS range extension flag
+    pub pps_range_extension_flag: bool,
+    /// PPS multilayer extension flag
+    pub pps_multilayer_extension_flag: bool,
+    /// PPS 3D extension flag
+    pub pps_3d_extension_flag: bool,
+    /// PPS SCC extension flag
+    pub pps_scc_extension_flag: bool,
+    /// PPS extension 4 bits
+    pub pps_extension_4bits: u8,
+}
+
+impl Pps {
+    /// Parse PPS from raw NAL unit RBSP data (with EPB already removed)
+    pub fn parse(data: &[u8]) -> Result<Self> {
+        let mut reader = BitReader::new(data);
+        Self::parse_from_bit_reader(&mut reader)
+    }
+
+    /// Parse PPS from a BitReader
+    pub fn parse_from_bit_reader<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<Self> {
+        // pps_pic_parameter_set_id
+        let pps_pic_parameter_set_id = reader.read_ue()? as u8;
+        if pps_pic_parameter_set_id > 63 {
+            return Err(invalid_data_error!("pps_pic_parameter_set_id", pps_pic_parameter_set_id));
+        }
+
+        // pps_seq_parameter_set_id
+        let pps_seq_parameter_set_id = reader.read_ue()? as u8;
+        if pps_seq_parameter_set_id > 15 {
+            return Err(invalid_data_error!("pps_seq_parameter_set_id", pps_seq_parameter_set_id));
+        }
+
+        // dependent_slice_segments_enabled_flag
+        let dependent_slice_segments_enabled_flag = reader.read_bit()?;
+
+        // output_flag_present_flag
+        let output_flag_present_flag = reader.read_bit()?;
+
+        // num_extra_slice_header_bits (3 bits)
+        let num_extra_slice_header_bits = reader.read::<3, u8>()?;
+
+        // sign_data_hiding_enabled_flag
+        let sign_data_hiding_enabled_flag = reader.read_bit()?;
+
+        // cabac_init_present_flag
+        let cabac_init_present_flag = reader.read_bit()?;
+
+        // num_ref_idx_l0_default_active_minus1
+        let num_ref_idx_l0_default_active_minus1 = reader.read_ue()?;
+        if num_ref_idx_l0_default_active_minus1 > 14 {
+            return Err(invalid_data_error!("num_ref_idx_l0_default_active_minus1", num_ref_idx_l0_default_active_minus1));
+        }
+
+        // num_ref_idx_l1_default_active_minus1
+        let num_ref_idx_l1_default_active_minus1 = reader.read_ue()?;
+        if num_ref_idx_l1_default_active_minus1 > 14 {
+            return Err(invalid_data_error!("num_ref_idx_l1_default_active_minus1", num_ref_idx_l1_default_active_minus1));
+        }
+
+        // init_qp_minus26
+        let init_qp_minus26 = reader.read_se()?;
+
+        // constrained_intra_pred_flag
+        let constrained_intra_pred_flag = reader.read_bit()?;
+
+        // transform_skip_enabled_flag
+        let transform_skip_enabled_flag = reader.read_bit()?;
+
+        // cu_qp_delta_enabled_flag
+        let cu_qp_delta_enabled_flag = reader.read_bit()?;
+        let diff_cu_qp_delta_depth = if cu_qp_delta_enabled_flag {
+            reader.read_ue()?
+        } else {
+            0
+        };
+
+        // pps_cb_qp_offset
+        let pps_cb_qp_offset = reader.read_se()?;
+        if !(-12..=12).contains(&pps_cb_qp_offset) {
+            return Err(invalid_data_error!("pps_cb_qp_offset", pps_cb_qp_offset));
+        }
+
+        // pps_cr_qp_offset
+        let pps_cr_qp_offset = reader.read_se()?;
+        if !(-12..=12).contains(&pps_cr_qp_offset) {
+            return Err(invalid_data_error!("pps_cr_qp_offset", pps_cr_qp_offset));
+        }
+
+        // pps_slice_chroma_qp_offsets_present_flag
+        let pps_slice_chroma_qp_offsets_present_flag = reader.read_bit()?;
+
+        // weighted_pred_flag
+        let weighted_pred_flag = reader.read_bit()?;
+
+        // weighted_bipred_flag
+        let weighted_bipred_flag = reader.read_bit()?;
+
+        // transquant_bypass_enabled_flag
+        let transquant_bypass_enabled_flag = reader.read_bit()?;
+
+        // tiles_enabled_flag
+        let tiles_enabled_flag = reader.read_bit()?;
+
+        // entropy_coding_sync_enabled_flag
+        let entropy_coding_sync_enabled_flag = reader.read_bit()?;
+
+        // Tile info
+        let tile_info = if tiles_enabled_flag {
+            Some(TileInfo::parse(reader)?)
+        } else {
+            None
+        };
+
+        // pps_loop_filter_across_slices_enabled_flag
+        let pps_loop_filter_across_slices_enabled_flag = reader.read_bit()?;
+
+        // deblocking_filter_control_present_flag
+        let deblocking_filter_control_present_flag = reader.read_bit()?;
+        let deblocking_filter_params = if deblocking_filter_control_present_flag {
+            Some(DeblockingFilterParams::parse(reader)?)
+        } else {
+            None
+        };
+
+        // pps_scaling_list_data_present_flag
+        let pps_scaling_list_data_present_flag = reader.read_bit()?;
+        let scaling_list_data = if pps_scaling_list_data_present_flag {
+            Some(ScalingListData::parse(reader, false)?)
+        } else {
+            None
+        };
+
+        // lists_modification_present_flag
+        let lists_modification_present_flag = reader.read_bit()?;
+
+        // log2_parallel_merge_level_minus2
+        let log2_parallel_merge_level_minus2 = reader.read_ue()?;
+
+        // slice_segment_header_extension_present_flag
+        let slice_segment_header_extension_present_flag = reader.read_bit()?;
+
+        // pps_extension_present_flag
+        let pps_extension_present_flag = reader.read_bit()?;
+        let (pps_range_extension_flag, pps_multilayer_extension_flag, pps_3d_extension_flag, pps_scc_extension_flag, pps_extension_4bits) =
+            if pps_extension_present_flag {
+                (reader.read_bit()?, reader.read_bit()?, reader.read_bit()?, reader.read_bit()?, reader.read::<4, u8>()?)
+            } else {
+                (false, false, false, false, 0)
+            };
+
+        Ok(Self {
+            pic_parameter_set_id: pps_pic_parameter_set_id,
+            seq_parameter_set_id: pps_seq_parameter_set_id,
+            dependent_slice_segments_enabled_flag,
+            output_flag_present_flag,
+            num_extra_slice_header_bits,
+            sign_data_hiding_enabled_flag,
+            cabac_init_present_flag,
+            num_ref_idx_l0_default_active_minus1,
+            num_ref_idx_l1_default_active_minus1,
+            init_qp_minus26,
+            constrained_intra_pred_flag,
+            transform_skip_enabled_flag,
+            cu_qp_delta_enabled_flag,
+            diff_cu_qp_delta_depth,
+            pps_cb_qp_offset,
+            pps_cr_qp_offset,
+            pps_slice_chroma_qp_offsets_present_flag,
+            weighted_pred_flag,
+            weighted_bipred_flag,
+            transquant_bypass_enabled_flag,
+            tiles_enabled_flag,
+            entropy_coding_sync_enabled_flag,
+            tile_info,
+            pps_loop_filter_across_slices_enabled_flag,
+            deblocking_filter_control_present_flag,
+            deblocking_filter_params,
+            pps_scaling_list_data_present_flag,
+            scaling_list_data,
+            lists_modification_present_flag,
+            log2_parallel_merge_level_minus2,
+            slice_segment_header_extension_present_flag,
+            pps_extension_present_flag,
+            pps_range_extension_flag,
+            pps_multilayer_extension_flag,
+            pps_3d_extension_flag,
+            pps_scc_extension_flag,
+            pps_extension_4bits,
+        })
+    }
+
+    /// Get actual number of reference pictures in list 0
+    #[inline]
+    pub fn number_of_reference_index_l0_default_active(&self) -> u32 {
+        self.num_ref_idx_l0_default_active_minus1 + 1
+    }
+
+    /// Get actual number of reference pictures in list 1
+    #[inline]
+    pub fn number_of_reference_index_l1_default_active(&self) -> u32 {
+        self.num_ref_idx_l1_default_active_minus1 + 1
+    }
+
+    /// Get initial QP (actual value: 0 to 51)
+    #[inline]
+    pub fn init_qp(&self) -> i32 {
+        self.init_qp_minus26 + 26
+    }
+
+    /// Get log2 parallel merge level
+    #[inline]
+    pub fn log2_parallel_merge_level(&self) -> u32 {
+        self.log2_parallel_merge_level_minus2 + 2
+    }
+
+    /// Check if weighted prediction is enabled for P slices
+    #[inline]
+    pub fn has_weighted_prediction(&self) -> bool {
+        self.weighted_pred_flag
+    }
+
+    /// Check if weighted bi-prediction is enabled for B slices
+    #[inline]
+    pub fn has_weighted_bi_prediction(&self) -> bool {
+        self.weighted_bipred_flag
+    }
+
+    /// Check if tiles are enabled
+    #[inline]
+    pub fn has_tiles(&self) -> bool {
+        self.tiles_enabled_flag
+    }
+
+    /// Check if WPP (Wavefront Parallel Processing) is enabled
+    #[inline]
+    pub fn has_wpp(&self) -> bool {
+        self.entropy_coding_sync_enabled_flag
+    }
+
+    /// Check if transform skip is enabled
+    #[inline]
+    pub fn has_transform_skip(&self) -> bool {
+        self.transform_skip_enabled_flag
+    }
+
+    /// Check if CU QP delta is enabled
+    #[inline]
+    pub fn has_cu_qp_delta(&self) -> bool {
+        self.cu_qp_delta_enabled_flag
+    }
+
+    /// Check if deblocking filter is disabled
+    #[inline]
+    pub fn is_deblocking_filter_disabled(&self) -> bool {
+        self.deblocking_filter_params.as_ref().map_or(false, |p| p.pps_deblocking_filter_disabled_flag)
+    }
+
+    /// Get the Cb QP offset
+    #[inline]
+    pub fn cb_qp_offset(&self) -> i32 {
+        self.pps_cb_qp_offset
+    }
+
+    /// Get the Cr QP offset
+    #[inline]
+    pub fn cr_qp_offset(&self) -> i32 {
+        self.pps_cr_qp_offset
+    }
+
+    /// Get number of tile columns (1 if tiles not enabled)
+    #[inline]
+    pub fn num_tile_columns(&self) -> u32 {
+        self.tile_info.as_ref().map_or(1, |t| t.num_tile_columns())
+    }
+
+    /// Get number of tile rows (1 if tiles not enabled)
+    #[inline]
+    pub fn num_tile_rows(&self) -> u32 {
+        self.tile_info.as_ref().map_or(1, |t| t.num_tile_rows())
+    }
+
+    /// Get total number of tiles (1 if tiles not enabled)
+    #[inline]
+    pub fn num_tiles(&self) -> u32 {
+        self.tile_info.as_ref().map_or(1, |t| t.num_tiles())
+    }
+}
