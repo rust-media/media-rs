@@ -16,6 +16,8 @@ pub enum Error {
     CreationFailed(Cow<'static, str>),
     #[error("Invalid parameter: {0} {1}")]
     InvalidParameter(Cow<'static, str>, Cow<'static, str>),
+    #[error("Invalid data: {0}")]
+    InvalidData(Cow<'static, str>),
     #[error("Not implemented")]
     NotImplemented,
     #[error("Not found: {0}")]
@@ -44,6 +46,8 @@ pub enum Error {
     WriteFailed(Cow<'static, str>),
     #[error("More data needed: {0}")]
     MoreDataNeeded(usize),
+    #[error("Unexpected end of data")]
+    UnexpectedEndOfData,
     #[error(transparent)]
     IO(#[from] std::io::Error),
 }
@@ -78,6 +82,19 @@ macro_rules! failed_error {
 macro_rules! invalid_param_error {
     ($param:expr) => {
         $crate::error::Error::InvalidParameter(stringify!($param).into(), format!("{:?}", $param).into())
+    };
+}
+
+#[macro_export]
+macro_rules! invalid_data_error {
+    ($param:literal) => {
+        $crate::error::Error::InvalidData($param.into())
+    };
+    ($param:expr) => {
+        $crate::error::Error::InvalidData(format!("{:?}", $param).into())
+    };
+    ($key:expr, $value:expr) => {
+        $crate::error::Error::InvalidData(format!("{}: {:?}", $key, $value).into())
     };
 }
 

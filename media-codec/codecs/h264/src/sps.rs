@@ -1,0 +1,1164 @@
+//! H.264/AVC Sequence Parameter Set (SPS) parser
+
+use std::io::Read;
+
+use media_codec_bitstream::{BigEndian, BitReader};
+use media_core::{invalid_data_error, Result};
+use smallvec::SmallVec;
+
+use crate::scaling_list::ScalingMatrix;
+
+/// Maximum CPB count
+const MAX_CPB_CNT: usize = 32;
+
+/// This struct stores them in the same order as the bitstream (MSB first)
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ConstraintSetFlags(u8);
+
+impl ConstraintSetFlags {
+    /// Bit mask for constraint_set0_flag (bit 7)
+    const FLAG0: u8 = 1 << (7 - 0); // 0b1000_0000
+    /// Bit mask for constraint_set1_flag (bit 6)
+    const FLAG1: u8 = 1 << (7 - 1); // 0b0100_0000
+    /// Bit mask for constraint_set2_flag (bit 5)
+    const FLAG2: u8 = 1 << (7 - 2); // 0b0010_0000
+    /// Bit mask for constraint_set3_flag (bit 4)
+    const FLAG3: u8 = 1 << (7 - 3); // 0b0001_0000
+    /// Bit mask for constraint_set4_flag (bit 3)
+    const FLAG4: u8 = 1 << (7 - 4); // 0b0000_1000
+    /// Bit mask for constraint_set5_flag (bit 2)
+    const FLAG5: u8 = 1 << (7 - 5); // 0b0000_0100
+
+    /// Create ConstraintSetFlags from raw byte value
+    #[inline]
+    pub const fn from_raw(value: u8) -> Self {
+        Self(value)
+    }
+
+    /// Get the raw byte value
+    #[inline]
+    pub const fn raw(&self) -> u8 {
+        self.0
+    }
+
+    /// Check if constraint_set0_flag is set
+    #[inline]
+    pub const fn has_flag0(&self) -> bool {
+        self.0 & Self::FLAG0 != 0
+    }
+
+    /// Check if constraint_set1_flag is set
+    #[inline]
+    pub const fn has_flag1(&self) -> bool {
+        self.0 & Self::FLAG1 != 0
+    }
+
+    /// Check if constraint_set2_flag is set
+    #[inline]
+    pub const fn has_flag2(&self) -> bool {
+        self.0 & Self::FLAG2 != 0
+    }
+
+    /// Check if constraint_set3_flag is set
+    #[inline]
+    pub const fn has_flag3(&self) -> bool {
+        self.0 & Self::FLAG3 != 0
+    }
+
+    /// Check if constraint_set4_flag is set
+    #[inline]
+    pub const fn has_flag4(&self) -> bool {
+        self.0 & Self::FLAG4 != 0
+    }
+
+    /// Check if constraint_set5_flag is set
+    #[inline]
+    pub const fn has_flag5(&self) -> bool {
+        self.0 & Self::FLAG5 != 0
+    }
+}
+
+/// H.264/AVC Profile
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u16)]
+pub enum Profile {
+    /// Baseline Profile (profile_idc = 66)
+    Baseline                    = 66,
+    /// Constrained Baseline Profile (profile_idc = 66, constraint_set1_flag =
+    /// 1)
+    ConstrainedBaseline         = ((ConstraintSetFlags::FLAG1 as u16) << 8) | 66,
+    /// Main Profile (profile_idc = 77)
+    Main                        = 77,
+    /// Extended Profile (profile_idc = 88)
+    Extended                    = 88,
+    /// High Profile (profile_idc = 100)
+    High                        = 100,
+    /// Progressive High Profile (profile_idc = 100, constraint_set4_flag = 1)
+    ProgressiveHigh             = ((ConstraintSetFlags::FLAG4 as u16) << 8) | 100,
+    /// Constrained High Profile (profile_idc = 100, constraint_set4_flag = 1,
+    /// constraint_set5_flag = 1)
+    ConstrainedHigh             = (((ConstraintSetFlags::FLAG4 | ConstraintSetFlags::FLAG5) as u16) << 8) | 100,
+    /// High 10 Profile (profile_idc = 110)
+    High10                      = 110,
+    /// High 10 Intra Profile (profile_idc = 110, constraint_set3_flag = 1)
+    High10Intra                 = ((ConstraintSetFlags::FLAG3 as u16) << 8) | 110,
+    /// High 4:2:2 Profile (profile_idc = 122)
+    High422                     = 122,
+    /// High 4:2:2 Intra Profile (profile_idc = 122, constraint_set3_flag = 1)
+    High422Intra                = ((ConstraintSetFlags::FLAG3 as u16) << 8) | 122,
+    /// High 4:4:4 Predictive Profile (profile_idc = 244)
+    High444Predictive           = 244,
+    /// High 4:4:4 Intra Profile (profile_idc = 244, constraint_set3_flag = 1)
+    High444Intra                = ((ConstraintSetFlags::FLAG3 as u16) << 8) | 244,
+    /// CAVLC 4:4:4 Intra Profile (profile_idc = 44)
+    Cavlc444Intra               = 44,
+    /// Scalable Baseline Profile (profile_idc = 83)
+    ScalableBaseline            = 83,
+    /// Scalable Constrained Baseline Profile (profile_idc = 83,
+    /// constraint_set5_flag = 1)
+    ScalableConstrainedBaseline = ((ConstraintSetFlags::FLAG5 as u16) << 8) | 83,
+    /// Scalable High Profile (profile_idc = 86)
+    ScalableHigh                = 86,
+    /// Scalable High Intra Profile (profile_idc = 86, constraint_set3_flag = 1)
+    ScalableHighIntra           = ((ConstraintSetFlags::FLAG3 as u16) << 8) | 86,
+    /// Scalable Constrained High Profile (profile_idc = 86,
+    /// constraint_set5_flag = 1)
+    ScalableConstrainedHigh     = ((ConstraintSetFlags::FLAG5 as u16) << 8) | 86,
+    /// Multiview High Profile (profile_idc = 118)
+    MultiviewHigh               = 118,
+    /// Stereo High Profile (profile_idc = 128)
+    StereoHigh                  = 128,
+    /// MFC High Profile (profile_idc = 134)
+    MFCHigh                     = 134,
+    /// MFC Depth High Profile (profile_idc = 135)
+    MFCDepthHigh                = 135,
+    /// Multiview Depth High Profile (profile_idc = 138)
+    MultiviewDepthHigh          = 138,
+    /// Enhanced Multiview Depth High Profile (profile_idc = 139)
+    EnhancedMultiviewDepthHigh  = 139,
+}
+
+impl Profile {
+    /// Create a Profile from profile_idc and constraint_set_flags
+    pub fn from_raw(profile_idc: u8, constraint_set_flags: ConstraintSetFlags) -> Result<Self> {
+        let profile = match profile_idc {
+            66 => {
+                if constraint_set_flags.has_flag1() {
+                    Profile::ConstrainedBaseline
+                } else {
+                    Profile::Baseline
+                }
+            }
+            77 => Profile::Main,
+            88 => Profile::Extended,
+            100 => {
+                if constraint_set_flags.has_flag4() {
+                    Profile::ProgressiveHigh
+                } else if constraint_set_flags.has_flag4() | constraint_set_flags.has_flag5() {
+                    Profile::ConstrainedHigh
+                } else {
+                    Profile::High
+                }
+            }
+            110 => {
+                if constraint_set_flags.has_flag3() {
+                    Profile::High10Intra
+                } else {
+                    Profile::High10
+                }
+            }
+            122 => {
+                if constraint_set_flags.has_flag3() {
+                    Profile::High422Intra
+                } else {
+                    Profile::High422
+                }
+            }
+            244 => {
+                if constraint_set_flags.has_flag3() {
+                    Profile::High444Intra
+                } else {
+                    Profile::High444Predictive
+                }
+            }
+            44 => Profile::Cavlc444Intra,
+            83 => {
+                if constraint_set_flags.has_flag5() {
+                    Profile::ScalableConstrainedBaseline
+                } else {
+                    Profile::ScalableBaseline
+                }
+            }
+            86 => {
+                if constraint_set_flags.has_flag3() {
+                    Profile::ScalableHighIntra
+                } else if constraint_set_flags.has_flag5() {
+                    Profile::ScalableConstrainedHigh
+                } else {
+                    Profile::ScalableHigh
+                }
+            }
+            118 => Profile::MultiviewHigh,
+            128 => Profile::StereoHigh,
+            134 => Profile::MFCHigh,
+            135 => Profile::MFCDepthHigh,
+            138 => Profile::MultiviewDepthHigh,
+            139 => Profile::EnhancedMultiviewDepthHigh,
+            _ => return Err(invalid_data_error!("profile_idc", profile_idc)),
+        };
+
+        Ok(profile)
+    }
+
+    /// Get the profile_idc value
+    pub fn idc(&self) -> u8 {
+        (*self as u16 & 0xFF) as u8
+    }
+
+    /// Check if profile has extended chroma format support
+    pub fn has_chroma_format_extension(&self) -> bool {
+        let profile_idc = self.idc();
+        matches!(profile_idc, 100 | 110 | 122 | 244 | 44 | 83 | 86 | 118 | 128 | 138 | 139 | 134 | 135)
+    }
+}
+
+/// Chroma format IDC values
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[repr(u8)]
+pub enum ChromaFormat {
+    Monochrome = 0,
+    #[default]
+    YUV420     = 1,
+    YUV422     = 2,
+    YUV444     = 3,
+}
+
+impl From<u8> for ChromaFormat {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => ChromaFormat::Monochrome,
+            1 => ChromaFormat::YUV420,
+            2 => ChromaFormat::YUV422,
+            3 => ChromaFormat::YUV444,
+            _ => ChromaFormat::YUV420,
+        }
+    }
+}
+
+/// Extended SAR aspect_ratio_idc value
+pub const EXTENDED_SAR: u8 = 255;
+
+/// Predefined Sample Aspect Ratio (SAR) values
+/// Table E-1 in H.264 specification
+const SAR_TABLE: [(u16, u16); 17] = [
+    (0, 0),    // 0: Unspecified
+    (1, 1),    // 1: 1:1 (square)
+    (12, 11),  // 2: 12:11
+    (10, 11),  // 3: 10:11
+    (16, 11),  // 4: 16:11
+    (40, 33),  // 5: 40:33
+    (24, 11),  // 6: 24:11
+    (20, 11),  // 7: 20:11
+    (32, 11),  // 8: 32:11
+    (80, 33),  // 9: 80:33
+    (18, 11),  // 10: 18:11
+    (15, 11),  // 11: 15:11
+    (64, 33),  // 12: 64:33
+    (160, 99), // 13: 160:99
+    (4, 3),    // 14: 4:3
+    (3, 2),    // 15: 3:2
+    (2, 1),    // 16: 2:1
+];
+
+/// Aspect Ratio Information
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct AspectRatioInfo {
+    /// Aspect ratio IDC (0-16 for predefined, 255 for extended SAR)
+    pub aspect_ratio_idc: u8,
+    /// Sample aspect ratio width (only valid when aspect_ratio_idc == 255)
+    pub sar_width: u16,
+    /// Sample aspect ratio height (only valid when aspect_ratio_idc == 255)
+    pub sar_height: u16,
+}
+
+impl AspectRatioInfo {
+    /// Parse AspectRatioInfo from a BitReader
+    pub fn parse<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<Self> {
+        let aspect_ratio_idc = reader.read::<8, u8>()?;
+        let (sar_width, sar_height) = if aspect_ratio_idc == EXTENDED_SAR {
+            (reader.read::<16, u16>()?, reader.read::<16, u16>()?)
+        } else {
+            (0, 0)
+        };
+
+        Ok(Self {
+            aspect_ratio_idc,
+            sar_width,
+            sar_height,
+        })
+    }
+
+    /// Get the sample aspect ratio as (width, height)
+    /// Returns None if unspecified (aspect_ratio_idc == 0)
+    pub fn sample_aspect_ratio(&self) -> Option<(u16, u16)> {
+        match self.aspect_ratio_idc {
+            0 => None, // Unspecified
+            EXTENDED_SAR => Some((self.sar_width, self.sar_height)),
+            idc if (idc as usize) < SAR_TABLE.len() => Some(SAR_TABLE[idc as usize]),
+            _ => None,
+        }
+    }
+
+    /// Check if this is an extended SAR
+    #[inline]
+    pub fn is_extended_sar(&self) -> bool {
+        self.aspect_ratio_idc == EXTENDED_SAR
+    }
+
+    /// Check if aspect ratio is specified
+    #[inline]
+    pub fn is_specified(&self) -> bool {
+        self.aspect_ratio_idc != 0
+    }
+}
+
+/// Video Format values
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[repr(u8)]
+pub enum VideoFormat {
+    Component   = 0,
+    PAL         = 1,
+    NTSC        = 2,
+    SECAM       = 3,
+    MAC         = 4,
+    #[default]
+    Unspecified = 5,
+}
+
+impl From<u8> for VideoFormat {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => VideoFormat::Component,
+            1 => VideoFormat::PAL,
+            2 => VideoFormat::NTSC,
+            3 => VideoFormat::SECAM,
+            4 => VideoFormat::MAC,
+            _ => VideoFormat::Unspecified,
+        }
+    }
+}
+
+/// Colour Description (colour_primaries, transfer_characteristics,
+/// matrix_coefficients)
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ColourDescription {
+    /// Colour primaries (Table E-3)
+    pub colour_primaries: u8,
+    /// Transfer characteristics (Table E-4)
+    pub transfer_characteristics: u8,
+    /// Matrix coefficients (Table E-5)
+    pub matrix_coefficients: u8,
+}
+
+impl ColourDescription {
+    /// Parse ColourDescription from a BitReader
+    pub fn parse<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<Self> {
+        Ok(Self {
+            colour_primaries: reader.read::<8, u8>()?,
+            transfer_characteristics: reader.read::<8, u8>()?,
+            matrix_coefficients: reader.read::<8, u8>()?,
+        })
+    }
+}
+
+/// Video Signal Type
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct VideoSignalType {
+    /// Video format
+    pub video_format: VideoFormat,
+    /// Video full range flag (0=limited range, 1=full range)
+    pub video_full_range_flag: bool,
+    /// Colour description (if present)
+    pub colour_description: Option<ColourDescription>,
+}
+
+impl VideoSignalType {
+    /// Parse VideoSignalType from a BitReader
+    pub fn parse<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<Self> {
+        let video_format = VideoFormat::from(reader.read::<3, u8>()?);
+        let video_full_range_flag = reader.read_bit()?;
+        let colour_description_present_flag = reader.read_bit()?;
+        let colour_description = if colour_description_present_flag {
+            Some(ColourDescription::parse(reader)?)
+        } else {
+            None
+        };
+
+        Ok(Self {
+            video_format,
+            video_full_range_flag,
+            colour_description,
+        })
+    }
+
+    /// Check if video uses full range
+    #[inline]
+    pub fn is_full_range(&self) -> bool {
+        self.video_full_range_flag
+    }
+
+    /// Get colour description if present
+    #[inline]
+    pub fn colour_description(&self) -> Option<&ColourDescription> {
+        self.colour_description.as_ref()
+    }
+}
+
+/// Chroma Sample Location Information
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ChromaLocInfo {
+    /// Chroma sample location type for top field
+    pub chroma_sample_loc_type_top_field: u32,
+    /// Chroma sample location type for bottom field
+    pub chroma_sample_loc_type_bottom_field: u32,
+}
+
+impl ChromaLocInfo {
+    /// Parse ChromaLocInfo from a BitReader
+    pub fn parse<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<Self> {
+        Ok(Self {
+            chroma_sample_loc_type_top_field: reader.read_ue()?,
+            chroma_sample_loc_type_bottom_field: reader.read_ue()?,
+        })
+    }
+}
+
+/// Timing Information
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct TimingInfo {
+    /// Number of units in tick
+    pub num_units_in_tick: u32,
+    /// Time scale
+    pub time_scale: u32,
+    /// Fixed frame rate flag
+    pub fixed_frame_rate_flag: bool,
+}
+
+impl TimingInfo {
+    /// Parse TimingInfo from a BitReader
+    pub fn parse<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<Self> {
+        Ok(Self {
+            num_units_in_tick: reader.read::<32, u32>()?,
+            time_scale: reader.read::<32, u32>()?,
+            fixed_frame_rate_flag: reader.read_bit()?,
+        })
+    }
+
+    /// Get frame rate as (numerator, denominator)
+    pub fn frame_rate(&self) -> Option<(u32, u32)> {
+        if self.num_units_in_tick > 0 {
+            // frame_rate = time_scale / (2 * num_units_in_tick)
+            Some((self.time_scale, self.num_units_in_tick * 2))
+        } else {
+            None
+        }
+    }
+
+    /// Get frame rate as floating point
+    pub fn frame_rate_fps(&self) -> Option<f64> {
+        self.frame_rate().map(|(num, den)| num as f64 / den as f64)
+    }
+
+    /// Check if the stream has a fixed frame rate
+    #[inline]
+    pub fn is_fixed_frame_rate(&self) -> bool {
+        self.fixed_frame_rate_flag
+    }
+}
+
+/// HRD (Hypothetical Reference Decoder) Parameters
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct HrdParameters {
+    /// CPB (Coded Picture Buffer) count minus 1
+    pub cpb_cnt_minus1: u32,
+    /// Bit rate scale
+    pub bit_rate_scale: u8,
+    /// CPB size scale
+    pub cpb_size_scale: u8,
+    /// Bit rate values minus 1 for each CPB
+    pub bit_rate_value_minus1: SmallVec<[u32; MAX_CPB_CNT]>,
+    /// CPB size values minus 1 for each CPB
+    pub cpb_size_value_minus1: SmallVec<[u32; MAX_CPB_CNT]>,
+    /// CBR (Constant Bit Rate) flags for each CPB
+    pub cbr_flag: SmallVec<[bool; MAX_CPB_CNT]>,
+    /// Initial CPB removal delay length minus 1
+    pub initial_cpb_removal_delay_length_minus1: u8,
+    /// CPB removal delay length minus 1
+    pub cpb_removal_delay_length_minus1: u8,
+    /// DPB output delay length minus 1
+    pub dpb_output_delay_length_minus1: u8,
+    /// Time offset length
+    pub time_offset_length: u8,
+}
+
+impl HrdParameters {
+    /// Parse HrdParameters from a BitReader
+    pub fn parse<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<Self> {
+        let cpb_cnt_minus1 = reader.read_ue()?;
+        let bit_rate_scale = reader.read::<4, u8>()?;
+        let cpb_size_scale = reader.read::<4, u8>()?;
+
+        let cpb_cnt = (cpb_cnt_minus1 + 1) as usize;
+        let mut bit_rate_value_minus1 = SmallVec::with_capacity(cpb_cnt);
+        let mut cpb_size_value_minus1 = SmallVec::with_capacity(cpb_cnt);
+        let mut cbr_flag = SmallVec::with_capacity(cpb_cnt);
+
+        for _ in 0..cpb_cnt {
+            bit_rate_value_minus1.push(reader.read_ue()?);
+            cpb_size_value_minus1.push(reader.read_ue()?);
+            cbr_flag.push(reader.read_bit()?);
+        }
+
+        let initial_cpb_removal_delay_length_minus1 = reader.read::<5, u8>()?;
+        let cpb_removal_delay_length_minus1 = reader.read::<5, u8>()?;
+        let dpb_output_delay_length_minus1 = reader.read::<5, u8>()?;
+        let time_offset_length = reader.read::<5, u8>()?;
+
+        Ok(Self {
+            cpb_cnt_minus1,
+            bit_rate_scale,
+            cpb_size_scale,
+            bit_rate_value_minus1,
+            cpb_size_value_minus1,
+            cbr_flag,
+            initial_cpb_removal_delay_length_minus1,
+            cpb_removal_delay_length_minus1,
+            dpb_output_delay_length_minus1,
+            time_offset_length,
+        })
+    }
+
+    /// Get bit rate for a specific CPB index (in bits/second)
+    pub fn bit_rate(&self, cpb_index: usize) -> Option<u64> {
+        self.bit_rate_value_minus1.get(cpb_index).map(|&val| (val as u64 + 1) << (6 + self.bit_rate_scale))
+    }
+
+    /// Get the number of CPB configurations
+    #[inline]
+    pub fn cpb_count(&self) -> u32 {
+        self.cpb_cnt_minus1 + 1
+    }
+
+    /// Get CPB size for a specific CPB index (in bits)
+    pub fn cpb_size(&self, cpb_index: usize) -> Option<u64> {
+        self.cpb_size_value_minus1.get(cpb_index).map(|&val| (val as u64 + 1) << (4 + self.cpb_size_scale))
+    }
+
+    /// Check if a specific CPB operates in CBR mode
+    pub fn is_cbr(&self, cpb_index: usize) -> Option<bool> {
+        self.cbr_flag.get(cpb_index).copied()
+    }
+
+    /// Get initial CPB removal delay length in bits
+    #[inline]
+    pub fn initial_cpb_removal_delay_length(&self) -> u8 {
+        self.initial_cpb_removal_delay_length_minus1 + 1
+    }
+
+    /// Get CPB removal delay length in bits
+    #[inline]
+    pub fn cpb_removal_delay_length(&self) -> u8 {
+        self.cpb_removal_delay_length_minus1 + 1
+    }
+
+    /// Get DPB output delay length in bits
+    #[inline]
+    pub fn dpb_output_delay_length(&self) -> u8 {
+        self.dpb_output_delay_length_minus1 + 1
+    }
+}
+
+/// Bitstream Restriction Information
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct BitstreamRestriction {
+    /// Motion vectors over picture boundaries flag
+    pub motion_vectors_over_pic_boundaries_flag: bool,
+    /// Max bytes per pic denom
+    pub max_bytes_per_pic_denom: u32,
+    /// Max bits per mb denom
+    pub max_bits_per_mb_denom: u32,
+    /// Log2 max mv length horizontal
+    pub log2_max_mv_length_horizontal: u32,
+    /// Log2 max mv length vertical
+    pub log2_max_mv_length_vertical: u32,
+    /// Max num reorder frames
+    pub max_num_reorder_frames: u32,
+    /// Max dec frame buffering
+    pub max_dec_frame_buffering: u32,
+}
+
+impl BitstreamRestriction {
+    /// Parse BitstreamRestriction from a BitReader
+    pub fn parse<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<Self> {
+        Ok(Self {
+            motion_vectors_over_pic_boundaries_flag: reader.read_bit()?,
+            max_bytes_per_pic_denom: reader.read_ue()?,
+            max_bits_per_mb_denom: reader.read_ue()?,
+            log2_max_mv_length_horizontal: reader.read_ue()?,
+            log2_max_mv_length_vertical: reader.read_ue()?,
+            max_num_reorder_frames: reader.read_ue()?,
+            max_dec_frame_buffering: reader.read_ue()?,
+        })
+    }
+
+    /// Check if motion vectors can cross picture boundaries
+    #[inline]
+    pub fn allows_mv_over_pic_boundaries(&self) -> bool {
+        self.motion_vectors_over_pic_boundaries_flag
+    }
+
+    /// Get the maximum number of frames that can be reordered
+    #[inline]
+    pub fn max_reorder_frames(&self) -> u32 {
+        self.max_num_reorder_frames
+    }
+
+    /// Get the DPB (Decoded Picture Buffer) size
+    #[inline]
+    pub fn dpb_size(&self) -> u32 {
+        self.max_dec_frame_buffering
+    }
+}
+
+/// Video Usability Information (VUI) parameters
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct VuiParameters {
+    /// Aspect ratio information (if present)
+    pub aspect_ratio_info: Option<AspectRatioInfo>,
+    /// Overscan info present flag
+    pub overscan_info_present_flag: bool,
+    /// Overscan appropriate flag
+    pub overscan_appropriate_flag: bool,
+    /// Video signal type (if present)
+    pub video_signal_type: Option<VideoSignalType>,
+    /// Chroma location info (if present)
+    pub chroma_loc_info: Option<ChromaLocInfo>,
+    /// Timing info (if present)
+    pub timing_info: Option<TimingInfo>,
+    /// NAL HRD parameters (if present)
+    pub nal_hrd_parameters: Option<HrdParameters>,
+    /// VCL HRD parameters (if present)
+    pub vcl_hrd_parameters: Option<HrdParameters>,
+    /// Low delay HRD flag
+    pub low_delay_hrd_flag: bool,
+    /// Picture struct present flag
+    pub pic_struct_present_flag: bool,
+    /// Bitstream restriction (if present)
+    pub bitstream_restriction: Option<BitstreamRestriction>,
+}
+
+impl VuiParameters {
+    /// Parse VUI parameters from a BitReader
+    pub fn parse<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<Self> {
+        // Aspect ratio info
+        let aspect_ratio_info_present_flag = reader.read_bit()?;
+        let aspect_ratio_info = if aspect_ratio_info_present_flag {
+            Some(AspectRatioInfo::parse(reader)?)
+        } else {
+            None
+        };
+
+        // Overscan info
+        let overscan_info_present_flag = reader.read_bit()?;
+        let overscan_appropriate_flag = if overscan_info_present_flag {
+            reader.read_bit()?
+        } else {
+            false
+        };
+
+        // Video signal type
+        let video_signal_type_present_flag = reader.read_bit()?;
+        let video_signal_type = if video_signal_type_present_flag {
+            Some(VideoSignalType::parse(reader)?)
+        } else {
+            None
+        };
+
+        // Chroma location info
+        let chroma_loc_info_present_flag = reader.read_bit()?;
+        let chroma_loc_info = if chroma_loc_info_present_flag {
+            Some(ChromaLocInfo::parse(reader)?)
+        } else {
+            None
+        };
+
+        // Timing info
+        let timing_info_present_flag = reader.read_bit()?;
+        let timing_info = if timing_info_present_flag {
+            Some(TimingInfo::parse(reader)?)
+        } else {
+            None
+        };
+
+        // NAL HRD parameters
+        let nal_hrd_parameters_present_flag = reader.read_bit()?;
+        let nal_hrd_parameters = if nal_hrd_parameters_present_flag {
+            Some(HrdParameters::parse(reader)?)
+        } else {
+            None
+        };
+
+        // VCL HRD parameters
+        let vcl_hrd_parameters_present_flag = reader.read_bit()?;
+        let vcl_hrd_parameters = if vcl_hrd_parameters_present_flag {
+            Some(HrdParameters::parse(reader)?)
+        } else {
+            None
+        };
+
+        let low_delay_hrd_flag = if nal_hrd_parameters.is_some() || vcl_hrd_parameters.is_some() {
+            reader.read_bit()?
+        } else {
+            false
+        };
+
+        let pic_struct_present_flag = reader.read_bit()?;
+
+        // Bitstream restriction
+        let bitstream_restriction_flag = reader.read_bit()?;
+        let bitstream_restriction = if bitstream_restriction_flag {
+            Some(BitstreamRestriction::parse(reader)?)
+        } else {
+            None
+        };
+
+        Ok(Self {
+            aspect_ratio_info,
+            overscan_info_present_flag,
+            overscan_appropriate_flag,
+            video_signal_type,
+            chroma_loc_info,
+            timing_info,
+            nal_hrd_parameters,
+            vcl_hrd_parameters,
+            low_delay_hrd_flag,
+            pic_struct_present_flag,
+            bitstream_restriction,
+        })
+    }
+
+    /// Get sample aspect ratio if available
+    pub fn sample_aspect_ratio(&self) -> Option<(u16, u16)> {
+        self.aspect_ratio_info.as_ref().and_then(|ar| ar.sample_aspect_ratio())
+    }
+
+    /// Get frame rate if timing info is available
+    pub fn frame_rate(&self) -> Option<(u32, u32)> {
+        self.timing_info.as_ref().and_then(|ti| ti.frame_rate())
+    }
+
+    /// Get frame rate as floating point
+    pub fn frame_rate_fps(&self) -> Option<f64> {
+        self.timing_info.as_ref().and_then(|ti| ti.frame_rate_fps())
+    }
+
+    /// Check if video uses full range
+    pub fn is_full_range(&self) -> bool {
+        self.video_signal_type.as_ref().map_or(false, |vs| vs.is_full_range())
+    }
+
+    /// Get colour description if available
+    pub fn colour_description(&self) -> Option<&ColourDescription> {
+        self.video_signal_type.as_ref().and_then(|vs| vs.colour_description())
+    }
+
+    /// Check if NAL HRD parameters are present
+    #[inline]
+    pub fn has_nal_hrd(&self) -> bool {
+        self.nal_hrd_parameters.is_some()
+    }
+
+    /// Check if VCL HRD parameters are present
+    #[inline]
+    pub fn has_vcl_hrd(&self) -> bool {
+        self.vcl_hrd_parameters.is_some()
+    }
+
+    /// Get maximum number of reorder frames
+    pub fn max_num_reorder_frames(&self) -> Option<u32> {
+        self.bitstream_restriction.as_ref().map(|br| br.max_num_reorder_frames)
+    }
+
+    /// Get DPB size (max_dec_frame_buffering)
+    pub fn dpb_size(&self) -> Option<u32> {
+        self.bitstream_restriction.as_ref().map(|br| br.max_dec_frame_buffering)
+    }
+}
+
+/// Sequence Parameter Set (SPS)
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct Sps {
+    /// Profile IDC
+    pub profile_idc: u8,
+    /// Constraint set flags (0-5)
+    pub constraint_set_flags: ConstraintSetFlags,
+    /// Level IDC
+    pub level_idc: u8,
+    /// Sequence parameter set ID (0-31)
+    pub seq_parameter_set_id: u8,
+    /// Chroma format
+    pub chroma_format: ChromaFormat,
+    /// Separate colour plane flag
+    pub separate_colour_plane_flag: bool,
+    /// Bit depth luma minus 8 (0-6, use `bit_depth_luma()` to get actual value
+    /// 8-14)
+    pub bit_depth_luma_minus8: u8,
+    /// Bit depth chroma minus 8 (0-6, use `bit_depth_chroma()` to get actual
+    /// value 8-14)
+    pub bit_depth_chroma_minus8: u8,
+    /// QP prime Y zero transform bypass flag
+    pub qpprime_y_zero_transform_bypass_flag: bool,
+    /// Scaling matrix (if seq_scaling_matrix_present_flag is true)
+    pub scaling_matrix: Option<ScalingMatrix>,
+    /// Log2 of max frame number minus 4 (0-12, use `log2_max_frame_num()` to
+    /// get actual value 4-16)
+    pub log2_max_frame_num_minus4: u32,
+    /// Picture order count type (0-2)
+    pub pic_order_cnt_type: u32,
+    /// Log2 of max picture order count LSB minus 4 (for pic_order_cnt_type ==
+    /// 0, use `log2_max_pic_order_cnt_lsb()` to get actual value 4-16)
+    pub log2_max_pic_order_cnt_lsb_minus4: u32,
+    /// Delta picture order always zero flag (for pic_order_cnt_type == 1)
+    pub delta_pic_order_always_zero_flag: bool,
+    /// Offset for non-reference picture (for pic_order_cnt_type == 1)
+    pub offset_for_non_ref_pic: i32,
+    /// Offset for top to bottom field (for pic_order_cnt_type == 1)
+    pub offset_for_top_to_bottom_field: i32,
+    /// Number of reference frames in pic order count cycle
+    pub num_ref_frames_in_pic_order_cnt_cycle: u32,
+    /// Offset for reference frames
+    pub offset_for_ref_frame: SmallVec<[i32; 256]>,
+    /// Maximum number of reference frames
+    pub max_num_ref_frames: u32,
+    /// Gaps in frame num value allowed flag
+    pub gaps_in_frame_num_value_allowed_flag: bool,
+    /// Picture width in macroblocks minus 1 (use `pic_width_in_mbs()` to get
+    /// actual value)
+    pub pic_width_in_mbs_minus1: u32,
+    /// Picture height in map units minus 1 (use `pic_height_in_map_units()` to
+    /// get actual value)
+    pub pic_height_in_map_units_minus1: u32,
+    /// Frame MBs only flag (1=frames only, 0=field/frame adaptive)
+    pub frame_mbs_only_flag: bool,
+    /// MB adaptive frame field flag
+    pub mb_adaptive_frame_field_flag: bool,
+    /// Direct 8x8 inference flag
+    pub direct_8x8_inference_flag: bool,
+    /// Frame cropping flag
+    pub frame_cropping_flag: bool,
+    /// Frame crop left offset
+    pub frame_crop_left_offset: u32,
+    /// Frame crop right offset
+    pub frame_crop_right_offset: u32,
+    /// Frame crop top offset
+    pub frame_crop_top_offset: u32,
+    /// Frame crop bottom offset
+    pub frame_crop_bottom_offset: u32,
+    /// VUI parameters
+    pub vui_parameters: Option<VuiParameters>,
+}
+
+impl Sps {
+    /// Parse SPS from raw NAL unit RBSP data (with EPB already removed)
+    pub fn parse(data: &[u8]) -> Result<Self> {
+        let mut reader = BitReader::new(data);
+        Self::parse_from_bit_reader(&mut reader)
+    }
+
+    /// Parse SPS from a BitReader
+    pub fn parse_from_bit_reader<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<Self> {
+        // Read profile_idc
+        let profile_idc = reader.read::<8, u8>()?;
+
+        // Read constraint set flags (6 flags + 2 reserved bits) as a single byte
+        // The flags are stored in bitstream order: constraint_set0 at MSB (bit 7)
+        let constraint_flags_byte = reader.read::<8, u8>()?;
+        let constraint_set_flags = ConstraintSetFlags::from_raw(constraint_flags_byte);
+
+        // Read level_idc
+        let level_idc = reader.read::<8, u8>()?;
+
+        // Read seq_parameter_set_id
+        let seq_parameter_set_id = reader.read_ue()?;
+        if seq_parameter_set_id > 31 {
+            return Err(invalid_data_error!("seq_parameter_set_id", seq_parameter_set_id));
+        }
+        let seq_parameter_set_id = seq_parameter_set_id as u8;
+
+        // Initialize defaults
+        let mut chroma_format = ChromaFormat::YUV420;
+        let mut separate_colour_plane_flag = false;
+        let mut bit_depth_luma_minus8 = 0u8;
+        let mut bit_depth_chroma_minus8 = 0u8;
+        let mut qpprime_y_zero_transform_bypass_flag = false;
+        let mut scaling_matrix = None;
+
+        let profile = Profile::from_raw(profile_idc, constraint_set_flags)?;
+
+        // High profile extensions
+        if profile.has_chroma_format_extension() {
+            let chroma_format_idc = reader.read_ue()?;
+            chroma_format = ChromaFormat::from(chroma_format_idc as u8);
+
+            if chroma_format_idc == 3 {
+                separate_colour_plane_flag = reader.read_bit()?;
+            }
+
+            bit_depth_luma_minus8 = reader.read_ue()? as u8;
+
+            bit_depth_chroma_minus8 = reader.read_ue()? as u8;
+
+            qpprime_y_zero_transform_bypass_flag = reader.read_bit()?;
+            let seq_scaling_matrix_present_flag = reader.read_bit()?;
+
+            if seq_scaling_matrix_present_flag {
+                scaling_matrix = Some(ScalingMatrix::parse(reader, chroma_format_idc)?);
+            }
+        }
+
+        // Read log2_max_frame_num_minus4
+        let log2_max_frame_num_minus4 = reader.read_ue()?;
+
+        // Read pic_order_cnt_type
+        let pic_order_cnt_type = reader.read_ue()?;
+
+        let mut log2_max_pic_order_cnt_lsb_minus4 = 0u32;
+        let mut delta_pic_order_always_zero_flag = false;
+        let mut offset_for_non_ref_pic = 0i32;
+        let mut offset_for_top_to_bottom_field = 0i32;
+        let mut num_ref_frames_in_pic_order_cnt_cycle = 0u32;
+        let mut offset_for_ref_frame = SmallVec::new();
+
+        if pic_order_cnt_type == 0 {
+            log2_max_pic_order_cnt_lsb_minus4 = reader.read_ue()?;
+        } else if pic_order_cnt_type == 1 {
+            delta_pic_order_always_zero_flag = reader.read_bit()?;
+            offset_for_non_ref_pic = reader.read_se()?;
+            offset_for_top_to_bottom_field = reader.read_se()?;
+            num_ref_frames_in_pic_order_cnt_cycle = reader.read_ue()?;
+
+            offset_for_ref_frame.reserve(num_ref_frames_in_pic_order_cnt_cycle as usize);
+            for _ in 0..num_ref_frames_in_pic_order_cnt_cycle {
+                offset_for_ref_frame.push(reader.read_se()?);
+            }
+        }
+
+        // Read max_num_ref_frames
+        let max_num_ref_frames = reader.read_ue()?;
+
+        // Read gaps_in_frame_num_value_allowed_flag
+        let gaps_in_frame_num_value_allowed_flag = reader.read_bit()?;
+
+        // Read pic_width_in_mbs_minus1
+        let pic_width_in_mbs_minus1 = reader.read_ue()?;
+
+        // Read pic_height_in_map_units_minus1
+        let pic_height_in_map_units_minus1 = reader.read_ue()?;
+
+        // Read frame_mbs_only_flag
+        let frame_mbs_only_flag = reader.read_bit()?;
+
+        let mut mb_adaptive_frame_field_flag = false;
+        if !frame_mbs_only_flag {
+            mb_adaptive_frame_field_flag = reader.read_bit()?;
+        }
+
+        // Read direct_8x8_inference_flag
+        let direct_8x8_inference_flag = reader.read_bit()?;
+
+        // Read frame cropping
+        let frame_cropping_flag = reader.read_bit()?;
+        let mut frame_crop_left_offset = 0u32;
+        let mut frame_crop_right_offset = 0u32;
+        let mut frame_crop_top_offset = 0u32;
+        let mut frame_crop_bottom_offset = 0u32;
+
+        if frame_cropping_flag {
+            frame_crop_left_offset = reader.read_ue()?;
+            frame_crop_right_offset = reader.read_ue()?;
+            frame_crop_top_offset = reader.read_ue()?;
+            frame_crop_bottom_offset = reader.read_ue()?;
+        }
+
+        // Read VUI parameters
+        let vui_parameters_present_flag = reader.read_bit()?;
+        let vui_parameters = if vui_parameters_present_flag {
+            Some(VuiParameters::parse(reader)?)
+        } else {
+            None
+        };
+
+        Ok(Self {
+            profile_idc,
+            constraint_set_flags,
+            level_idc,
+            seq_parameter_set_id,
+            chroma_format,
+            separate_colour_plane_flag,
+            bit_depth_luma_minus8,
+            bit_depth_chroma_minus8,
+            qpprime_y_zero_transform_bypass_flag,
+            scaling_matrix,
+            log2_max_frame_num_minus4,
+            pic_order_cnt_type,
+            log2_max_pic_order_cnt_lsb_minus4,
+            delta_pic_order_always_zero_flag,
+            offset_for_non_ref_pic,
+            offset_for_top_to_bottom_field,
+            num_ref_frames_in_pic_order_cnt_cycle,
+            offset_for_ref_frame,
+            max_num_ref_frames,
+            gaps_in_frame_num_value_allowed_flag,
+            pic_width_in_mbs_minus1,
+            pic_height_in_map_units_minus1,
+            frame_mbs_only_flag,
+            mb_adaptive_frame_field_flag,
+            direct_8x8_inference_flag,
+            frame_cropping_flag,
+            frame_crop_left_offset,
+            frame_crop_right_offset,
+            frame_crop_top_offset,
+            frame_crop_bottom_offset,
+            vui_parameters,
+        })
+    }
+
+    /// Get actual bit depth for luma samples (8-14)
+    #[inline]
+    pub fn bit_depth_luma(&self) -> u8 {
+        self.bit_depth_luma_minus8 + 8
+    }
+
+    /// Get actual bit depth for chroma samples (8-14)
+    #[inline]
+    pub fn bit_depth_chroma(&self) -> u8 {
+        self.bit_depth_chroma_minus8 + 8
+    }
+
+    /// Get actual log2_max_frame_num (4-16)
+    #[inline]
+    pub fn log2_max_frame_num(&self) -> u32 {
+        self.log2_max_frame_num_minus4 + 4
+    }
+
+    /// Get MaxFrameNum derived from log2_max_frame_num
+    #[inline]
+    pub fn max_frame_num(&self) -> u32 {
+        1 << self.log2_max_frame_num()
+    }
+
+    /// Get actual log2_max_pic_order_cnt_lsb (4-16, only valid when
+    /// pic_order_cnt_type == 0)
+    #[inline]
+    pub fn log2_max_pic_order_cnt_lsb(&self) -> u32 {
+        self.log2_max_pic_order_cnt_lsb_minus4 + 4
+    }
+
+    /// Get MaxPicOrderCntLsb derived from log2_max_pic_order_cnt_lsb
+    #[inline]
+    pub fn max_pic_order_cnt_lsb(&self) -> u32 {
+        1 << self.log2_max_pic_order_cnt_lsb()
+    }
+
+    /// Get actual picture width in macroblocks
+    #[inline]
+    pub fn pic_width_in_mbs(&self) -> u32 {
+        self.pic_width_in_mbs_minus1 + 1
+    }
+
+    /// Get actual picture height in map units
+    #[inline]
+    pub fn pic_height_in_map_units(&self) -> u32 {
+        self.pic_height_in_map_units_minus1 + 1
+    }
+
+    /// Get the actual frame width in pixels
+    pub fn width(&self) -> u32 {
+        let width = self.pic_width_in_mbs() * 16;
+        let crop_x = self.crop_unit_x();
+        width - (self.frame_crop_left_offset + self.frame_crop_right_offset) * crop_x
+    }
+
+    /// Get the actual frame height in pixels
+    pub fn height(&self) -> u32 {
+        let height = self.pic_height_in_map_units() * 16 * (2 - self.frame_mbs_only_flag as u32);
+        let crop_y = self.crop_unit_y();
+        height - (self.frame_crop_top_offset + self.frame_crop_bottom_offset) * crop_y
+    }
+
+    /// Get the crop unit X based on chroma format
+    fn crop_unit_x(&self) -> u32 {
+        match self.chroma_format {
+            ChromaFormat::Monochrome => 1,
+            ChromaFormat::YUV420 => 2,
+            ChromaFormat::YUV422 => 2,
+            ChromaFormat::YUV444 => 1,
+        }
+    }
+
+    /// Get the crop unit Y based on chroma format and frame_mbs_only_flag
+    fn crop_unit_y(&self) -> u32 {
+        let sub_height_c = match self.chroma_format {
+            ChromaFormat::Monochrome => 1,
+            ChromaFormat::YUV420 => 2,
+            ChromaFormat::YUV422 => 1,
+            ChromaFormat::YUV444 => 1,
+        };
+        sub_height_c * (2 - self.frame_mbs_only_flag as u32)
+    }
+
+    /// Get frame rate as (numerator, denominator) if available
+    pub fn frame_rate(&self) -> Option<(u32, u32)> {
+        self.vui_parameters.as_ref().and_then(|vui_params| vui_params.frame_rate())
+    }
+
+    /// Get frame rate as floating point
+    pub fn frame_rate_fps(&self) -> Option<f64> {
+        self.vui_parameters.as_ref().and_then(|vui_params| vui_params.frame_rate_fps())
+    }
+
+    /// Get sample aspect ratio (SAR) if available
+    pub fn sample_aspect_ratio(&self) -> Option<(u16, u16)> {
+        self.vui_parameters.as_ref().and_then(|vui_params| vui_params.sample_aspect_ratio())
+    }
+
+    /// Get colour description if available
+    pub fn colour_description(&self) -> Option<&ColourDescription> {
+        self.vui_parameters.as_ref().and_then(|vui_params| vui_params.colour_description())
+    }
+
+    /// Check if video uses full range
+    pub fn is_full_range(&self) -> bool {
+        self.vui_parameters.as_ref().map_or(false, |vui_params| vui_params.is_full_range())
+    }
+
+    /// Get timing info if available
+    pub fn timing_info(&self) -> Option<&TimingInfo> {
+        self.vui_parameters.as_ref().and_then(|vui_params| vui_params.timing_info.as_ref())
+    }
+
+    /// Get NAL HRD parameters if available
+    pub fn nal_hrd_parameters(&self) -> Option<&HrdParameters> {
+        self.vui_parameters.as_ref().and_then(|vui_params| vui_params.nal_hrd_parameters.as_ref())
+    }
+
+    /// Get VCL HRD parameters if available
+    pub fn vcl_hrd_parameters(&self) -> Option<&HrdParameters> {
+        self.vui_parameters.as_ref().and_then(|vui_params| vui_params.vcl_hrd_parameters.as_ref())
+    }
+
+    /// Get bitstream restriction if available
+    pub fn bitstream_restriction(&self) -> Option<&BitstreamRestriction> {
+        self.vui_parameters.as_ref().and_then(|vui_params| vui_params.bitstream_restriction.as_ref())
+    }
+}

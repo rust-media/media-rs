@@ -1,0 +1,23 @@
+[package]
+name = "media-codec-h264"
+description = "An H.264 decoder implementation for media-codec"
+homepage.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/media-codec-h264"
+version = "0.1.0"
+authors.workspace = true
+license.workspace = true
+categories = ["multimedia::video"]
+keywords = ["avc", "video", "codec", "decoder"]
+edition.workspace = true
+
+[dependencies]
+media-codec-bitstream.workspace = true
+media-codec-nal.workspace = true
+media-codec-types = { workspace = true, features = ["video"] }
+media-core = { workspace = true, features = ["video"] }
+smallvec.workspace = true
+
+[features]
+default = ["decoder"]
+decoder = ["media-codec-types/decoder"]
