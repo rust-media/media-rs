@@ -1,6 +1,6 @@
 [package]
 name = "media-codec-nal"
-description = "NAL unit parser for H.264/H.265 video decoder"
+description = "A NAL unit parser for H.264 and H.265 bitstreams"
 homepage.workspace = true
 repository.workspace = true
 documentation = "https://docs.rs/media-codec-nal"

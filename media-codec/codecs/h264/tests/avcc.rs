@@ -44,12 +44,12 @@ fn test_parse_avcc() {
     // Check SPS
     let parser = NalParser::<H264NalHeader>::new(None);
     let nal_unit = parser.parse(&avcc.sequence_parameter_sets[0]).unwrap();
-    let sps = Sps::parse(nal_unit.rbsp()).unwrap();
+    let sps = Sps::parse(nal_unit.payload()).unwrap();
     assert_eq!(sps.profile_idc, 100);
 
     // Check PPS
     let nal_unit = parser.parse(&avcc.picture_parameter_sets[0]).unwrap();
-    let pps = Pps::parse(nal_unit.rbsp()).unwrap();
+    let pps = Pps::parse(nal_unit.payload()).unwrap();
     assert_eq!(pps.pic_parameter_set_id, 0);
 
     // Check extended configuration

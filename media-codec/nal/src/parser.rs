@@ -4,20 +4,19 @@ use std::{marker::PhantomData, sync::Arc};
 
 use media_core::{
     buffer::{Buffer, BufferPool},
-    error::Error,
-    Result,
+    invalid_data_error, Result,
 };
 
 use crate::header::NalHeader;
 
-/// Internal storage for NAL unit payload (RBSP with EPB removed)
+/// Internal storage for NAL RBSP payload (header excluded, EPB removed)
 #[derive(Debug)]
 enum NalPayload<'a> {
-    /// Reference to original data (no EPB, zero-copy)
+    /// Reference to original payload data (no EPB, zero-copy)
     Borrowed(&'a [u8]),
-    /// Owned Vec with EPB removed
+    /// Owned Vec payload with EPB removed
     Owned(Vec<u8>),
-    /// Owned buffer from pool with EPB removed
+    /// Owned buffer from pool payload with EPB removed
     Buffer(Arc<Buffer>),
 }
 
@@ -67,16 +66,10 @@ impl<'a, T: NalHeader> NalUnit<'a, T> {
         &self.header
     }
 
-    /// Get the complete NAL unit data (header + RBSP payload)
+    /// Get the RBSP payload
     #[inline]
-    pub fn data(&self) -> &[u8] {
+    pub fn payload(&self) -> &[u8] {
         self.payload.as_slice()
-    }
-
-    /// Get the RBSP payload (excluding header, with EPB removed)
-    #[inline]
-    pub fn rbsp(&self) -> &[u8] {
-        &self.payload.as_slice()[T::HEADER_SIZE..]
     }
 
     /// Get the NAL unit type
@@ -162,7 +155,7 @@ impl<T: NalHeader> NalParser<T> {
     /// Parse a single NAL unit from raw NAL data (without start code)
     pub fn parse<'a>(&self, data: &'a [u8]) -> Result<NalUnit<'a, T>> {
         if data.len() < T::HEADER_SIZE {
-            return Err(Error::InvalidData(format!("NAL data too short: expected at least {} bytes, got {}", T::HEADER_SIZE, data.len()).into()));
+            return Err(invalid_data_error!(format!("NAL data too short: expected at least {} bytes, got {}", T::HEADER_SIZE, data.len())));
         }
 
         // Parse the header
@@ -174,25 +167,22 @@ impl<T: NalHeader> NalParser<T> {
 
         if epb_count == 0 {
             // Zero-copy: no EPB in payload, use borrowed reference
-            Ok(NalUnit::new(header, NalPayload::Borrowed(data)))
+            Ok(NalUnit::new(header, NalPayload::Borrowed(payload)))
         } else {
             // Need to remove EPB
-            let new_len = data.len() - epb_count;
+            let new_len = payload.len() - epb_count;
 
             if let Some(pool) = &self.pool {
-                let mut buffer = pool.get_buffer_with_length(new_len);
-                if let Some(buf) = Arc::get_mut(&mut buffer) {
-                    let output = buf.data_mut();
-                    output[..T::HEADER_SIZE].copy_from_slice(&data[..T::HEADER_SIZE]);
-                    Self::remove_epb(payload, &mut output[T::HEADER_SIZE..]);
-                    return Ok(NalUnit::new(header, NalPayload::Buffer(buffer)));
+                let mut output = pool.get_buffer_with_length(new_len);
+                if let Some(buffer) = Arc::get_mut(&mut output) {
+                    Self::remove_epb(payload, buffer.data_mut());
+                    return Ok(NalUnit::new(header, NalPayload::Buffer(output)));
                 }
             }
 
-            let mut vec = vec![0u8; new_len];
-            vec[..T::HEADER_SIZE].copy_from_slice(&data[..T::HEADER_SIZE]);
-            Self::remove_epb(payload, &mut vec[T::HEADER_SIZE..]);
-            Ok(NalUnit::new(header, NalPayload::Owned(vec)))
+            let mut output = vec![0u8; new_len];
+            Self::remove_epb(payload, &mut output);
+            Ok(NalUnit::new(header, NalPayload::Owned(output)))
         }
     }
 
