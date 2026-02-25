@@ -69,7 +69,7 @@ fn test_parse_hvcc() {
     // Check VPS
     let parser = NalParser::<H265NalHeader>::new(None);
     let nal_unit = parser.parse(&hvcc.nalu_arrays[0].nalus[0]).unwrap();
-    let vps = Vps::parse(nal_unit.rbsp()).unwrap();
+    let vps = Vps::parse(nal_unit.payload()).unwrap();
     assert_eq!(vps.video_parameter_set_id, 0);
 
     // SPS array
@@ -81,7 +81,7 @@ fn test_parse_hvcc() {
     // Check SPS
     let parser = NalParser::<H265NalHeader>::new(None);
     let nal_unit = parser.parse(&hvcc.nalu_arrays[1].nalus[0]).unwrap();
-    let sps = Sps::parse(nal_unit.rbsp()).unwrap();
+    let sps = Sps::parse(nal_unit.payload()).unwrap();
     assert_eq!(sps.video_parameter_set_id, 0);
     assert_eq!(sps.pic_width_in_luma_samples, 320);
     assert_eq!(sps.pic_height_in_luma_samples, 240);
@@ -95,7 +95,7 @@ fn test_parse_hvcc() {
     // Check PPS
     let parser = NalParser::<H265NalHeader>::new(None);
     let nal_unit = parser.parse(&hvcc.nalu_arrays[2].nalus[0]).unwrap();
-    let pps = Pps::parse(nal_unit.rbsp()).unwrap();
+    let pps = Pps::parse(nal_unit.payload()).unwrap();
     assert_eq!(pps.pic_parameter_set_id, 0);
 }
 
