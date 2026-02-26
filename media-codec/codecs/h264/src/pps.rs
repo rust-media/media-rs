@@ -355,22 +355,20 @@ impl Pps {
         let mut scaling_matrix = None;
         let mut second_chroma_qp_index_offset = chroma_qp_index_offset;
 
-        // Check for more RBSP data (High Profile extensions)
-        // Try to read transform_8x8_mode_flag - if it fails, we're at end of RBSP
-        if let Ok(flag) = reader.read_bit() {
+        // Try to parse High Profile extensions (transform_8x8_mode_flag, etc.)
+        // If any read fails or values are invalid, assume it was rbsp_trailing_bits
+        if let Some((flag, second_offset, matrix)) = (|| -> Option<_> {
+            let flag = reader.read_bit().ok()?;
+            let scaling_present = reader.read_bit().ok()?;
+            let second_offset = reader.read_se().ok().filter(|v| (-12..=12).contains(v))?;
+            let matrix = scaling_present
+                .then(|| PpsScalingMatrix::parse(reader, flag, chroma_format_idc).ok())
+                .flatten();
+            Some((flag, second_offset, matrix))
+        })() {
             transform_8x8_mode_flag = flag;
-
-            // Read pic_scaling_matrix_present_flag
-            let pic_scaling_matrix_present_flag = reader.read_bit()?;
-            if pic_scaling_matrix_present_flag {
-                scaling_matrix = Some(PpsScalingMatrix::parse(reader, transform_8x8_mode_flag, chroma_format_idc)?);
-            }
-
-            // Read second_chroma_qp_index_offset
-            second_chroma_qp_index_offset = reader.read_se()?;
-            if !(-12..=12).contains(&second_chroma_qp_index_offset) {
-                return Err(invalid_data_error!("second_chroma_qp_index_offset", second_chroma_qp_index_offset));
-            }
+            second_chroma_qp_index_offset = second_offset;
+            scaling_matrix = matrix;
         }
 
         Ok(Self {
