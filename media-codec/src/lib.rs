@@ -1,7 +1,7 @@
 #[cfg(any(feature = "decoder", feature = "encoder"))]
 pub mod codec;
 #[cfg(any(feature = "decoder", feature = "encoder"))]
-pub mod codecs_registry;
+pub mod codecs;
 #[cfg(feature = "decoder")]
 pub mod decoder;
 #[cfg(feature = "encoder")]

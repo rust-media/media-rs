@@ -12,9 +12,9 @@ keywords = ["codec", "encoder", "decoder"]
 edition.workspace = true
 
 [dependencies]
-ctor = "0.6"
-media-codec-h264 = { version = "0.1.0", path = "codecs/h264", optional = true }
-media-codec-h265 = { version = "0.1.0", path = "codecs/h265", optional = true }
+ctor.workspace = true
+media-codec-h264 = { version = "0.1.0", default-features = false, path = "codecs/h264", optional = true }
+media-codec-h265 = { version = "0.1.0", default-features = false, path = "codecs/h265", optional = true }
 media-codec-types.workspace = true
 media-core.workspace = true
 
@@ -22,16 +22,21 @@ media-core.workspace = true
 media-codec-video-toolbox = { version = "0.1.0", path = "codecs/video-toolbox", optional = true }
 
 [features]
-default = ["audio", "video", "decoder", "encoder"]
+default = ["audio", "video", "decoder", "encoder", "all-codecs"]
+all-codecs = ["all-decoders", "all-encoders"]
+all-decoders = ["all-audio-decoders", "all-video-decoders"]
+all-encoders = ["all-audio-encoders", "all-video-encoders"]
+all-audio-decoders = []
+all-audio-encoders = []
+all-video-decoders = ["h264", "h265", "video-toolbox"]
+all-video-encoders = []
 audio = [
     "media-core/audio",
     "media-codec-types/audio",
-    "audio-codec",
 ]
 video = [
     "media-core/video",
     "media-codec-types/video",
-    "video-codec",
 ]
 decoder = [
     "media-codec-types/decoder",
@@ -42,8 +47,6 @@ decoder = [
 encoder = [
     "media-codec-types/encoder",
 ]
-audio-codec = []
-video-codec = ["h264", "h265", "video-toolbox"]
 # Codecs
 h264 = ["dep:media-codec-h264"]
 h265 = ["dep:media-codec-h265"]
