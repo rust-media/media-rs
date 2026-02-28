@@ -1,0 +1,33 @@
+[package]
+name = "media-format-isomp4"
+description = "Demuxer and muxer for ISO Base Media File Format (MP4/MOV)"
+homepage.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/media-format-isomp4"
+version = "0.1.0"
+authors.workspace = true
+license.workspace = true
+categories = ["multimedia", "multimedia::audio", "multimedia::video"]
+keywords = ["mp4", "mov", "demuxer"]
+edition.workspace = true
+
+[dependencies]
+media-codec-types = { workspace = true, features = ["decoder"] }
+media-core.workspace = true
+media-format-types.workspace = true
+mp4-atom = { version = "0.10.1", features = ["bytes"] }
+
+[features]
+default = ["audio", "video", "demuxer"]
+audio = [
+    "media-core/audio",
+    "media-codec-types/audio",
+    "media-format-types/audio",
+]
+video = [
+    "media-core/video",
+    "media-codec-types/video",
+    "media-format-types/video",
+]
+demuxer = ["media-format-types/demuxer"]
+muxer = ["media-format-types/muxer"]

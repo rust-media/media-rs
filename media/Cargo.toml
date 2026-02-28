@@ -31,6 +31,7 @@ default = [
     "device",
     "format",
     "media-codec?/all-codecs",
+    "media-format?/all-formats",
 ]
 audio = [
     "media-core/audio",
