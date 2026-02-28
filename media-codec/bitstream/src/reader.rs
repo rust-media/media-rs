@@ -1,9 +1,10 @@
-use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom};
+use std::io::{Cursor, Error, ErrorKind, Read, Result, Seek, SeekFrom};
 
 use bitstream_io::{BigEndian, BitRead, Endianness, Integer};
 
 pub struct BitReader<R: Read, E: Endianness> {
     inner: bitstream_io::BitReader<R, E>,
+    total_bits: usize,
 }
 
 impl<R: Read, E: Endianness> BitReader<R, E> {
@@ -12,6 +13,7 @@ impl<R: Read, E: Endianness> BitReader<R, E> {
     pub fn new(reader: R) -> Self {
         Self {
             inner: bitstream_io::BitReader::new(reader),
+            total_bits: 0,
         }
     }
 
@@ -67,6 +69,20 @@ impl<R: Read, E: Endianness> BitReader<R, E> {
     #[inline]
     pub fn read_unary<const STOP_BIT: u8>(&mut self) -> Result<u32> {
         self.inner.read_unary::<STOP_BIT>()
+    }
+}
+
+impl<'a, E: Endianness> BitReader<Cursor<&'a [u8]>, E> {
+    /// Create a BitReader from a byte slice, automatically tracking length
+    pub fn from_slice(data: &'a [u8]) -> Self {
+        Self {
+            inner: bitstream_io::BitReader::new(Cursor::new(data)),
+            total_bits: data.len() * 8,
+        }
+    }
+
+    pub fn bits_left(&mut self) -> Result<usize> {
+        Ok(self.total_bits.saturating_sub(self.inner.position_in_bits()? as usize))
     }
 }
 
