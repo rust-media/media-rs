@@ -1,50 +1,37 @@
-use std::io::{BufWriter, Seek, Write};
+//! Muxer
 
-use media_codec::packet::Packet;
-use media_core::{variant::Variant, Result};
+use std::sync::{Arc, LazyLock, RwLock};
 
-use crate::{format::Format, stream::StreamCollection, track::TrackCollection};
+use media_codec_types::packet::Packet;
+use media_core::Result;
+pub use media_format_types::muxer::*;
 
-pub trait Writer: Write + Seek {}
+use crate::format::{find_format_by_extension, register_format, FormatList, LazyFormatList};
 
-impl<W: Write + Seek> Writer for BufWriter<W> {}
+/// Global muxer registry
+static MUXER_LIST: LazyFormatList<dyn MuxerBuilder> = LazyLock::new(|| RwLock::new(FormatList::new()));
 
-pub struct MuxerState {
-    pub metadata: Variant,
-    pub tracks: TrackCollection,
-    pub streams: StreamCollection,
+/// Registers a muxer builder
+pub fn register_muxer(builder: Arc<dyn MuxerBuilder>) -> Result<()> {
+    register_format(&MUXER_LIST, builder)
 }
 
-impl MuxerState {
-    pub fn new() -> Self {
-        Self {
-            streams: StreamCollection::new(),
-            tracks: TrackCollection::new(),
-            metadata: Variant::new_dict(),
-        }
-    }
+/// Finds a muxer builder by file extension
+pub fn find_muxer_by_extension(ext: &str) -> Result<Arc<dyn MuxerBuilder>> {
+    find_format_by_extension(&MUXER_LIST, ext)
 }
 
-impl Default for MuxerState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-pub trait Muxer: Format {
-    fn write_header<W: Writer>(&mut self, writer: &mut W, state: &MuxerState) -> Result<()>;
-    fn write_packet<W: Writer>(&mut self, writer: &mut W, state: &MuxerState, packet: &Packet) -> Result<()>;
-    fn write_trailer<W: Writer>(&mut self, writer: &mut W) -> Result<()>;
-}
-
-pub struct MuxerContext<D: Muxer, W: Writer> {
-    muxer: D,
+/// Context for managing muxer operations
+pub struct MuxerContext<M: Muxer, W: Writer> {
+    muxer: M,
     writer: W,
+    /// Muxer state
     pub state: MuxerState,
 }
 
-impl<D: Muxer, W: Writer> MuxerContext<D, W> {
-    pub fn new(muxer: D, writer: W) -> Self {
+impl<M: Muxer, W: Writer> MuxerContext<M, W> {
+    /// Creates a new muxer context
+    pub fn new(muxer: M, writer: W) -> Self {
         Self {
             muxer,
             writer,
@@ -52,14 +39,17 @@ impl<D: Muxer, W: Writer> MuxerContext<D, W> {
         }
     }
 
+    /// Writes the container header
     pub fn write_header(&mut self) -> Result<()> {
         self.muxer.write_header(&mut self.writer, &self.state)
     }
 
+    /// Writes a packet to the container
     pub fn write_packet(&mut self, packet: &Packet) -> Result<()> {
         self.muxer.write_packet(&mut self.writer, &self.state, packet)
     }
 
+    /// Writes the container trailer
     pub fn write_trailer(&mut self) -> Result<()> {
         self.muxer.write_trailer(&mut self.writer)
     }

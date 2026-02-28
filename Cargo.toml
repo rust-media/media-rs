@@ -9,9 +9,10 @@ members = [
     "media-device",
     "media-filter",
     "media-format",
+    "media-format/types",
+    "media-format/formats/isomp4",
     "media",
     # Codecs
-    "media-codec/codecs/aac",
     "media-codec/codecs/h264",
     "media-codec/codecs/h265",
     "media-codec/codecs/video-toolbox",
@@ -36,14 +37,16 @@ media-codec-nal = { version = "0.1.0", path = "./media-codec/nal" }
 media-codec-types = { version = "0.9.0", default-features = false, path = "./media-codec/types" }
 media-device = { version = "0.9.0", default-features = false, path = "./media-device" }
 media-format = { version = "0.9.0", default-features = false, path = "./media-format" }
+media-format-types = { version = "0.9.0", default-features = false, path = "./media-format/types" }
 aligned-vec = "0.6"
-bitflags = "2.10"
+bitflags = "2.11"
 bytemuck = { version = "1.25", features = ["derive"] }
 cfg-if = "1.0"
 core-audio-types = "0.2.0"
 core-foundation = "0.10"
 core-media = "0.7.1"
 core-video = { version = "0.5.2", default-features = false, features = ["link"] }
+ctor = "0.6.3"
 num_enum = "0.7"
 num-rational = "0.4"
 num-traits = "0.2"

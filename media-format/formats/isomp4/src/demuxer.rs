@@ -1,36 +1,37 @@
+//! ISO Base Media File Format (MP4/MOV) demuxer
+
 use std::{io::SeekFrom, num::NonZeroU32};
 
 #[cfg(feature = "audio")]
-use media_codec::AudioParameters;
-use media_codec::{
+use media_codec_types::AudioParameters;
+use media_codec_types::{
     decoder::DecoderParameters,
     packet::{Packet, PacketFlags},
     CodecID, CodecParameters,
 };
 #[cfg(feature = "video")]
-use media_codec::{decoder::ExtraData, VideoParameters};
+use media_codec_types::{decoder::ExtraData, VideoParameters};
 #[cfg(feature = "audio")]
 use media_core::audio::ChannelLayout;
 #[cfg(feature = "video")]
 use media_core::video::ColorRange;
 use media_core::{invalid_error, not_found_error, rational::Rational64, time::USEC_PER_SEC, variant::Variant, MediaType, Result};
+use media_format_types::{
+    Format, FormatBuilder, demuxer::{Demuxer, DemuxerBuilder, DemuxerState, Reader, SeekFlags}, stream::Stream, track::Track
+};
 use mp4_atom::{Atom, Codec as Mp4Codec, Ftyp, Header, Mdat, Moov, ReadAtom, ReadFrom, Stbl, StszSamples};
 #[cfg(feature = "audio")]
 use mp4_atom::{Audio, Esds};
 #[cfg(feature = "video")]
 use mp4_atom::{Avcc, Colr, Hvcc, Visual};
 
-use crate::{
-    demuxer::{Demuxer, DemuxerState, Reader, SeekFlags},
-    format::Format,
-    stream::Stream,
-    track::Track,
-};
-
+/// MP4 demuxer implementation
 pub struct Mp4Demuxer {
+    /// File type box
     pub ftyp: Option<Ftyp>,
+    /// Movie box containing all metadata
     pub moov: Option<Moov>,
-    // Track current sample index for each track
+    /// Track current sample index for each track
     track_sample_indices: Vec<usize>,
 }
 
@@ -249,7 +250,7 @@ impl Format for Mp4Demuxer {
 }
 
 impl Demuxer for Mp4Demuxer {
-    fn read_header<R: Reader>(&mut self, reader: &mut R, state: &mut DemuxerState) -> Result<()> {
+    fn read_header(&mut self, reader: &mut dyn Reader, state: &mut DemuxerState) -> Result<()> {
         // Read atoms until find moov
         loop {
             let header = match Header::read_from(reader) {
@@ -319,7 +320,7 @@ impl Demuxer for Mp4Demuxer {
         }
     }
 
-    fn read_packet<R: Reader>(&mut self, reader: &mut R, state: &DemuxerState) -> Result<Packet<'static>> {
+    fn read_packet(&mut self, reader: &mut dyn Reader, state: &DemuxerState) -> Result<Packet<'static>> {
         let moov = self.moov.as_ref().ok_or_else(|| not_found_error!("moov"))?;
 
         // Find the track with the earliest next sample
@@ -487,9 +488,9 @@ impl Demuxer for Mp4Demuxer {
         Ok(packet)
     }
 
-    fn seek<R: Reader>(
+    fn seek(
         &mut self,
-        _reader: &mut R,
+        _reader: &mut dyn Reader,
         state: &DemuxerState,
         track_index: Option<usize>,
         timestamp_us: i64,
@@ -563,5 +564,58 @@ impl Demuxer for Mp4Demuxer {
         }
 
         Ok(())
+    }
+}
+
+/// Builder for MP4 demuxer
+pub struct Mp4DemuxerBuilder;
+
+/// Probes data to determine if it's an ISO Base Media File Format container
+pub fn probe(data: &[u8]) -> bool {
+    if data.len() < 12 {
+        return false;
+    }
+
+    // Check for ftyp box at the beginning (most common)
+    if &data[4..8] == b"ftyp" {
+        return true;
+    }
+
+    // Check for mdat or moov box (less common but valid)
+    if &data[4..8] == b"mdat" || &data[4..8] == b"moov" || &data[4..8] == b"free" || &data[4..8] == b"skip" {
+        return true;
+    }
+
+    // Check for wide box followed by mdat (used in some QuickTime files)
+    if &data[4..8] == b"wide" && data.len() >= 16 && &data[12..16] == b"mdat" {
+        return true;
+    }
+
+    false
+}
+
+impl FormatBuilder for Mp4DemuxerBuilder {
+    fn name(&self) -> &'static str {
+        "mp4"
+    }
+
+    fn extensions(&self) -> &[&'static str] {
+       &["mp4", "mov", "m4v", "m4a"]
+    }
+}
+
+impl DemuxerBuilder for Mp4DemuxerBuilder {
+    fn new_demuxer(&self) -> Result<Box<dyn Demuxer>> {
+        Ok(Box::new(Mp4Demuxer::new()))
+    }
+
+    fn probe(&self, reader: &mut dyn Reader) -> bool {
+        let mut buf = [0u8; 8];
+        reader.read_exact(&mut buf).ok();
+        
+        matches!(
+            &buf[4..8],
+            b"ftyp" | b"moov" | b"mdat" | b"free" | b"skip" | b"wide"
+        )
     }
 }

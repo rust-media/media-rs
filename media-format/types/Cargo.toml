@@ -1,0 +1,30 @@
+[package]
+name = "media-format-types"
+description = "Provides common types for demuxer and muxer implementations"
+homepage.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/media-format-types"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+categories = ["multimedia", "multimedia::audio", "multimedia::video"]
+keywords = ["container", "demuxer", "muxer"]
+edition.workspace = true
+
+[dependencies]
+bitflags.workspace = true
+media-codec-types.workspace = true
+media-core.workspace = true
+
+[features]
+default = ["audio", "video", "demuxer", "muxer"]
+audio = [
+    "media-core/audio",
+    "media-codec-types/audio",
+]
+video = [
+    "media-core/video",
+    "media-codec-types/video",
+]
+demuxer = ["media-codec-types/decoder"]
+muxer = ["media-codec-types/encoder"]

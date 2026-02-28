@@ -5,4 +5,4 @@
 [![License](https://img.shields.io/badge/License-Apache%202-blue.svg)](LICENSE-APACHE)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE-MIT)
 
-A generic muxing and demuxing framework.
+A generic framework for demuxing and muxing media containers.
