@@ -16,16 +16,16 @@ pub(crate) const MAX_TILE_COLUMNS: usize = 20;
 /// Tile information in PPS
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TileInfo {
-    /// Number of tile columns minus 1
-    pub num_tile_columns_minus1: u32,
-    /// Number of tile rows minus 1
-    pub num_tile_rows_minus1: u32,
+    /// Number of tile columns
+    pub num_tile_columns: u32,
+    /// Number of tile rows
+    pub num_tile_rows: u32,
     /// Uniform spacing flag
     pub uniform_spacing_flag: bool,
-    /// Column widths minus 1 (if not uniform spacing)
-    pub column_width_minus1: SmallVec<[u32; MAX_TILE_COLUMNS]>,
-    /// Row heights minus 1 (if not uniform spacing)
-    pub row_height_minus1: SmallVec<[u32; MAX_TILE_ROWS]>,
+    /// Column widths (if not uniform spacing)
+    pub column_width: SmallVec<[u32; MAX_TILE_COLUMNS]>,
+    /// Row heights (if not uniform spacing)
+    pub row_height: SmallVec<[u32; MAX_TILE_ROWS]>,
     /// Loop filter across tiles enabled flag
     pub loop_filter_across_tiles_enabled_flag: bool,
 }
@@ -33,33 +33,33 @@ pub struct TileInfo {
 impl TileInfo {
     /// Parse TileInfo from a BitReader
     pub fn parse<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<Self> {
-        let num_tile_columns_minus1 = reader.read_ue()?;
-        let num_tile_rows_minus1 = reader.read_ue()?;
+        let num_tile_columns = reader.read_ue()? + 1;
+        let num_tile_rows = reader.read_ue()? + 1;
         let uniform_spacing_flag = reader.read_bit()?;
 
-        let mut column_width_minus1 = SmallVec::new();
-        let mut row_height_minus1 = SmallVec::new();
+        let mut column_width = SmallVec::new();
+        let mut row_height = SmallVec::new();
 
         if !uniform_spacing_flag {
-            column_width_minus1.reserve(num_tile_columns_minus1 as usize);
-            for _ in 0..num_tile_columns_minus1 {
-                column_width_minus1.push(reader.read_ue()?);
+            column_width.reserve((num_tile_columns - 1) as usize);
+            for _ in 0..(num_tile_columns - 1) {
+                column_width.push(reader.read_ue()? + 1);
             }
 
-            row_height_minus1.reserve(num_tile_rows_minus1 as usize);
-            for _ in 0..num_tile_rows_minus1 {
-                row_height_minus1.push(reader.read_ue()?);
+            row_height.reserve((num_tile_rows - 1) as usize);
+            for _ in 0..(num_tile_rows - 1) {
+                row_height.push(reader.read_ue()? + 1);
             }
         }
 
         let loop_filter_across_tiles_enabled_flag = reader.read_bit()?;
 
         Ok(Self {
-            num_tile_columns_minus1,
-            num_tile_rows_minus1,
+            num_tile_columns,
+            num_tile_rows,
             uniform_spacing_flag,
-            column_width_minus1,
-            row_height_minus1,
+            column_width,
+            row_height,
             loop_filter_across_tiles_enabled_flag,
         })
     }
@@ -67,13 +67,13 @@ impl TileInfo {
     /// Get number of tile columns
     #[inline]
     pub fn num_tile_columns(&self) -> u32 {
-        self.num_tile_columns_minus1 + 1
+        self.num_tile_columns
     }
 
     /// Get number of tile rows
     #[inline]
     pub fn num_tile_rows(&self) -> u32 {
-        self.num_tile_rows_minus1 + 1
+        self.num_tile_rows
     }
 
     /// Get total number of tiles
@@ -146,12 +146,12 @@ pub struct Pps {
     pub sign_data_hiding_enabled_flag: bool,
     /// CABAC init present flag
     pub cabac_init_present_flag: bool,
-    /// Number of reference pictures in list 0 minus 1
-    pub num_ref_idx_l0_default_active_minus1: u32,
-    /// Number of reference pictures in list 1 minus 1
-    pub num_ref_idx_l1_default_active_minus1: u32,
-    /// Initial QP minus 26
-    pub init_qp_minus26: i32,
+    /// Number of reference pictures in list 0
+    pub num_ref_idx_l0_default_active: u32,
+    /// Number of reference pictures in list 1
+    pub num_ref_idx_l1_default_active: u32,
+    /// Initial QP
+    pub init_qp: i32,
     /// Constrained intra prediction flag
     pub constrained_intra_pred_flag: bool,
     /// Transform skip enabled flag
@@ -190,8 +190,8 @@ pub struct Pps {
     pub scaling_list_data: Option<ScalingListData>,
     /// Lists modification present flag
     pub lists_modification_present_flag: bool,
-    /// Log2 parallel merge level minus 2
-    pub log2_parallel_merge_level_minus2: u32,
+    /// Log2 parallel merge level
+    pub log2_parallel_merge_level: u32,
     /// Slice segment header extension present flag
     pub slice_segment_header_extension_present_flag: bool,
     /// PPS extension present flag
@@ -244,20 +244,20 @@ impl Pps {
         // cabac_init_present_flag
         let cabac_init_present_flag = reader.read_bit()?;
 
-        // num_ref_idx_l0_default_active_minus1
-        let num_ref_idx_l0_default_active_minus1 = reader.read_ue()?;
-        if num_ref_idx_l0_default_active_minus1 > 14 {
-            return Err(invalid_data_error!("num_ref_idx_l0_default_active_minus1", num_ref_idx_l0_default_active_minus1));
+        // num_ref_idx_l0_default_active
+        let num_ref_idx_l0_default_active = reader.read_ue()? + 1;
+        if num_ref_idx_l0_default_active > 15 {
+            return Err(invalid_data_error!("num_ref_idx_l0_default_active", num_ref_idx_l0_default_active));
         }
 
-        // num_ref_idx_l1_default_active_minus1
-        let num_ref_idx_l1_default_active_minus1 = reader.read_ue()?;
-        if num_ref_idx_l1_default_active_minus1 > 14 {
-            return Err(invalid_data_error!("num_ref_idx_l1_default_active_minus1", num_ref_idx_l1_default_active_minus1));
+        // num_ref_idx_l1_default_active
+        let num_ref_idx_l1_default_active = reader.read_ue()? + 1;
+        if num_ref_idx_l1_default_active > 15 {
+            return Err(invalid_data_error!("num_ref_idx_l1_default_active", num_ref_idx_l1_default_active));
         }
 
-        // init_qp_minus26
-        let init_qp_minus26 = reader.read_se()?;
+        // init_qp
+        let init_qp = reader.read_se()? + 26;
 
         // constrained_intra_pred_flag
         let constrained_intra_pred_flag = reader.read_bit()?;
@@ -332,8 +332,8 @@ impl Pps {
         // lists_modification_present_flag
         let lists_modification_present_flag = reader.read_bit()?;
 
-        // log2_parallel_merge_level_minus2
-        let log2_parallel_merge_level_minus2 = reader.read_ue()?;
+        // log2_parallel_merge_level
+        let log2_parallel_merge_level = reader.read_ue()? + 2;
 
         // slice_segment_header_extension_present_flag
         let slice_segment_header_extension_present_flag = reader.read_bit()?;
@@ -355,9 +355,9 @@ impl Pps {
             num_extra_slice_header_bits,
             sign_data_hiding_enabled_flag,
             cabac_init_present_flag,
-            num_ref_idx_l0_default_active_minus1,
-            num_ref_idx_l1_default_active_minus1,
-            init_qp_minus26,
+            num_ref_idx_l0_default_active,
+            num_ref_idx_l1_default_active,
+            init_qp,
             constrained_intra_pred_flag,
             transform_skip_enabled_flag,
             cu_qp_delta_enabled_flag,
@@ -377,7 +377,7 @@ impl Pps {
             pps_scaling_list_data_present_flag,
             scaling_list_data,
             lists_modification_present_flag,
-            log2_parallel_merge_level_minus2,
+            log2_parallel_merge_level,
             slice_segment_header_extension_present_flag,
             pps_extension_present_flag,
             pps_range_extension_flag,
@@ -391,25 +391,25 @@ impl Pps {
     /// Get actual number of reference pictures in list 0
     #[inline]
     pub fn number_of_reference_index_l0_default_active(&self) -> u32 {
-        self.num_ref_idx_l0_default_active_minus1 + 1
+        self.num_ref_idx_l0_default_active
     }
 
     /// Get actual number of reference pictures in list 1
     #[inline]
     pub fn number_of_reference_index_l1_default_active(&self) -> u32 {
-        self.num_ref_idx_l1_default_active_minus1 + 1
+        self.num_ref_idx_l1_default_active
     }
 
     /// Get initial QP (actual value: 0 to 51)
     #[inline]
     pub fn init_qp(&self) -> i32 {
-        self.init_qp_minus26 + 26
+        self.init_qp
     }
 
     /// Get log2 parallel merge level
     #[inline]
     pub fn log2_parallel_merge_level(&self) -> u32 {
-        self.log2_parallel_merge_level_minus2 + 2
+        self.log2_parallel_merge_level
     }
 
     /// Check if weighted prediction is enabled for P slices

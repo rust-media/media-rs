@@ -17,14 +17,14 @@ fn test_parse_vps() {
     let vps = Vps::parse(VPS_DATA).unwrap();
 
     assert_eq!(vps.video_parameter_set_id, 0);
-    assert_eq!(vps.vps_max_layers_minus1, 0);
-    assert_eq!(vps.vps_max_sub_layers_minus1, 0);
+    assert_eq!(vps.vps_max_layers, 1);
+    assert_eq!(vps.vps_max_sub_layers, 1);
     assert_eq!(vps.vps_temporal_id_nesting_flag, true);
 
     assert_eq!(vps.profile_tier_level.general_profile_idc, 1); // Main
     assert_eq!(vps.profile_tier_level.general_tier_flag, false); // Main tier
     assert_eq!(vps.profile_tier_level.general_level_idc, 93); // Level 3.1
 
-    assert_eq!(vps.vps_num_layer_sets_minus1, 0);
+    assert_eq!(vps.vps_num_layer_sets, 1);
     assert_eq!(vps.vps_timing_info_present_flag, false);
 }

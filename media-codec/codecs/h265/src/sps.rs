@@ -421,8 +421,8 @@ pub struct TimingInfo {
     pub vui_time_scale: u32,
     /// POC proportional to timing flag
     pub vui_poc_proportional_to_timing_flag: bool,
-    /// Number of ticks POC diff one minus 1
-    pub vui_num_ticks_poc_diff_one_minus1: u32,
+    /// Number of ticks POC diff one
+    pub vui_num_ticks_poc_diff_one: u32,
 }
 
 impl TimingInfo {
@@ -431,8 +431,8 @@ impl TimingInfo {
         let vui_num_units_in_tick = reader.read::<32, u32>()?;
         let vui_time_scale = reader.read::<32, u32>()?;
         let vui_poc_proportional_to_timing_flag = reader.read_bit()?;
-        let vui_num_ticks_poc_diff_one_minus1 = if vui_poc_proportional_to_timing_flag {
-            reader.read_ue()?
+        let vui_num_ticks_poc_diff_one = if vui_poc_proportional_to_timing_flag {
+            reader.read_ue()? + 1
         } else {
             0
         };
@@ -441,7 +441,7 @@ impl TimingInfo {
             vui_num_units_in_tick,
             vui_time_scale,
             vui_poc_proportional_to_timing_flag,
-            vui_num_ticks_poc_diff_one_minus1,
+            vui_num_ticks_poc_diff_one,
         })
     }
 
@@ -671,12 +671,12 @@ pub struct ShortTermRefPicSet {
     pub num_negative_pics: u32,
     /// Number of positive pictures
     pub num_positive_pics: u32,
-    /// Delta POC for negative pictures minus 1
-    pub delta_poc_s0_minus1: SmallVec<[u32; MAX_REFS]>,
+    /// Delta POC for negative pictures
+    pub delta_poc_s0: SmallVec<[u32; MAX_REFS]>,
     /// Used by curr pic for negative pictures
     pub used_by_curr_pic_s0_flag: SmallVec<[bool; MAX_REFS]>,
-    /// Delta POC for positive pictures minus 1
-    pub delta_poc_s1_minus1: SmallVec<[u32; MAX_REFS]>,
+    /// Delta POC for positive pictures
+    pub delta_poc_s1: SmallVec<[u32; MAX_REFS]>,
     /// Used by curr pic for positive pictures
     pub used_by_curr_pic_s1_flag: SmallVec<[bool; MAX_REFS]>,
 }
@@ -730,17 +730,17 @@ impl ShortTermRefPicSet {
             rps.num_negative_pics = reader.read_ue()?;
             rps.num_positive_pics = reader.read_ue()?;
 
-            rps.delta_poc_s0_minus1.reserve(rps.num_negative_pics as usize);
+            rps.delta_poc_s0.reserve(rps.num_negative_pics as usize);
             rps.used_by_curr_pic_s0_flag.reserve(rps.num_negative_pics as usize);
             for _ in 0..rps.num_negative_pics {
-                rps.delta_poc_s0_minus1.push(reader.read_ue()?);
+                rps.delta_poc_s0.push(reader.read_ue()? + 1);
                 rps.used_by_curr_pic_s0_flag.push(reader.read_bit()?);
             }
 
-            rps.delta_poc_s1_minus1.reserve(rps.num_positive_pics as usize);
+            rps.delta_poc_s1.reserve(rps.num_positive_pics as usize);
             rps.used_by_curr_pic_s1_flag.reserve(rps.num_positive_pics as usize);
             for _ in 0..rps.num_positive_pics {
-                rps.delta_poc_s1_minus1.push(reader.read_ue()?);
+                rps.delta_poc_s1.push(reader.read_ue()? + 1);
                 rps.used_by_curr_pic_s1_flag.push(reader.read_bit()?);
             }
         }
@@ -760,8 +760,8 @@ impl ShortTermRefPicSet {
 pub struct Sps {
     /// VPS ID that this SPS refers to (0-15)
     pub video_parameter_set_id: u8,
-    /// Maximum number of sub-layers minus 1 (0-6)
-    pub sps_max_sub_layers_minus1: u8,
+    /// Maximum number of sub-layers (0-6)
+    pub sps_max_sub_layers: u8,
     /// Temporal ID nesting flag
     pub sps_temporal_id_nesting_flag: bool,
     /// Profile tier level
@@ -786,26 +786,26 @@ pub struct Sps {
     pub conf_win_top_offset: u32,
     /// Conformance window bottom offset
     pub conf_win_bottom_offset: u32,
-    /// Bit depth luma minus 8
-    pub bit_depth_luma_minus8: u8,
-    /// Bit depth chroma minus 8
-    pub bit_depth_chroma_minus8: u8,
-    /// Log2 max POC LSB minus 4
-    pub log2_max_pic_order_cnt_lsb_minus4: u8,
+    /// Bit depth luma
+    pub bit_depth_luma: u8,
+    /// Bit depth chroma
+    pub bit_depth_chroma: u8,
+    /// Log2 max POC LSB
+    pub log2_max_pic_order_cnt_lsb: u8,
     /// SPS sub-layer ordering info present flag
     pub sps_sub_layer_ordering_info_present_flag: bool,
-    /// Maximum decoder buffer size minus 1 per sub-layer
-    pub sps_max_dec_pic_buffering_minus1: SmallVec<[u32; MAX_SUB_LAYERS]>,
+    /// Maximum decoder buffer size per sub-layer
+    pub sps_max_dec_pic_buffering: SmallVec<[u32; MAX_SUB_LAYERS]>,
     /// Maximum number of reorder pictures per sub-layer
     pub sps_max_num_reorder_pics: SmallVec<[u32; MAX_SUB_LAYERS]>,
     /// Maximum latency increase plus 1 per sub-layer
     pub sps_max_latency_increase_plus1: SmallVec<[u32; MAX_SUB_LAYERS]>,
-    /// Log2 minimum luma coding block size minus 3
-    pub log2_min_luma_coding_block_size_minus3: u32,
+    /// Log2 minimum luma coding block size
+    pub log2_min_luma_coding_block_size: u32,
     /// Log2 differential max min luma coding block size
     pub log2_diff_max_min_luma_coding_block_size: u32,
-    /// Log2 minimum luma transform block size minus 2
-    pub log2_min_luma_transform_block_size_minus2: u32,
+    /// Log2 minimum luma transform block size
+    pub log2_min_luma_transform_block_size: u32,
     /// Log2 differential max min luma transform block size
     pub log2_diff_max_min_luma_transform_block_size: u32,
     /// Maximum transform hierarchy depth for inter slices
@@ -824,12 +824,12 @@ pub struct Sps {
     pub sample_adaptive_offset_enabled_flag: bool,
     /// PCM enabled flag
     pub pcm_enabled_flag: bool,
-    /// PCM sample bit depth luma minus 1
-    pub pcm_sample_bit_depth_luma_minus1: u8,
-    /// PCM sample bit depth chroma minus 1
-    pub pcm_sample_bit_depth_chroma_minus1: u8,
-    /// Log2 minimum PCM luma coding block size minus 3
-    pub log2_min_pcm_luma_coding_block_size_minus3: u32,
+    /// PCM sample bit depth luma
+    pub pcm_sample_bit_depth_luma: u8,
+    /// PCM sample bit depth chroma
+    pub pcm_sample_bit_depth_chroma: u8,
+    /// Log2 minimum PCM luma coding block size
+    pub log2_min_pcm_luma_coding_block_size: u32,
     /// Log2 differential max min PCM luma coding block size
     pub log2_diff_max_min_pcm_luma_coding_block_size: u32,
     /// PCM loop filter disabled flag
@@ -878,11 +878,12 @@ impl Sps {
         // sps_video_parameter_set_id (4 bits)
         let sps_video_parameter_set_id = reader.read::<4, u8>()?;
 
-        // sps_max_sub_layers_minus1 (3 bits)
+        // sps_max_sub_layers (3 bits, stored as minus1)
         let sps_max_sub_layers_minus1 = reader.read::<3, u8>()?;
         if sps_max_sub_layers_minus1 > 6 {
-            return Err(invalid_data_error!("sps_max_sub_layers_minus1", sps_max_sub_layers_minus1));
+            return Err(invalid_data_error!("sps_max_sub_layers", sps_max_sub_layers_minus1 + 1));
         }
+        let sps_max_sub_layers = sps_max_sub_layers_minus1 + 1;
 
         // sps_temporal_id_nesting_flag (1 bit)
         let sps_temporal_id_nesting_flag = reader.read_bit()?;
@@ -921,14 +922,14 @@ impl Sps {
             (0, 0, 0, 0)
         };
 
-        // bit_depth_luma_minus8
-        let bit_depth_luma_minus8 = reader.read_ue()? as u8;
+        // bit_depth_luma
+        let bit_depth_luma = reader.read_ue()? as u8 + 8;
 
-        // bit_depth_chroma_minus8
-        let bit_depth_chroma_minus8 = reader.read_ue()? as u8;
+        // bit_depth_chroma
+        let bit_depth_chroma = reader.read_ue()? as u8 + 8;
 
-        // log2_max_pic_order_cnt_lsb_minus4
-        let log2_max_pic_order_cnt_lsb_minus4 = reader.read_ue()? as u8;
+        // log2_max_pic_order_cnt_lsb
+        let log2_max_pic_order_cnt_lsb = reader.read_ue()? as u8 + 4;
 
         // sps_sub_layer_ordering_info_present_flag
         let sps_sub_layer_ordering_info_present_flag = reader.read_bit()?;
@@ -939,14 +940,14 @@ impl Sps {
         } else {
             sps_max_sub_layers_minus1 as usize
         };
-        let num_sub_layers = (sps_max_sub_layers_minus1 + 1) as usize;
+        let num_sub_layers = sps_max_sub_layers as usize;
 
-        let mut sps_max_dec_pic_buffering_minus1 = smallvec![0u32; num_sub_layers];
+        let mut sps_max_dec_pic_buffering = smallvec![0u32; num_sub_layers];
         let mut sps_max_num_reorder_pics = smallvec![0u32; num_sub_layers];
         let mut sps_max_latency_increase_plus1 = smallvec![0u32; num_sub_layers];
 
         for i in start_idx..num_sub_layers {
-            sps_max_dec_pic_buffering_minus1[i] = reader.read_ue()?;
+            sps_max_dec_pic_buffering[i] = reader.read_ue()? + 1;
             sps_max_num_reorder_pics[i] = reader.read_ue()?;
             sps_max_latency_increase_plus1[i] = reader.read_ue()?;
         }
@@ -954,20 +955,20 @@ impl Sps {
         // Fill in lower sub-layers if not present
         if !sps_sub_layer_ordering_info_present_flag {
             for i in 0..start_idx {
-                sps_max_dec_pic_buffering_minus1[i] = sps_max_dec_pic_buffering_minus1[start_idx];
+                sps_max_dec_pic_buffering[i] = sps_max_dec_pic_buffering[start_idx];
                 sps_max_num_reorder_pics[i] = sps_max_num_reorder_pics[start_idx];
                 sps_max_latency_increase_plus1[i] = sps_max_latency_increase_plus1[start_idx];
             }
         }
 
-        // log2_min_luma_coding_block_size_minus3
-        let log2_min_luma_coding_block_size_minus3 = reader.read_ue()?;
+        // log2_min_luma_coding_block_size
+        let log2_min_luma_coding_block_size = reader.read_ue()? + 3;
 
         // log2_diff_max_min_luma_coding_block_size
         let log2_diff_max_min_luma_coding_block_size = reader.read_ue()?;
 
-        // log2_min_luma_transform_block_size_minus2
-        let log2_min_luma_transform_block_size_minus2 = reader.read_ue()?;
+        // log2_min_luma_transform_block_size
+        let log2_min_luma_transform_block_size = reader.read_ue()? + 2;
 
         // log2_diff_max_min_luma_transform_block_size
         let log2_diff_max_min_luma_transform_block_size = reader.read_ue()?;
@@ -1002,15 +1003,15 @@ impl Sps {
         // pcm_enabled_flag
         let pcm_enabled_flag = reader.read_bit()?;
         let (
-            pcm_sample_bit_depth_luma_minus1,
-            pcm_sample_bit_depth_chroma_minus1,
-            log2_min_pcm_luma_coding_block_size_minus3,
+            pcm_sample_bit_depth_luma,
+            pcm_sample_bit_depth_chroma,
+            log2_min_pcm_luma_coding_block_size,
             log2_diff_max_min_pcm_luma_coding_block_size,
             pcm_loop_filter_disabled_flag,
         ) = if pcm_enabled_flag {
-            let luma_bits = reader.read::<4, u8>()?;
-            let chroma_bits = reader.read::<4, u8>()?;
-            let min_size = reader.read_ue()?;
+            let luma_bits = reader.read::<4, u8>()? + 1;
+            let chroma_bits = reader.read::<4, u8>()? + 1;
+            let min_size = reader.read_ue()? + 3;
             let diff_size = reader.read_ue()?;
             let loop_filter = reader.read_bit()?;
             (luma_bits, chroma_bits, min_size, diff_size, loop_filter)
@@ -1034,7 +1035,7 @@ impl Sps {
             let num_lt = reader.read_ue()?;
             let mut poc_lsb = SmallVec::with_capacity(num_lt as usize);
             let mut used_flags = SmallVec::with_capacity(num_lt as usize);
-            let log2_max_poc_lsb = log2_max_pic_order_cnt_lsb_minus4 as u32 + 4;
+            let log2_max_poc_lsb = log2_max_pic_order_cnt_lsb as u32;
             for _ in 0..num_lt {
                 poc_lsb.push(reader.read_var(log2_max_poc_lsb)?);
                 used_flags.push(reader.read_bit()?);
@@ -1069,7 +1070,7 @@ impl Sps {
 
         Ok(Self {
             video_parameter_set_id: sps_video_parameter_set_id,
-            sps_max_sub_layers_minus1,
+            sps_max_sub_layers,
             sps_temporal_id_nesting_flag,
             profile_tier_level,
             sps_seq_parameter_set_id,
@@ -1082,16 +1083,16 @@ impl Sps {
             conf_win_right_offset,
             conf_win_top_offset,
             conf_win_bottom_offset,
-            bit_depth_luma_minus8,
-            bit_depth_chroma_minus8,
-            log2_max_pic_order_cnt_lsb_minus4,
+            bit_depth_luma,
+            bit_depth_chroma,
+            log2_max_pic_order_cnt_lsb,
             sps_sub_layer_ordering_info_present_flag,
-            sps_max_dec_pic_buffering_minus1,
+            sps_max_dec_pic_buffering,
             sps_max_num_reorder_pics,
             sps_max_latency_increase_plus1,
-            log2_min_luma_coding_block_size_minus3,
+            log2_min_luma_coding_block_size,
             log2_diff_max_min_luma_coding_block_size,
-            log2_min_luma_transform_block_size_minus2,
+            log2_min_luma_transform_block_size,
             log2_diff_max_min_luma_transform_block_size,
             max_transform_hierarchy_depth_inter,
             max_transform_hierarchy_depth_intra,
@@ -1101,9 +1102,9 @@ impl Sps {
             amp_enabled_flag,
             sample_adaptive_offset_enabled_flag,
             pcm_enabled_flag,
-            pcm_sample_bit_depth_luma_minus1,
-            pcm_sample_bit_depth_chroma_minus1,
-            log2_min_pcm_luma_coding_block_size_minus3,
+            pcm_sample_bit_depth_luma,
+            pcm_sample_bit_depth_chroma,
+            log2_min_pcm_luma_coding_block_size,
             log2_diff_max_min_pcm_luma_coding_block_size,
             pcm_loop_filter_disabled_flag,
             num_short_term_ref_pic_sets,
@@ -1127,43 +1128,43 @@ impl Sps {
     /// Get actual bit depth for luma samples (8-16)
     #[inline]
     pub fn bit_depth_luma(&self) -> u8 {
-        self.bit_depth_luma_minus8 + 8
+        self.bit_depth_luma
     }
 
     /// Get actual bit depth for chroma samples (8-16)
     #[inline]
     pub fn bit_depth_chroma(&self) -> u8 {
-        self.bit_depth_chroma_minus8 + 8
+        self.bit_depth_chroma
     }
 
     /// Get actual log2_max_pic_order_cnt_lsb (4-16)
     #[inline]
     pub fn log2_max_pic_order_cnt_lsb(&self) -> u8 {
-        self.log2_max_pic_order_cnt_lsb_minus4 + 4
+        self.log2_max_pic_order_cnt_lsb
     }
 
     /// Get MaxPicOrderCntLsb
     #[inline]
     pub fn max_pic_order_cnt_lsb(&self) -> u32 {
-        1 << self.log2_max_pic_order_cnt_lsb()
+        1 << self.log2_max_pic_order_cnt_lsb
     }
 
     /// Get maximum number of sub-layers
     #[inline]
     pub fn max_sub_layers(&self) -> u8 {
-        self.sps_max_sub_layers_minus1 + 1
+        self.sps_max_sub_layers
     }
 
     /// Get log2 minimum coding block size
     #[inline]
     pub fn log2_min_cb_size(&self) -> u32 {
-        self.log2_min_luma_coding_block_size_minus3 + 3
+        self.log2_min_luma_coding_block_size
     }
 
     /// Get log2 CTB size (Coding Tree Block)
     #[inline]
     pub fn log2_ctb_size(&self) -> u32 {
-        self.log2_min_cb_size() + self.log2_diff_max_min_luma_coding_block_size
+        self.log2_min_luma_coding_block_size + self.log2_diff_max_min_luma_coding_block_size
     }
 
     /// Get minimum coding block size in pixels
