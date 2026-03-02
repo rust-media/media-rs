@@ -86,10 +86,9 @@ impl RefPicListModification {
         let mut rplm = Self::default();
 
         // Calculate NumPocTotalCurr (simplified - just use ref_idx counts)
-        let num_poc_total_curr = header.num_ref_idx_l0_active_minus1 +
-            1 +
+        let num_poc_total_curr = header.num_ref_idx_l0_active +
             if header.slice_type.is_b() {
-                header.num_ref_idx_l1_active_minus1 + 1
+                header.num_ref_idx_l1_active
             } else {
                 0
             };
@@ -99,8 +98,8 @@ impl RefPicListModification {
 
             rplm.ref_pic_list_modification_flag_l0 = reader.read_bit()?;
             if rplm.ref_pic_list_modification_flag_l0 {
-                rplm.list_entry_l0 = SmallVec::with_capacity((header.num_ref_idx_l0_active_minus1 + 1) as usize);
-                for _ in 0..=header.num_ref_idx_l0_active_minus1 {
+                rplm.list_entry_l0 = SmallVec::with_capacity(header.num_ref_idx_l0_active as usize);
+                for _ in 0..header.num_ref_idx_l0_active {
                     rplm.list_entry_l0.push(reader.read_var(bits_needed)?);
                 }
             }
@@ -108,8 +107,8 @@ impl RefPicListModification {
             if header.slice_type.is_b() {
                 rplm.ref_pic_list_modification_flag_l1 = reader.read_bit()?;
                 if rplm.ref_pic_list_modification_flag_l1 {
-                    rplm.list_entry_l1 = SmallVec::with_capacity((header.num_ref_idx_l1_active_minus1 + 1) as usize);
-                    for _ in 0..=header.num_ref_idx_l1_active_minus1 {
+                    rplm.list_entry_l1 = SmallVec::with_capacity(header.num_ref_idx_l1_active as usize);
+                    for _ in 0..header.num_ref_idx_l1_active {
                         rplm.list_entry_l1.push(reader.read_var(bits_needed)?);
                     }
                 }
@@ -167,7 +166,7 @@ impl PredWeightTable {
             pwt.delta_chroma_log2_weight_denom = reader.read_se()?;
         }
 
-        let num_l0 = (header.num_ref_idx_l0_active_minus1 + 1) as usize;
+        let num_l0 = header.num_ref_idx_l0_active as usize;
 
         // L0 weights
         let mut luma_weight_l0_flag = SmallVec::<[bool; MAX_REFS]>::with_capacity(num_l0);
@@ -215,7 +214,7 @@ impl PredWeightTable {
 
         // L1 weights (for B slices)
         if header.slice_type.is_b() {
-            let num_l1 = (header.num_ref_idx_l1_active_minus1 + 1) as usize;
+            let num_l1 = header.num_ref_idx_l1_active as usize;
 
             let mut luma_weight_l1_flag = SmallVec::<[bool; MAX_REFS]>::with_capacity(num_l1);
             for _ in 0..num_l1 {
@@ -301,9 +300,9 @@ pub struct SliceSegmentHeader {
     /// Slice SAO chroma flag
     pub slice_sao_chroma_flag: bool,
     /// Number of reference pictures in list 0
-    pub num_ref_idx_l0_active_minus1: u32,
+    pub num_ref_idx_l0_active: u32,
     /// Number of reference pictures in list 1
-    pub num_ref_idx_l1_active_minus1: u32,
+    pub num_ref_idx_l1_active: u32,
     /// Reference picture list modification
     pub ref_pic_list_modification: Option<RefPicListModification>,
     /// MVP L0 flag
@@ -346,8 +345,8 @@ pub struct SliceSegmentHeader {
     pub slice_loop_filter_across_slices_enabled_flag: bool,
     /// Number of entry point offsets
     pub num_entry_point_offsets: u32,
-    /// Entry point offset minus 1
-    pub entry_point_offset_minus1: Vec<[u32; MAX_ENTRY_POINT_OFFSETS]>,
+    /// Entry point offset
+    pub entry_point_offset: Vec<u32>,
 }
 
 impl SliceSegmentHeader {
@@ -416,7 +415,7 @@ impl SliceSegmentHeader {
         // For non-IDR slices
         if !nal_unit_type.is_idr() {
             // slice_pic_order_cnt_lsb
-            let poc_lsb_bits = sps.log2_max_pic_order_cnt_lsb_minus4 as u32 + 4;
+            let poc_lsb_bits = sps.log2_max_pic_order_cnt_lsb as u32;
             header.slice_pic_order_cnt_lsb = reader.read_var(poc_lsb_bits)?;
 
             // short_term_ref_pic_set_sps_flag
@@ -453,7 +452,7 @@ impl SliceSegmentHeader {
                             let _: u32 = reader.read_var(bits)?;
                         }
                     } else {
-                        let poc_bits = sps.log2_max_pic_order_cnt_lsb_minus4 as u32 + 4;
+                        let poc_bits = sps.log2_max_pic_order_cnt_lsb as u32;
                         // poc_lsb_lt
                         let _: u32 = reader.read_var(poc_bits)?;
                         // used_by_curr_pic_lt_flag
@@ -489,13 +488,13 @@ impl SliceSegmentHeader {
             // num_ref_idx_active_override_flag
             let num_ref_idx_active_override_flag = reader.read_bit()?;
             if num_ref_idx_active_override_flag {
-                header.num_ref_idx_l0_active_minus1 = reader.read_ue()?;
+                header.num_ref_idx_l0_active = reader.read_ue()? + 1;
                 if header.slice_type.is_b() {
-                    header.num_ref_idx_l1_active_minus1 = reader.read_ue()?;
+                    header.num_ref_idx_l1_active = reader.read_ue()? + 1;
                 }
             } else {
-                header.num_ref_idx_l0_active_minus1 = pps.num_ref_idx_l0_default_active_minus1;
-                header.num_ref_idx_l1_active_minus1 = pps.num_ref_idx_l1_default_active_minus1;
+                header.num_ref_idx_l0_active = pps.num_ref_idx_l0_default_active;
+                header.num_ref_idx_l1_active = pps.num_ref_idx_l1_default_active;
             }
 
             // ref_pic_lists_modification
@@ -522,12 +521,12 @@ impl SliceSegmentHeader {
                 }
 
                 let max_ref_idx = if header.collocated_from_l0_flag {
-                    header.num_ref_idx_l0_active_minus1
+                    header.num_ref_idx_l0_active
                 } else {
-                    header.num_ref_idx_l1_active_minus1
+                    header.num_ref_idx_l1_active
                 };
 
-                if max_ref_idx > 0 {
+                if max_ref_idx > 1 {
                     header.collocated_ref_idx = reader.read_ue()?;
                 }
             }
@@ -587,11 +586,11 @@ impl SliceSegmentHeader {
         if pps.tiles_enabled_flag || pps.entropy_coding_sync_enabled_flag {
             header.num_entry_point_offsets = reader.read_ue()?;
             if header.num_entry_point_offsets > 0 {
-                let offset_len_minus1 = reader.read_ue()?;
-                let offset_bits = offset_len_minus1 + 1;
-                header.entry_point_offset_minus1 = Vec::with_capacity(header.num_entry_point_offsets as usize);
+                let offset_len = reader.read_ue()? + 1;
+                let offset_bits = offset_len;
+                header.entry_point_offset = Vec::with_capacity(header.num_entry_point_offsets as usize);
                 for _ in 0..header.num_entry_point_offsets {
-                    header.entry_point_offset_minus1.push(reader.read_var(offset_bits)?);
+                    header.entry_point_offset.push(reader.read_var::<u32>(offset_bits)? + 1);
                 }
             }
         }
@@ -602,19 +601,19 @@ impl SliceSegmentHeader {
     /// Get number of reference pictures in list 0
     #[inline]
     pub fn num_ref_idx_l0_active(&self) -> u32 {
-        self.num_ref_idx_l0_active_minus1 + 1
+        self.num_ref_idx_l0_active
     }
 
     /// Get number of reference pictures in list 1
     #[inline]
     pub fn num_ref_idx_l1_active(&self) -> u32 {
-        self.num_ref_idx_l1_active_minus1 + 1
+        self.num_ref_idx_l1_active
     }
 
     /// Get slice QP (actual value)
     #[inline]
     pub fn slice_qp(&self, pps: &Pps) -> i32 {
-        26 + pps.init_qp_minus26 + self.slice_qp_delta
+        pps.init_qp + self.slice_qp_delta
     }
 
     /// Get max number of merge candidates

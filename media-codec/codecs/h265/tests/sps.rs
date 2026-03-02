@@ -18,7 +18,7 @@ fn test_parse_sps() {
     let sps = Sps::parse(SPS_DATA).unwrap();
 
     assert_eq!(sps.video_parameter_set_id, 0);
-    assert_eq!(sps.sps_max_sub_layers_minus1, 0);
+    assert_eq!(sps.sps_max_sub_layers, 1);
     assert_eq!(sps.sps_temporal_id_nesting_flag, true);
 
     // Profile/Tier/Level
@@ -30,8 +30,6 @@ fn test_parse_sps() {
     assert_eq!(sps.chroma_format, ChromaFormat::YUV420);
     assert_eq!(sps.pic_width_in_luma_samples, 320);
     assert_eq!(sps.pic_height_in_luma_samples, 240);
-    assert_eq!(sps.bit_depth_luma_minus8, 0);
-    assert_eq!(sps.bit_depth_chroma_minus8, 0);
-    assert_eq!(sps.bit_depth_luma(), 8);
-    assert_eq!(sps.bit_depth_chroma(), 8);
+    assert_eq!(sps.bit_depth_luma, 8);
+    assert_eq!(sps.bit_depth_chroma, 8);
 }
