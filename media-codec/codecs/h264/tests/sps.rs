@@ -1,4 +1,4 @@
-use media_codec_h264::sps::{ChromaFormat, ConstraintSetFlags, Sps};
+use media_codec_h264::sps::{ChromaFormat, Sps};
 
 #[rustfmt::skip]
 const SPS_DATA: &[u8] = &[
@@ -19,17 +19,12 @@ fn test_parse_sps() {
     assert_eq!(sps.level_idc, 10); // Level 1.0
     assert_eq!(sps.seq_parameter_set_id, 0);
     assert_eq!(sps.chroma_format, ChromaFormat::YUV420); // Default for baseline
-    assert_eq!(sps.bit_depth_luma_minus8, 0); // Raw value
-    assert_eq!(sps.bit_depth_luma(), 8); // Corrected value
-    assert_eq!(sps.bit_depth_chroma_minus8, 0); // Raw value
-    assert_eq!(sps.bit_depth_chroma(), 8); // Corrected value
+    assert_eq!(sps.bit_depth_luma, 8); // Already converted
+    assert_eq!(sps.bit_depth_chroma, 8); // Already converted
 
-    // Check dimensions (raw values)
-    assert_eq!(sps.pic_width_in_mbs_minus1, 10); // Raw: 176 / 16 - 1
-    assert_eq!(sps.pic_height_in_map_units_minus1, 8); // Raw: 144 / 16 - 1
-                                                       // Corrected values via getter methods
-    assert_eq!(sps.pic_width_in_mbs(), 11); // 176 / 16
-    assert_eq!(sps.pic_height_in_map_units(), 9); // 144 / 16
+    // Check dimensions (already converted values)
+    assert_eq!(sps.pic_width_in_mbs, 11); // 176 / 16
+    assert_eq!(sps.pic_height_in_map_units, 9); // 144 / 16
     assert!(sps.frame_mbs_only_flag);
 
     // Check calculated dimensions

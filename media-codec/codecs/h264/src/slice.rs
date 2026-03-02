@@ -132,12 +132,12 @@ impl RefPicListModification {
                     let modification_of_pic_nums_idc = reader.read_ue()?;
                     let op = match modification_of_pic_nums_idc {
                         0 => {
-                            let abs_diff_pic_num_minus1 = reader.read_ue()?;
-                            RefPicListModOp::SubtractFromPicNum(abs_diff_pic_num_minus1)
+                            let abs_diff_pic_num = reader.read_ue()? + 1;
+                            RefPicListModOp::SubtractFromPicNum(abs_diff_pic_num)
                         }
                         1 => {
-                            let abs_diff_pic_num_minus1 = reader.read_ue()?;
-                            RefPicListModOp::AddToPicNum(abs_diff_pic_num_minus1)
+                            let abs_diff_pic_num = reader.read_ue()? + 1;
+                            RefPicListModOp::AddToPicNum(abs_diff_pic_num)
                         }
                         2 => {
                             let long_term_pic_num = reader.read_ue()?;
@@ -163,12 +163,12 @@ impl RefPicListModification {
                     let modification_of_pic_nums_idc = reader.read_ue()?;
                     let op = match modification_of_pic_nums_idc {
                         0 => {
-                            let abs_diff_pic_num_minus1 = reader.read_ue()?;
-                            RefPicListModOp::SubtractFromPicNum(abs_diff_pic_num_minus1)
+                            let abs_diff_pic_num = reader.read_ue()? + 1;
+                            RefPicListModOp::SubtractFromPicNum(abs_diff_pic_num)
                         }
                         1 => {
-                            let abs_diff_pic_num_minus1 = reader.read_ue()?;
-                            RefPicListModOp::AddToPicNum(abs_diff_pic_num_minus1)
+                            let abs_diff_pic_num = reader.read_ue()? + 1;
+                            RefPicListModOp::AddToPicNum(abs_diff_pic_num)
                         }
                         2 => {
                             let long_term_pic_num = reader.read_ue()?;
@@ -219,8 +219,8 @@ impl PredWeightTable {
     pub fn parse<R: Read>(
         reader: &mut BitReader<R, BigEndian>,
         slice_type: SliceType,
-        num_ref_idx_l0_active_minus1: u32,
-        num_ref_idx_l1_active_minus1: u32,
+        num_ref_idx_l0_active: u32,
+        num_ref_idx_l1_active: u32,
         chroma_array_type: u8,
     ) -> Result<Self> {
         let mut pwt = Self::default();
@@ -236,7 +236,7 @@ impl PredWeightTable {
         let default_luma_weight = 1i32 << pwt.luma_log2_weight_denom;
         let default_chroma_weight = 1i32 << pwt.chroma_log2_weight_denom;
 
-        let num_l0 = (num_ref_idx_l0_active_minus1 + 1) as usize;
+        let num_l0 = num_ref_idx_l0_active as usize;
 
         // Initialize L0 vectors
         pwt.luma_weight_l0 = SmallVec::with_capacity(num_l0);
@@ -273,7 +273,7 @@ impl PredWeightTable {
 
         // L1 weights (for B slices)
         if slice_type.is_b() {
-            let num_l1 = (num_ref_idx_l1_active_minus1 + 1) as usize;
+            let num_l1 = num_ref_idx_l1_active as usize;
 
             pwt.luma_weight_l1 = SmallVec::with_capacity(num_l1);
             pwt.luma_offset_l1 = SmallVec::with_capacity(num_l1);
@@ -317,13 +317,13 @@ pub enum MemoryManagementControlOp {
     /// End of operations (memory_management_control_operation == 0)
     End,
     /// Mark short-term picture as "unused for reference" (op == 1)
-    ShortTermUnused { difference_of_pic_nums_minus1: u32 },
+    ShortTermUnused { difference_of_pic_nums: u32 },
     /// Mark long-term picture as "unused for reference" (op == 2)
     LongTermUnused { long_term_pic_num: u32 },
     /// Assign long-term frame index to short-term picture (op == 3)
-    ShortTermToLongTerm { difference_of_pic_nums_minus1: u32, long_term_frame_idx: u32 },
+    ShortTermToLongTerm { difference_of_pic_nums: u32, long_term_frame_idx: u32 },
     /// Specify max long-term frame index (op == 4)
-    MaxLongTermFrameIdx { max_long_term_frame_idx_plus1: u32 },
+    MaxLongTermFrameIdx { max_long_term_frame_idx: i32 },
     /// Mark all reference pictures as "unused for reference" (op == 5)
     ClearAll,
     /// Assign long-term frame index to current picture (op == 6)
@@ -362,9 +362,9 @@ impl DecRefPicMarking {
                     let op = match memory_management_control_operation {
                         0 => MemoryManagementControlOp::End,
                         1 => {
-                            let difference_of_pic_nums_minus1 = reader.read_ue()?;
+                            let difference_of_pic_nums = reader.read_ue()? + 1;
                             MemoryManagementControlOp::ShortTermUnused {
-                                difference_of_pic_nums_minus1,
+                                difference_of_pic_nums,
                             }
                         }
                         2 => {
@@ -374,17 +374,17 @@ impl DecRefPicMarking {
                             }
                         }
                         3 => {
-                            let difference_of_pic_nums_minus1 = reader.read_ue()?;
+                            let difference_of_pic_nums = reader.read_ue()? + 1;
                             let long_term_frame_idx = reader.read_ue()?;
                             MemoryManagementControlOp::ShortTermToLongTerm {
-                                difference_of_pic_nums_minus1,
+                                difference_of_pic_nums,
                                 long_term_frame_idx,
                             }
                         }
                         4 => {
-                            let max_long_term_frame_idx_plus1 = reader.read_ue()?;
+                            let max_long_term_frame_idx = reader.read_ue()? as i32 - 1;
                             MemoryManagementControlOp::MaxLongTermFrameIdx {
-                                max_long_term_frame_idx_plus1,
+                                max_long_term_frame_idx,
                             }
                         }
                         5 => MemoryManagementControlOp::ClearAll,
@@ -442,10 +442,10 @@ pub struct SliceHeader {
     pub direct_spatial_mv_pred_flag: bool,
     /// Number of reference pictures in list 0 override flag
     pub num_ref_idx_active_override_flag: bool,
-    /// Number of reference pictures in list 0 minus 1
-    pub num_ref_idx_l0_active_minus1: u32,
-    /// Number of reference pictures in list 1 minus 1
-    pub num_ref_idx_l1_active_minus1: u32,
+    /// Number of reference pictures in list 0
+    pub num_ref_idx_l0_active: u32,
+    /// Number of reference pictures in list 1
+    pub num_ref_idx_l1_active: u32,
     /// Reference picture list modification
     pub ref_pic_list_modification: Option<RefPicListModification>,
     /// Prediction weight table
@@ -509,7 +509,7 @@ impl SliceHeader {
         }
 
         // frame_num
-        let frame_num_bits = sps.log2_max_frame_num();
+        let frame_num_bits = sps.log2_max_frame_num;
         header.frame_num = reader.read_var(frame_num_bits)?;
 
         // field_pic_flag and bottom_field_flag
@@ -527,7 +527,7 @@ impl SliceHeader {
 
         // Picture order count
         if sps.pic_order_cnt_type == 0 {
-            let poc_lsb_bits = sps.log2_max_pic_order_cnt_lsb();
+            let poc_lsb_bits = sps.log2_max_pic_order_cnt_lsb;
             header.pic_order_cnt_lsb = reader.read_var(poc_lsb_bits)?;
 
             if pps.bottom_field_pic_order_in_frame_present_flag && !header.field_pic_flag {
@@ -556,13 +556,13 @@ impl SliceHeader {
         if header.slice_type.is_p() || header.slice_type.is_sp() || header.slice_type.is_b() {
             header.num_ref_idx_active_override_flag = reader.read_bit()?;
             if header.num_ref_idx_active_override_flag {
-                header.num_ref_idx_l0_active_minus1 = reader.read_ue()?;
+                header.num_ref_idx_l0_active = reader.read_ue()? + 1;
                 if header.slice_type.is_b() {
-                    header.num_ref_idx_l1_active_minus1 = reader.read_ue()?;
+                    header.num_ref_idx_l1_active = reader.read_ue()? + 1;
                 }
             } else {
-                header.num_ref_idx_l0_active_minus1 = pps.num_ref_idx_l0_default_active_minus1;
-                header.num_ref_idx_l1_active_minus1 = pps.num_ref_idx_l1_default_active_minus1;
+                header.num_ref_idx_l0_active = pps.num_ref_idx_l0_default_active;
+                header.num_ref_idx_l1_active = pps.num_ref_idx_l1_default_active;
             }
         }
 
@@ -584,8 +584,8 @@ impl SliceHeader {
             header.pred_weight_table = Some(PredWeightTable::parse(
                 reader,
                 header.slice_type,
-                header.num_ref_idx_l0_active_minus1,
-                header.num_ref_idx_l1_active_minus1,
+                header.num_ref_idx_l0_active,
+                header.num_ref_idx_l1_active,
                 chroma_array_type,
             )?);
         }
@@ -627,14 +627,13 @@ impl SliceHeader {
         }
 
         // slice_group_change_cycle
-        if pps.num_slice_groups_minus1 > 0 {
+        if pps.num_slice_groups > 1 {
             if let Some(ref sg_params) = pps.slice_group_params {
                 let map_type = sg_params.slice_group_map_type as u8;
                 if (3..=5).contains(&map_type) {
-                    let pic_size_in_map_units = sps.pic_width_in_mbs() * sps.pic_height_in_map_units();
-                    let slice_group_change_rate = sg_params.slice_group_change_rate();
-                    let pic_size_in_map_units_minus1 = pic_size_in_map_units - 1;
-                    let bits_needed = (32 - ((pic_size_in_map_units_minus1 / slice_group_change_rate) + 1).leading_zeros()).max(1);
+                    let pic_size_in_map_units = sps.pic_width_in_mbs * sps.pic_height_in_map_units;
+                    let slice_group_change_rate = sg_params.slice_group_change_rate;
+                    let bits_needed = (32 - ((pic_size_in_map_units - 1) / slice_group_change_rate + 1).leading_zeros()).max(1);
                     header.slice_group_change_cycle = reader.read_var(bits_needed)?;
                 }
             }
@@ -643,28 +642,16 @@ impl SliceHeader {
         Ok(header)
     }
 
-    /// Get number of reference pictures in list 0
-    #[inline]
-    pub fn num_ref_idx_l0_active(&self) -> u32 {
-        self.num_ref_idx_l0_active_minus1 + 1
-    }
-
-    /// Get number of reference pictures in list 1
-    #[inline]
-    pub fn num_ref_idx_l1_active(&self) -> u32 {
-        self.num_ref_idx_l1_active_minus1 + 1
-    }
-
     /// Get slice QP (actual value)
     #[inline]
     pub fn slice_qp(&self, pps: &Pps) -> i32 {
-        26 + pps.pic_init_qp_minus26 + self.slice_qp_delta
+        pps.pic_init_qp + self.slice_qp_delta
     }
 
     /// Get slice QS (actual value, for SP/SI slices)
     #[inline]
     pub fn slice_qs(&self, pps: &Pps) -> i32 {
-        26 + pps.pic_init_qs_minus26 + self.slice_qs_delta
+        pps.pic_init_qs + self.slice_qs_delta
     }
 
     /// Check if this is the first macroblock in the picture

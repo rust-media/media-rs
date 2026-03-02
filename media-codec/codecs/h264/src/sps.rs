@@ -479,24 +479,24 @@ impl TimingInfo {
 /// HRD (Hypothetical Reference Decoder) Parameters
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct HrdParameters {
-    /// CPB (Coded Picture Buffer) count minus 1
-    pub cpb_cnt_minus1: u32,
+    /// CPB (Coded Picture Buffer) count
+    pub cpb_cnt: u32,
     /// Bit rate scale
     pub bit_rate_scale: u8,
     /// CPB size scale
     pub cpb_size_scale: u8,
-    /// Bit rate values minus 1 for each CPB
-    pub bit_rate_value_minus1: SmallVec<[u32; MAX_CPB_CNT]>,
-    /// CPB size values minus 1 for each CPB
-    pub cpb_size_value_minus1: SmallVec<[u32; MAX_CPB_CNT]>,
+    /// Bit rate values for each CPB
+    pub bit_rate_value: SmallVec<[u32; MAX_CPB_CNT]>,
+    /// CPB size values for each CPB
+    pub cpb_size_value: SmallVec<[u32; MAX_CPB_CNT]>,
     /// CBR (Constant Bit Rate) flags for each CPB
     pub cbr_flag: SmallVec<[bool; MAX_CPB_CNT]>,
-    /// Initial CPB removal delay length minus 1
-    pub initial_cpb_removal_delay_length_minus1: u8,
-    /// CPB removal delay length minus 1
-    pub cpb_removal_delay_length_minus1: u8,
-    /// DPB output delay length minus 1
-    pub dpb_output_delay_length_minus1: u8,
+    /// Initial CPB removal delay length
+    pub initial_cpb_removal_delay_length: u8,
+    /// CPB removal delay length
+    pub cpb_removal_delay_length: u8,
+    /// DPB output delay length
+    pub dpb_output_delay_length: u8,
     /// Time offset length
     pub time_offset_length: u8,
 }
@@ -504,77 +504,53 @@ pub struct HrdParameters {
 impl HrdParameters {
     /// Parse HrdParameters from a BitReader
     pub fn parse<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<Self> {
-        let cpb_cnt_minus1 = reader.read_ue()?;
+        let cpb_cnt = reader.read_ue()? + 1;
         let bit_rate_scale = reader.read::<4, u8>()?;
         let cpb_size_scale = reader.read::<4, u8>()?;
 
-        let cpb_cnt = (cpb_cnt_minus1 + 1) as usize;
-        let mut bit_rate_value_minus1 = SmallVec::with_capacity(cpb_cnt);
-        let mut cpb_size_value_minus1 = SmallVec::with_capacity(cpb_cnt);
-        let mut cbr_flag = SmallVec::with_capacity(cpb_cnt);
+        let cpb_cnt_usize = cpb_cnt as usize;
+        let mut bit_rate_value = SmallVec::with_capacity(cpb_cnt_usize);
+        let mut cpb_size_value = SmallVec::with_capacity(cpb_cnt_usize);
+        let mut cbr_flag = SmallVec::with_capacity(cpb_cnt_usize);
 
-        for _ in 0..cpb_cnt {
-            bit_rate_value_minus1.push(reader.read_ue()?);
-            cpb_size_value_minus1.push(reader.read_ue()?);
+        for _ in 0..cpb_cnt_usize {
+            bit_rate_value.push(reader.read_ue()? + 1);
+            cpb_size_value.push(reader.read_ue()? + 1);
             cbr_flag.push(reader.read_bit()?);
         }
 
-        let initial_cpb_removal_delay_length_minus1 = reader.read::<5, u8>()?;
-        let cpb_removal_delay_length_minus1 = reader.read::<5, u8>()?;
-        let dpb_output_delay_length_minus1 = reader.read::<5, u8>()?;
+        let initial_cpb_removal_delay_length = reader.read::<5, u8>()? + 1;
+        let cpb_removal_delay_length = reader.read::<5, u8>()? + 1;
+        let dpb_output_delay_length = reader.read::<5, u8>()? + 1;
         let time_offset_length = reader.read::<5, u8>()?;
 
         Ok(Self {
-            cpb_cnt_minus1,
+            cpb_cnt,
             bit_rate_scale,
             cpb_size_scale,
-            bit_rate_value_minus1,
-            cpb_size_value_minus1,
+            bit_rate_value,
+            cpb_size_value,
             cbr_flag,
-            initial_cpb_removal_delay_length_minus1,
-            cpb_removal_delay_length_minus1,
-            dpb_output_delay_length_minus1,
+            initial_cpb_removal_delay_length,
+            cpb_removal_delay_length,
+            dpb_output_delay_length,
             time_offset_length,
         })
     }
 
     /// Get bit rate for a specific CPB index (in bits/second)
     pub fn bit_rate(&self, cpb_index: usize) -> Option<u64> {
-        self.bit_rate_value_minus1.get(cpb_index).map(|&val| (val as u64 + 1) << (6 + self.bit_rate_scale))
-    }
-
-    /// Get the number of CPB configurations
-    #[inline]
-    pub fn cpb_count(&self) -> u32 {
-        self.cpb_cnt_minus1 + 1
+        self.bit_rate_value.get(cpb_index).map(|&val| (val as u64) << (6 + self.bit_rate_scale))
     }
 
     /// Get CPB size for a specific CPB index (in bits)
     pub fn cpb_size(&self, cpb_index: usize) -> Option<u64> {
-        self.cpb_size_value_minus1.get(cpb_index).map(|&val| (val as u64 + 1) << (4 + self.cpb_size_scale))
+        self.cpb_size_value.get(cpb_index).map(|&val| (val as u64) << (4 + self.cpb_size_scale))
     }
 
     /// Check if a specific CPB operates in CBR mode
     pub fn is_cbr(&self, cpb_index: usize) -> Option<bool> {
         self.cbr_flag.get(cpb_index).copied()
-    }
-
-    /// Get initial CPB removal delay length in bits
-    #[inline]
-    pub fn initial_cpb_removal_delay_length(&self) -> u8 {
-        self.initial_cpb_removal_delay_length_minus1 + 1
-    }
-
-    /// Get CPB removal delay length in bits
-    #[inline]
-    pub fn cpb_removal_delay_length(&self) -> u8 {
-        self.cpb_removal_delay_length_minus1 + 1
-    }
-
-    /// Get DPB output delay length in bits
-    #[inline]
-    pub fn dpb_output_delay_length(&self) -> u8 {
-        self.dpb_output_delay_length_minus1 + 1
     }
 }
 
@@ -810,24 +786,21 @@ pub struct Sps {
     pub chroma_format: ChromaFormat,
     /// Separate colour plane flag
     pub separate_colour_plane_flag: bool,
-    /// Bit depth luma minus 8 (0-6, use `bit_depth_luma()` to get actual value
-    /// 8-14)
-    pub bit_depth_luma_minus8: u8,
-    /// Bit depth chroma minus 8 (0-6, use `bit_depth_chroma()` to get actual
-    /// value 8-14)
-    pub bit_depth_chroma_minus8: u8,
+    /// Bit depth luma (8-14)
+    pub bit_depth_luma: u8,
+    /// Bit depth chroma (8-14)
+    pub bit_depth_chroma: u8,
     /// QP prime Y zero transform bypass flag
     pub qpprime_y_zero_transform_bypass_flag: bool,
     /// Scaling matrix (if seq_scaling_matrix_present_flag is true)
     pub scaling_matrix: Option<ScalingMatrix>,
-    /// Log2 of max frame number minus 4 (0-12, use `log2_max_frame_num()` to
-    /// get actual value 4-16)
-    pub log2_max_frame_num_minus4: u32,
+    /// Log2 of max frame number (4-16)
+    pub log2_max_frame_num: u32,
     /// Picture order count type (0-2)
     pub pic_order_cnt_type: u32,
-    /// Log2 of max picture order count LSB minus 4 (for pic_order_cnt_type ==
-    /// 0, use `log2_max_pic_order_cnt_lsb()` to get actual value 4-16)
-    pub log2_max_pic_order_cnt_lsb_minus4: u32,
+    /// Log2 of max picture order count LSB (4-16, valid when pic_order_cnt_type
+    /// == 0)
+    pub log2_max_pic_order_cnt_lsb: u32,
     /// Delta picture order always zero flag (for pic_order_cnt_type == 1)
     pub delta_pic_order_always_zero_flag: bool,
     /// Offset for non-reference picture (for pic_order_cnt_type == 1)
@@ -842,12 +815,10 @@ pub struct Sps {
     pub max_num_ref_frames: u32,
     /// Gaps in frame num value allowed flag
     pub gaps_in_frame_num_value_allowed_flag: bool,
-    /// Picture width in macroblocks minus 1 (use `pic_width_in_mbs()` to get
-    /// actual value)
-    pub pic_width_in_mbs_minus1: u32,
-    /// Picture height in map units minus 1 (use `pic_height_in_map_units()` to
-    /// get actual value)
-    pub pic_height_in_map_units_minus1: u32,
+    /// Picture width in macroblocks
+    pub pic_width_in_mbs: u32,
+    /// Picture height in map units
+    pub pic_height_in_map_units: u32,
     /// Frame MBs only flag (1=frames only, 0=field/frame adaptive)
     pub frame_mbs_only_flag: bool,
     /// MB adaptive frame field flag
@@ -898,8 +869,8 @@ impl Sps {
         // Initialize defaults
         let mut chroma_format = ChromaFormat::YUV420;
         let mut separate_colour_plane_flag = false;
-        let mut bit_depth_luma_minus8 = 0u8;
-        let mut bit_depth_chroma_minus8 = 0u8;
+        let mut bit_depth_luma = 8u8;
+        let mut bit_depth_chroma = 8u8;
         let mut qpprime_y_zero_transform_bypass_flag = false;
         let mut scaling_matrix = None;
 
@@ -914,9 +885,9 @@ impl Sps {
                 separate_colour_plane_flag = reader.read_bit()?;
             }
 
-            bit_depth_luma_minus8 = reader.read_ue()? as u8;
+            bit_depth_luma = (reader.read_ue()? as u8) + 8;
 
-            bit_depth_chroma_minus8 = reader.read_ue()? as u8;
+            bit_depth_chroma = (reader.read_ue()? as u8) + 8;
 
             qpprime_y_zero_transform_bypass_flag = reader.read_bit()?;
             let seq_scaling_matrix_present_flag = reader.read_bit()?;
@@ -926,13 +897,13 @@ impl Sps {
             }
         }
 
-        // Read log2_max_frame_num_minus4
-        let log2_max_frame_num_minus4 = reader.read_ue()?;
+        // Read log2_max_frame_num and convert
+        let log2_max_frame_num = reader.read_ue()? + 4;
 
         // Read pic_order_cnt_type
         let pic_order_cnt_type = reader.read_ue()?;
 
-        let mut log2_max_pic_order_cnt_lsb_minus4 = 0u32;
+        let mut log2_max_pic_order_cnt_lsb = 4u32;
         let mut delta_pic_order_always_zero_flag = false;
         let mut offset_for_non_ref_pic = 0i32;
         let mut offset_for_top_to_bottom_field = 0i32;
@@ -940,7 +911,7 @@ impl Sps {
         let mut offset_for_ref_frame = SmallVec::new();
 
         if pic_order_cnt_type == 0 {
-            log2_max_pic_order_cnt_lsb_minus4 = reader.read_ue()?;
+            log2_max_pic_order_cnt_lsb = reader.read_ue()? + 4;
         } else if pic_order_cnt_type == 1 {
             delta_pic_order_always_zero_flag = reader.read_bit()?;
             offset_for_non_ref_pic = reader.read_se()?;
@@ -959,11 +930,11 @@ impl Sps {
         // Read gaps_in_frame_num_value_allowed_flag
         let gaps_in_frame_num_value_allowed_flag = reader.read_bit()?;
 
-        // Read pic_width_in_mbs_minus1
-        let pic_width_in_mbs_minus1 = reader.read_ue()?;
+        // Read pic_width_in_mbs and convert
+        let pic_width_in_mbs = reader.read_ue()? + 1;
 
-        // Read pic_height_in_map_units_minus1
-        let pic_height_in_map_units_minus1 = reader.read_ue()?;
+        // Read pic_height_in_map_units and convert
+        let pic_height_in_map_units = reader.read_ue()? + 1;
 
         // Read frame_mbs_only_flag
         let frame_mbs_only_flag = reader.read_bit()?;
@@ -1005,13 +976,13 @@ impl Sps {
             seq_parameter_set_id,
             chroma_format,
             separate_colour_plane_flag,
-            bit_depth_luma_minus8,
-            bit_depth_chroma_minus8,
+            bit_depth_luma,
+            bit_depth_chroma,
             qpprime_y_zero_transform_bypass_flag,
             scaling_matrix,
-            log2_max_frame_num_minus4,
+            log2_max_frame_num,
             pic_order_cnt_type,
-            log2_max_pic_order_cnt_lsb_minus4,
+            log2_max_pic_order_cnt_lsb,
             delta_pic_order_always_zero_flag,
             offset_for_non_ref_pic,
             offset_for_top_to_bottom_field,
@@ -1019,8 +990,8 @@ impl Sps {
             offset_for_ref_frame,
             max_num_ref_frames,
             gaps_in_frame_num_value_allowed_flag,
-            pic_width_in_mbs_minus1,
-            pic_height_in_map_units_minus1,
+            pic_width_in_mbs,
+            pic_height_in_map_units,
             frame_mbs_only_flag,
             mb_adaptive_frame_field_flag,
             direct_8x8_inference_flag,
@@ -1033,65 +1004,28 @@ impl Sps {
         })
     }
 
-    /// Get actual bit depth for luma samples (8-14)
-    #[inline]
-    pub fn bit_depth_luma(&self) -> u8 {
-        self.bit_depth_luma_minus8 + 8
-    }
-
-    /// Get actual bit depth for chroma samples (8-14)
-    #[inline]
-    pub fn bit_depth_chroma(&self) -> u8 {
-        self.bit_depth_chroma_minus8 + 8
-    }
-
-    /// Get actual log2_max_frame_num (4-16)
-    #[inline]
-    pub fn log2_max_frame_num(&self) -> u32 {
-        self.log2_max_frame_num_minus4 + 4
-    }
-
     /// Get MaxFrameNum derived from log2_max_frame_num
     #[inline]
     pub fn max_frame_num(&self) -> u32 {
-        1 << self.log2_max_frame_num()
-    }
-
-    /// Get actual log2_max_pic_order_cnt_lsb (4-16, only valid when
-    /// pic_order_cnt_type == 0)
-    #[inline]
-    pub fn log2_max_pic_order_cnt_lsb(&self) -> u32 {
-        self.log2_max_pic_order_cnt_lsb_minus4 + 4
+        1 << self.log2_max_frame_num
     }
 
     /// Get MaxPicOrderCntLsb derived from log2_max_pic_order_cnt_lsb
     #[inline]
     pub fn max_pic_order_cnt_lsb(&self) -> u32 {
-        1 << self.log2_max_pic_order_cnt_lsb()
-    }
-
-    /// Get actual picture width in macroblocks
-    #[inline]
-    pub fn pic_width_in_mbs(&self) -> u32 {
-        self.pic_width_in_mbs_minus1 + 1
-    }
-
-    /// Get actual picture height in map units
-    #[inline]
-    pub fn pic_height_in_map_units(&self) -> u32 {
-        self.pic_height_in_map_units_minus1 + 1
+        1 << self.log2_max_pic_order_cnt_lsb
     }
 
     /// Get the actual frame width in pixels
     pub fn width(&self) -> u32 {
-        let width = self.pic_width_in_mbs() * 16;
+        let width = self.pic_width_in_mbs * 16;
         let crop_x = self.crop_unit_x();
         width - (self.frame_crop_left_offset + self.frame_crop_right_offset) * crop_x
     }
 
     /// Get the actual frame height in pixels
     pub fn height(&self) -> u32 {
-        let height = self.pic_height_in_map_units() * 16 * (2 - self.frame_mbs_only_flag as u32);
+        let height = self.pic_height_in_map_units * 16 * (2 - self.frame_mbs_only_flag as u32);
         let crop_y = self.crop_unit_y();
         height - (self.frame_crop_top_offset + self.frame_crop_bottom_offset) * crop_y
     }

@@ -11,7 +11,7 @@ use crate::scaling_list::{ScalingList4x4, ScalingList8x8};
 /// Maximum number of slice groups
 const MAX_SLICE_GROUPS: usize = 8;
 
-/// Slice group map type (for num_slice_groups_minus1 > 0)
+/// Slice group map type
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[repr(u8)]
 pub enum SliceGroupMapType {
@@ -52,25 +52,25 @@ impl From<u32> for SliceGroupMapType {
 pub struct SliceGroupParams {
     /// Slice group map type
     pub slice_group_map_type: SliceGroupMapType,
-    /// Run length minus 1 for each slice group (for type 0)
-    pub run_length_minus1: SmallVec<[u32; MAX_SLICE_GROUPS]>,
+    /// Run length for each slice group (for type 0)
+    pub run_length: SmallVec<[u32; MAX_SLICE_GROUPS]>,
     /// Top left macroblock address for each slice group (for type 2)
     pub top_left: SmallVec<[u32; MAX_SLICE_GROUPS]>,
     /// Bottom right macroblock address for each slice group (for type 2)
     pub bottom_right: SmallVec<[u32; MAX_SLICE_GROUPS]>,
     /// Slice group change direction flag (for types 3, 4, 5)
     pub slice_group_change_direction_flag: bool,
-    /// Slice group change rate minus 1 (for types 3, 4, 5)
-    pub slice_group_change_rate_minus1: u32,
-    /// Picture size in map units minus 1 (for type 6)
-    pub pic_size_in_map_units_minus1: u32,
+    /// Slice group change rate (for types 3, 4, 5)
+    pub slice_group_change_rate: u32,
+    /// Picture size in map units (for type 6)
+    pub pic_size_in_map_units: u32,
     /// Slice group ID for each map unit (for type 6)
     pub slice_group_id: Vec<u32>,
 }
 
 impl SliceGroupParams {
     /// Parse slice group parameters from a BitReader
-    pub fn parse<R: Read>(reader: &mut BitReader<R, BigEndian>, num_slice_groups_minus1: u32) -> Result<Self> {
+    pub fn parse<R: Read>(reader: &mut BitReader<R, BigEndian>, num_slice_groups: u32) -> Result<Self> {
         let slice_group_map_type_val = reader.read_ue()?;
         let slice_group_map_type = SliceGroupMapType::from(slice_group_map_type_val);
 
@@ -82,10 +82,10 @@ impl SliceGroupParams {
         match slice_group_map_type {
             SliceGroupMapType::Interleaved => {
                 // Type 0: Interleaved slice groups
-                let num_groups = (num_slice_groups_minus1 + 1) as usize;
-                params.run_length_minus1.reserve(num_groups);
+                let num_groups = num_slice_groups as usize;
+                params.run_length.reserve(num_groups);
                 for _ in 0..num_groups {
-                    params.run_length_minus1.push(reader.read_ue()?);
+                    params.run_length.push(reader.read_ue()? + 1);
                 }
             }
             SliceGroupMapType::Dispersed => {
@@ -93,7 +93,7 @@ impl SliceGroupParams {
             }
             SliceGroupMapType::ForegroundLeftover => {
                 // Type 2: Foreground with left-over
-                let num_groups = num_slice_groups_minus1 as usize;
+                let num_groups = (num_slice_groups - 1) as usize;
                 params.top_left.reserve(num_groups);
                 params.bottom_right.reserve(num_groups);
                 for _ in 0..num_groups {
@@ -104,14 +104,14 @@ impl SliceGroupParams {
             SliceGroupMapType::BoxOut | SliceGroupMapType::RasterScan | SliceGroupMapType::Wipe => {
                 // Types 3, 4, 5: Changing slice groups
                 params.slice_group_change_direction_flag = reader.read_bit()?;
-                params.slice_group_change_rate_minus1 = reader.read_ue()?;
+                params.slice_group_change_rate = reader.read_ue()? + 1;
             }
             SliceGroupMapType::Explicit => {
                 // Type 6: Explicit slice group map
-                params.pic_size_in_map_units_minus1 = reader.read_ue()?;
-                let num_map_units = (params.pic_size_in_map_units_minus1 + 1) as usize;
+                params.pic_size_in_map_units = reader.read_ue()? + 1;
+                let num_map_units = params.pic_size_in_map_units as usize;
                 // Calculate bits needed for slice_group_id
-                let bits_needed = (32 - num_slice_groups_minus1.leading_zeros()).max(1);
+                let bits_needed = (32 - (num_slice_groups - 1).leading_zeros()).max(1);
                 params.slice_group_id = Vec::with_capacity(num_map_units);
                 for _ in 0..num_map_units {
                     params.slice_group_id.push(reader.read_var(bits_needed)?);
@@ -120,18 +120,6 @@ impl SliceGroupParams {
         }
 
         Ok(params)
-    }
-
-    /// Get slice group change rate (actual value, for types 3, 4, 5)
-    #[inline]
-    pub fn slice_group_change_rate(&self) -> u32 {
-        self.slice_group_change_rate_minus1 + 1
-    }
-
-    /// Get picture size in map units (actual value, for type 6)
-    #[inline]
-    pub fn pic_size_in_map_units(&self) -> u32 {
-        self.pic_size_in_map_units_minus1 + 1
     }
 }
 
@@ -146,22 +134,22 @@ pub struct Pps {
     pub entropy_coding_mode_flag: bool,
     /// Bottom field picture order in frame present flag
     pub bottom_field_pic_order_in_frame_present_flag: bool,
-    /// Number of slice groups minus 1 (0 = single slice group)
-    pub num_slice_groups_minus1: u32,
-    /// Slice group parameters (if num_slice_groups_minus1 > 0)
+    /// Number of slice groups
+    pub num_slice_groups: u32,
+    /// Slice group parameters (if num_slice_groups > 1)
     pub slice_group_params: Option<SliceGroupParams>,
-    /// Number of reference pictures in list 0 minus 1 (0-31)
-    pub num_ref_idx_l0_default_active_minus1: u32,
-    /// Number of reference pictures in list 1 minus 1 (0-31)
-    pub num_ref_idx_l1_default_active_minus1: u32,
+    /// Number of reference pictures in list 0 (0-32)
+    pub num_ref_idx_l0_default_active: u32,
+    /// Number of reference pictures in list 1 (0-32)
+    pub num_ref_idx_l1_default_active: u32,
     /// Weighted prediction flag for P and SP slices
     pub weighted_pred_flag: bool,
     /// Weighted biprediction IDC for B slices (0, 1, or 2)
     pub weighted_bipred_idc: u8,
-    /// Initial QP minus 26 for slices (-26 to 25)
-    pub pic_init_qp_minus26: i32,
-    /// Initial QP minus 26 for SP/SI slices (-26 to 25)
-    pub pic_init_qs_minus26: i32,
+    /// Initial QP for slices
+    pub pic_init_qp: i32,
+    /// Initial QP for SP/SI slices
+    pub pic_init_qs: i32,
     /// Chroma QP index offset (-12 to 12)
     pub chroma_qp_index_offset: i32,
     /// Deblocking filter control present flag
@@ -301,26 +289,26 @@ impl Pps {
         // Read bottom_field_pic_order_in_frame_present_flag
         let bottom_field_pic_order_in_frame_present_flag = reader.read_bit()?;
 
-        // Read num_slice_groups_minus1
-        let num_slice_groups_minus1 = reader.read_ue()?;
+        // Read num_slice_groups and convert
+        let num_slice_groups = reader.read_ue()? + 1;
 
         // Read slice group parameters if more than one slice group
-        let slice_group_params = if num_slice_groups_minus1 > 0 {
-            Some(SliceGroupParams::parse(reader, num_slice_groups_minus1)?)
+        let slice_group_params = if num_slice_groups > 1 {
+            Some(SliceGroupParams::parse(reader, num_slice_groups)?)
         } else {
             None
         };
 
-        // Read num_ref_idx_l0_default_active_minus1
-        let num_ref_idx_l0_default_active_minus1 = reader.read_ue()?;
-        if num_ref_idx_l0_default_active_minus1 > 31 {
-            return Err(invalid_data_error!("num_ref_idx_l0_default_active_minus1", num_ref_idx_l0_default_active_minus1));
+        // Read num_ref_idx_l0_default_active and convert
+        let num_ref_idx_l0_default_active = reader.read_ue()? + 1;
+        if num_ref_idx_l0_default_active > 32 {
+            return Err(invalid_data_error!("num_ref_idx_l0_default_active", num_ref_idx_l0_default_active));
         }
 
-        // Read num_ref_idx_l1_default_active_minus1
-        let num_ref_idx_l1_default_active_minus1 = reader.read_ue()?;
-        if num_ref_idx_l1_default_active_minus1 > 31 {
-            return Err(invalid_data_error!("num_ref_idx_l1_default_active_minus1", num_ref_idx_l1_default_active_minus1));
+        // Read num_ref_idx_l1_default_active and convert
+        let num_ref_idx_l1_default_active = reader.read_ue()? + 1;
+        if num_ref_idx_l1_default_active > 32 {
+            return Err(invalid_data_error!("num_ref_idx_l1_default_active", num_ref_idx_l1_default_active));
         }
 
         // Read weighted_pred_flag
@@ -329,11 +317,11 @@ impl Pps {
         // Read weighted_bipred_idc
         let weighted_bipred_idc = reader.read::<2, u8>()?;
 
-        // Read pic_init_qp_minus26
-        let pic_init_qp_minus26 = reader.read_se()?;
+        // Read pic_init_qp and convert
+        let pic_init_qp = reader.read_se()? + 26;
 
-        // Read pic_init_qs_minus26
-        let pic_init_qs_minus26 = reader.read_se()?;
+        // Read pic_init_qs and convert
+        let pic_init_qs = reader.read_se()? + 26;
 
         // Read chroma_qp_index_offset
         let chroma_qp_index_offset = reader.read_se()?;
@@ -361,9 +349,7 @@ impl Pps {
             let flag = reader.read_bit().ok()?;
             let scaling_present = reader.read_bit().ok()?;
             let second_offset = reader.read_se().ok().filter(|v| (-12..=12).contains(v))?;
-            let matrix = scaling_present
-                .then(|| PpsScalingMatrix::parse(reader, flag, chroma_format_idc).ok())
-                .flatten();
+            let matrix = scaling_present.then(|| PpsScalingMatrix::parse(reader, flag, chroma_format_idc).ok()).flatten();
             Some((flag, second_offset, matrix))
         })() {
             transform_8x8_mode_flag = flag;
@@ -376,14 +362,14 @@ impl Pps {
             seq_parameter_set_id,
             entropy_coding_mode_flag,
             bottom_field_pic_order_in_frame_present_flag,
-            num_slice_groups_minus1,
+            num_slice_groups,
             slice_group_params,
-            num_ref_idx_l0_default_active_minus1,
-            num_ref_idx_l1_default_active_minus1,
+            num_ref_idx_l0_default_active,
+            num_ref_idx_l1_default_active,
             weighted_pred_flag,
             weighted_bipred_idc,
-            pic_init_qp_minus26,
-            pic_init_qs_minus26,
+            pic_init_qp,
+            pic_init_qs,
             chroma_qp_index_offset,
             deblocking_filter_control_present_flag,
             constrained_intra_pred_flag,
@@ -392,36 +378,6 @@ impl Pps {
             scaling_matrix,
             second_chroma_qp_index_offset,
         })
-    }
-
-    /// Get actual number of reference pictures in list 0
-    #[inline]
-    pub fn number_of_reference_index_l0_default_active(&self) -> u32 {
-        self.num_ref_idx_l0_default_active_minus1 + 1
-    }
-
-    /// Get actual number of reference pictures in list 1
-    #[inline]
-    pub fn number_of_reference_index_l1_default_active(&self) -> u32 {
-        self.num_ref_idx_l1_default_active_minus1 + 1
-    }
-
-    /// Get actual number of slice groups
-    #[inline]
-    pub fn num_slice_groups(&self) -> u32 {
-        self.num_slice_groups_minus1 + 1
-    }
-
-    /// Get initial QP for slices (actual value: -26 to 51)
-    #[inline]
-    pub fn pic_init_qp(&self) -> i32 {
-        self.pic_init_qp_minus26 + 26
-    }
-
-    /// Get initial QP for SP/SI slices (actual value: -26 to 51)
-    #[inline]
-    pub fn pic_init_qs(&self) -> i32 {
-        self.pic_init_qs_minus26 + 26
     }
 
     /// Check if CABAC entropy coding is used

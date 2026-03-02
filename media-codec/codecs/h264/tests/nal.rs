@@ -52,13 +52,13 @@ fn test_forbidden_bit_error() {
 
 #[test]
 fn test_to_byte() {
-    let header = H264NalHeader::new(false, 3, NalUnitType::from_u8(5).unwrap());
+    let header = H264NalHeader::new(false, 3, NalUnitType::from_u8(5));
     assert_eq!(header.to_byte(), 0x65);
 }
 
 #[test]
 fn test_unit_type_enum() {
-    assert_eq!(NalUnitType::from_u8(5).unwrap(), NalUnitType::SliceIdr);
-    assert_eq!(NalUnitType::from_u8(7).unwrap(), NalUnitType::Sps);
-    assert_eq!(NalUnitType::from_u8(8).unwrap(), NalUnitType::Pps);
+    assert_eq!(NalUnitType::from_u8(5), NalUnitType::SliceIdr);
+    assert_eq!(NalUnitType::from_u8(7), NalUnitType::Sps);
+    assert_eq!(NalUnitType::from_u8(8), NalUnitType::Pps);
 }
