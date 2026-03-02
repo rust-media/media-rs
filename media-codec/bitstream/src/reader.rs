@@ -72,6 +72,13 @@ impl<R: Read, E: Endianness> BitReader<R, E> {
     }
 }
 
+impl<R: Read + Seek, E: Endianness> BitReader<R, E> {
+    /// Returns the number of bits left in the stream
+    pub fn bits_left(&mut self) -> Result<usize> {
+        Ok(self.total_bits.saturating_sub(self.inner.position_in_bits()? as usize))
+    }
+}
+
 impl<'a, E: Endianness> BitReader<Cursor<&'a [u8]>, E> {
     /// Create a BitReader from a byte slice, automatically tracking length
     pub fn from_slice(data: &'a [u8]) -> Self {
@@ -79,10 +86,6 @@ impl<'a, E: Endianness> BitReader<Cursor<&'a [u8]>, E> {
             inner: bitstream_io::BitReader::new(Cursor::new(data)),
             total_bits: data.len() * 8,
         }
-    }
-
-    pub fn bits_left(&mut self) -> Result<usize> {
-        Ok(self.total_bits.saturating_sub(self.inner.position_in_bits()? as usize))
     }
 }
 
