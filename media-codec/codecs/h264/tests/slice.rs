@@ -35,7 +35,7 @@ const IDR_SLICE_HEADER: &[u8] = &[
 #[test]
 fn test_parse_idr_slice_header() {
     let sps = Sps::parse(SPS_DATA).unwrap();
-    let pps = Pps::parse(PPS_DATA).unwrap();
+    let pps = Pps::parse_with_sps(PPS_DATA, &sps).unwrap();
 
     let header = SliceHeader::parse(
         IDR_SLICE_HEADER,
@@ -55,19 +55,28 @@ fn test_parse_idr_slice_header() {
 }
 
 #[test]
-fn test_slice_type() {
+fn test_slice_type_from_u8() {
     assert_eq!(SliceType::from_u8(0), Some(SliceType::P));
     assert_eq!(SliceType::from_u8(1), Some(SliceType::B));
     assert_eq!(SliceType::from_u8(2), Some(SliceType::I));
     assert_eq!(SliceType::from_u8(3), Some(SliceType::SP));
     assert_eq!(SliceType::from_u8(4), Some(SliceType::SI));
+    // Values 5-9 map to same types (all slices in picture have same type)
     assert_eq!(SliceType::from_u8(5), Some(SliceType::P));
     assert_eq!(SliceType::from_u8(6), Some(SliceType::B));
     assert_eq!(SliceType::from_u8(7), Some(SliceType::I));
     assert_eq!(SliceType::from_u8(8), Some(SliceType::SP));
     assert_eq!(SliceType::from_u8(9), Some(SliceType::SI));
+}
 
+#[test]
+fn test_slice_type_properties() {
+    // Intra slices
     assert!(SliceType::I.is_intra());
+    assert!(SliceType::SI.is_intra());
+
+    // Inter slices
     assert!(!SliceType::P.is_intra());
     assert!(!SliceType::B.is_intra());
+    assert!(!SliceType::SP.is_intra());
 }

@@ -29,7 +29,7 @@ pub const ZIGZAG_8X8: [u8; 64] = [
     35, 42, 49, 56, 57, 50, 43, 36,
     29, 22, 15, 23, 30, 37, 44, 51,
     58, 59, 52, 45, 38, 31, 39, 46,
-    53, 60, 61, 54, 47, 55, 62, 63
+    53, 60, 61, 54, 47, 55, 62, 63,
 ];
 
 /// Flat 4x4 scaling list (all values are 16)
@@ -353,7 +353,7 @@ impl ScalingMatrix {
     /// Get 8x8 intra Y scaling list
     #[inline]
     pub fn intra_y_8x8(&self) -> Option<&ScalingList8x8> {
-        self.scaling_list_8x8.get(0)
+        self.scaling_list_8x8.first()
     }
 
     /// Get 8x8 inter Y scaling list
