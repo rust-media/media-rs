@@ -84,10 +84,10 @@ impl Hvcc {
         let general_tier_flag = (profile_byte >> 5) & 0b1 != 0;
         let general_profile_idc = profile_byte & 0b0001_1111;
 
-        // Read general profile compatibility flags (32 bits)
+        // Read general profile compatibility flags
         let general_profile_compatibility_flags = reader.read::<u32>()?;
 
-        // Read general constraint indicator flags (48 bits = 6 bytes)
+        // Read general constraint indicator flags (48 bits)
         let constraint_high = reader.read::<u32>()? as u64;
         let constraint_low = reader.read::<u16>()? as u64;
         let general_constraint_indicator_flags = (constraint_high << 16) | constraint_low;

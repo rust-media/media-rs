@@ -6,12 +6,10 @@ use media_codec_bitstream::{BigEndian, BitReader};
 use media_core::{invalid_data_error, Result};
 use smallvec::SmallVec;
 
-use crate::scaling_list::ScalingListData;
-
-/// Maximum number of tile rows
-pub(crate) const MAX_TILE_ROWS: usize = 22;
-/// Maximum number of tile columns
-pub(crate) const MAX_TILE_COLUMNS: usize = 20;
+use crate::{
+    constants::{MAX_PPS_COUNT, MAX_QP_OFFSET, MAX_REFS, MAX_SPS_COUNT, MAX_TILE_COLUMNS, MAX_TILE_ROWS, MIN_QP_OFFSET},
+    scaling_list::ScalingListData,
+};
 
 /// Tile information in PPS
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -217,55 +215,57 @@ impl Pps {
 
     /// Parse PPS from a BitReader
     pub fn parse_from_bit_reader<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<Self> {
-        // pps_pic_parameter_set_id
-        let pps_pic_parameter_set_id = reader.read_ue()? as u8;
-        if pps_pic_parameter_set_id > 63 {
-            return Err(invalid_data_error!("pps_pic_parameter_set_id", pps_pic_parameter_set_id));
+        // Read pps_pic_parameter_set_id
+        let pic_parameter_set_id = reader.read_ue()?;
+        if pic_parameter_set_id as usize >= MAX_PPS_COUNT {
+            return Err(invalid_data_error!("pps_id", pic_parameter_set_id));
         }
+        let pic_parameter_set_id = pic_parameter_set_id as u8;
 
-        // pps_seq_parameter_set_id
-        let pps_seq_parameter_set_id = reader.read_ue()? as u8;
-        if pps_seq_parameter_set_id > 15 {
-            return Err(invalid_data_error!("pps_seq_parameter_set_id", pps_seq_parameter_set_id));
+        // Read pps_seq_parameter_set_id
+        let seq_parameter_set_id = reader.read_ue()?;
+        if seq_parameter_set_id as usize >= MAX_SPS_COUNT {
+            return Err(invalid_data_error!("sps_id", seq_parameter_set_id));
         }
+        let seq_parameter_set_id = seq_parameter_set_id as u8;
 
-        // dependent_slice_segments_enabled_flag
+        // Read dependent_slice_segments_enabled_flag
         let dependent_slice_segments_enabled_flag = reader.read_bit()?;
 
-        // output_flag_present_flag
+        // Read output_flag_present_flag
         let output_flag_present_flag = reader.read_bit()?;
 
-        // num_extra_slice_header_bits (3 bits)
+        // Read num_extra_slice_header_bits
         let num_extra_slice_header_bits = reader.read::<3, u8>()?;
 
-        // sign_data_hiding_enabled_flag
+        // Read sign_data_hiding_enabled_flag
         let sign_data_hiding_enabled_flag = reader.read_bit()?;
 
-        // cabac_init_present_flag
+        // Read cabac_init_present_flag
         let cabac_init_present_flag = reader.read_bit()?;
 
-        // num_ref_idx_l0_default_active
+        // Read num_ref_idx_l0_default_active
         let num_ref_idx_l0_default_active = reader.read_ue()? + 1;
-        if num_ref_idx_l0_default_active > 15 {
+        if num_ref_idx_l0_default_active as usize > MAX_REFS {
             return Err(invalid_data_error!("num_ref_idx_l0_default_active", num_ref_idx_l0_default_active));
         }
 
-        // num_ref_idx_l1_default_active
+        // Read num_ref_idx_l1_default_active
         let num_ref_idx_l1_default_active = reader.read_ue()? + 1;
-        if num_ref_idx_l1_default_active > 15 {
+        if num_ref_idx_l1_default_active as usize > MAX_REFS {
             return Err(invalid_data_error!("num_ref_idx_l1_default_active", num_ref_idx_l1_default_active));
         }
 
-        // init_qp
+        // Read init_qp
         let init_qp = reader.read_se()? + 26;
 
-        // constrained_intra_pred_flag
+        // Read constrained_intra_pred_flag
         let constrained_intra_pred_flag = reader.read_bit()?;
 
-        // transform_skip_enabled_flag
+        // Read transform_skip_enabled_flag
         let transform_skip_enabled_flag = reader.read_bit()?;
 
-        // cu_qp_delta_enabled_flag
+        // Read cu_qp_delta_enabled_flag and diff_cu_qp_delta_depth
         let cu_qp_delta_enabled_flag = reader.read_bit()?;
         let diff_cu_qp_delta_depth = if cu_qp_delta_enabled_flag {
             reader.read_ue()?
@@ -273,47 +273,48 @@ impl Pps {
             0
         };
 
-        // pps_cb_qp_offset
+        // Read pps_cb_qp_offset (MIN_QP_OFFSET..MAX_QP_OFFSET)
         let pps_cb_qp_offset = reader.read_se()?;
-        if !(-12..=12).contains(&pps_cb_qp_offset) {
+        if !(MIN_QP_OFFSET..=MAX_QP_OFFSET).contains(&pps_cb_qp_offset) {
             return Err(invalid_data_error!("pps_cb_qp_offset", pps_cb_qp_offset));
         }
 
-        // pps_cr_qp_offset
+        // Read pps_cr_qp_offset (MIN_QP_OFFSET..MAX_QP_OFFSET)
         let pps_cr_qp_offset = reader.read_se()?;
-        if !(-12..=12).contains(&pps_cr_qp_offset) {
+        if !(MIN_QP_OFFSET..=MAX_QP_OFFSET).contains(&pps_cr_qp_offset) {
             return Err(invalid_data_error!("pps_cr_qp_offset", pps_cr_qp_offset));
         }
 
-        // pps_slice_chroma_qp_offsets_present_flag
+        // Read pps_slice_chroma_qp_offsets_present_flag
         let pps_slice_chroma_qp_offsets_present_flag = reader.read_bit()?;
 
-        // weighted_pred_flag
+        // Read weighted_pred_flag
         let weighted_pred_flag = reader.read_bit()?;
 
-        // weighted_bipred_flag
+        // Read weighted_bipred_flag
         let weighted_bipred_flag = reader.read_bit()?;
 
-        // transquant_bypass_enabled_flag
+        // Read transquant_bypass_enabled_flag
         let transquant_bypass_enabled_flag = reader.read_bit()?;
 
-        // tiles_enabled_flag
+        // Read tiles_enabled_flag
         let tiles_enabled_flag = reader.read_bit()?;
 
-        // entropy_coding_sync_enabled_flag
+        // Read entropy_coding_sync_enabled_flag
         let entropy_coding_sync_enabled_flag = reader.read_bit()?;
 
-        // Tile info
+        // Parse tile info (if tiles_enabled_flag)
         let tile_info = if tiles_enabled_flag {
             Some(TileInfo::parse(reader)?)
         } else {
             None
         };
 
-        // pps_loop_filter_across_slices_enabled_flag
+        // Read pps_loop_filter_across_slices_enabled_flag
         let pps_loop_filter_across_slices_enabled_flag = reader.read_bit()?;
 
-        // deblocking_filter_control_present_flag
+        // Read deblocking_filter_control_present_flag and parse deblocking filter
+        // params
         let deblocking_filter_control_present_flag = reader.read_bit()?;
         let deblocking_filter_params = if deblocking_filter_control_present_flag {
             Some(DeblockingFilterParams::parse(reader)?)
@@ -321,7 +322,7 @@ impl Pps {
             None
         };
 
-        // pps_scaling_list_data_present_flag
+        // Read pps_scaling_list_data_present_flag and parse scaling list data
         let pps_scaling_list_data_present_flag = reader.read_bit()?;
         let scaling_list_data = if pps_scaling_list_data_present_flag {
             Some(ScalingListData::parse(reader, false)?)
@@ -329,16 +330,16 @@ impl Pps {
             None
         };
 
-        // lists_modification_present_flag
+        // Read lists_modification_present_flag
         let lists_modification_present_flag = reader.read_bit()?;
 
-        // log2_parallel_merge_level
+        // Read log2_parallel_merge_level
         let log2_parallel_merge_level = reader.read_ue()? + 2;
 
-        // slice_segment_header_extension_present_flag
+        // Read slice_segment_header_extension_present_flag
         let slice_segment_header_extension_present_flag = reader.read_bit()?;
 
-        // pps_extension_present_flag
+        // Read pps_extension_present_flag and extension flags
         let pps_extension_present_flag = reader.read_bit()?;
         let (pps_range_extension_flag, pps_multilayer_extension_flag, pps_3d_extension_flag, pps_scc_extension_flag, pps_extension_4bits) =
             if pps_extension_present_flag {
@@ -348,8 +349,8 @@ impl Pps {
             };
 
         Ok(Self {
-            pic_parameter_set_id: pps_pic_parameter_set_id,
-            seq_parameter_set_id: pps_seq_parameter_set_id,
+            pic_parameter_set_id,
+            seq_parameter_set_id,
             dependent_slice_segments_enabled_flag,
             output_flag_present_flag,
             num_extra_slice_header_bits,
@@ -451,7 +452,7 @@ impl Pps {
     /// Check if deblocking filter is disabled
     #[inline]
     pub fn is_deblocking_filter_disabled(&self) -> bool {
-        self.deblocking_filter_params.as_ref().map_or(false, |p| p.pps_deblocking_filter_disabled_flag)
+        self.deblocking_filter_params.as_ref().is_some_and(|p| p.pps_deblocking_filter_disabled_flag)
     }
 
     /// Get the Cb QP offset
