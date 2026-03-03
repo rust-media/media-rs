@@ -7,16 +7,11 @@ use media_core::{invalid_data_error, Result};
 use smallvec::SmallVec;
 
 use crate::{
+    constants::MAX_REFS,
     nal::NalUnitType,
-    pps::{Pps, MAX_TILE_COLUMNS},
+    pps::Pps,
     sps::{ShortTermRefPicSet, Sps},
 };
-
-/// Maximum number of reference pictures
-const MAX_REFS: usize = 16;
-
-/// Maximum number of entry point offsets
-const MAX_ENTRY_POINT_OFFSETS: usize = MAX_TILE_COLUMNS * 135;
 
 /// Slice type as defined in ITU-T H.265 Table 7-7
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -151,10 +146,11 @@ pub struct PredWeightTable {
 impl PredWeightTable {
     /// Parse prediction weight table from a BitReader
     pub fn parse<R: Read>(reader: &mut BitReader<R, BigEndian>, header: &SliceSegmentHeader, sps: &Sps) -> Result<Self> {
-        let mut pwt = Self::default();
-
-        // luma_log2_weight_denom
-        pwt.luma_log2_weight_denom = reader.read_ue()?;
+        let mut pwt = Self {
+            // luma_log2_weight_denom
+            luma_log2_weight_denom: reader.read_ue()?,
+            ..Default::default()
+        };
 
         // delta_chroma_log2_weight_denom
         let chroma_array_type = if sps.separate_colour_plane_flag {
@@ -190,8 +186,8 @@ impl PredWeightTable {
 
         for i in 0..num_l0 {
             if luma_weight_l0_flag[i] {
-                pwt.luma_weight_l0.push(reader.read_se()? as i32 + default_luma_weight);
-                pwt.luma_offset_l0.push(reader.read_se()? as i32);
+                pwt.luma_weight_l0.push(reader.read_se()? + default_luma_weight);
+                pwt.luma_offset_l0.push(reader.read_se()?);
             } else {
                 pwt.luma_weight_l0.push(default_luma_weight);
                 pwt.luma_offset_l0.push(0);
@@ -199,10 +195,10 @@ impl PredWeightTable {
 
             if chroma_array_type != 0 {
                 if i < chroma_weight_l0_flag.len() && chroma_weight_l0_flag[i] {
-                    let w0 = reader.read_se()? as i32;
-                    let o0 = reader.read_se()? as i32;
-                    let w1 = reader.read_se()? as i32;
-                    let o1 = reader.read_se()? as i32;
+                    let w0 = reader.read_se()?;
+                    let o0 = reader.read_se()?;
+                    let w1 = reader.read_se()?;
+                    let o1 = reader.read_se()?;
                     pwt.chroma_weight_l0.push([w0, w1]);
                     pwt.chroma_offset_l0.push([o0, o1]);
                 } else {
@@ -235,8 +231,8 @@ impl PredWeightTable {
 
             for i in 0..num_l1 {
                 if luma_weight_l1_flag[i] {
-                    pwt.luma_weight_l1.push(reader.read_se()? as i32 + default_luma_weight);
-                    pwt.luma_offset_l1.push(reader.read_se()? as i32);
+                    pwt.luma_weight_l1.push(reader.read_se()? + default_luma_weight);
+                    pwt.luma_offset_l1.push(reader.read_se()?);
                 } else {
                     pwt.luma_weight_l1.push(default_luma_weight);
                     pwt.luma_offset_l1.push(0);
@@ -244,10 +240,10 @@ impl PredWeightTable {
 
                 if chroma_array_type != 0 {
                     if i < chroma_weight_l1_flag.len() && chroma_weight_l1_flag[i] {
-                        let w0 = reader.read_se()? as i32;
-                        let o0 = reader.read_se()? as i32;
-                        let w1 = reader.read_se()? as i32;
-                        let o1 = reader.read_se()? as i32;
+                        let w0 = reader.read_se()?;
+                        let o0 = reader.read_se()?;
+                        let w1 = reader.read_se()?;
+                        let o1 = reader.read_se()?;
                         pwt.chroma_weight_l1.push([w0, w1]);
                         pwt.chroma_offset_l1.push([o0, o1]);
                     } else {
@@ -315,8 +311,8 @@ pub struct SliceSegmentHeader {
     pub collocated_ref_idx: u32,
     /// Prediction weight table
     pub pred_weight_table: Option<PredWeightTable>,
-    /// Five minus max num merge cand
-    pub five_minus_max_num_merge_cand: u32,
+    /// Max number of merge candidates
+    pub max_num_merge_cand: u32,
     /// Use integer MV flag (SCC extension)
     pub use_integer_mv_flag: bool,
     /// Slice QP delta
@@ -358,10 +354,11 @@ impl SliceSegmentHeader {
 
     /// Parse slice segment header from a BitReader
     pub fn parse_from_bit_reader<R: Read>(reader: &mut BitReader<R, BigEndian>, nal_unit_type: NalUnitType, sps: &Sps, pps: &Pps) -> Result<Self> {
-        let mut header = Self::default();
-
-        // first_slice_segment_in_pic_flag
-        header.first_slice_segment_in_pic_flag = reader.read_bit()?;
+        let mut header = Self {
+            // first_slice_segment_in_pic_flag
+            first_slice_segment_in_pic_flag: reader.read_bit()?,
+            ..Default::default()
+        };
 
         // no_output_of_prior_pics_flag (only for BLA/IDR/CRA)
         if nal_unit_type.is_irap() {
@@ -536,8 +533,9 @@ impl SliceSegmentHeader {
                 header.pred_weight_table = Some(PredWeightTable::parse(reader, &header, sps)?);
             }
 
-            // five_minus_max_num_merge_cand
-            header.five_minus_max_num_merge_cand = reader.read_ue()?;
+            // max_num_merge_cand
+            let five_minus_max_num_merge_cand = reader.read_ue()?;
+            header.max_num_merge_cand = 5 - five_minus_max_num_merge_cand;
 
             // use_integer_mv_flag (SCC extension) - skip for now
         }
@@ -619,7 +617,7 @@ impl SliceSegmentHeader {
     /// Get max number of merge candidates
     #[inline]
     pub fn max_num_merge_cand(&self) -> u32 {
-        5 - self.five_minus_max_num_merge_cand
+        self.max_num_merge_cand
     }
 
     /// Check if this is the first slice segment in the picture

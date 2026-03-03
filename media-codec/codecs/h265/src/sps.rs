@@ -7,16 +7,10 @@ use media_core::{invalid_data_error, Result};
 use smallvec::{smallvec, SmallVec};
 
 use crate::{
+    constants::{EXTENDED_SAR, MAX_LONG_TERM_REF_PICS, MAX_REFS, MAX_SPS_COUNT, MAX_SUB_LAYERS, MAX_VPS_COUNT},
     scaling_list::ScalingListData,
     vps::{HrdParameters, ProfileTierLevel},
 };
-
-/// Maximum number of sub-layers
-const MAX_SUB_LAYERS: usize = 7;
-/// Maximum number of reference pictures
-const MAX_REFS: usize = 16;
-/// Maximum number of long-term reference pictures
-const MAX_LONG_TERM_REF_PICS: usize = 32;
 
 /// H.265/HEVC Profile
 ///
@@ -62,7 +56,7 @@ pub enum Profile {
     /// Multiview Format Range Extensions Profile (general_profile_idc = 10)
     /// - Multiview video with extended bit depths/chroma formats
     /// - Identified when general_profile_compatibility_flag[6] is set
-    MultiviewRangeExtensions = 0 << 4 | 10,
+    MultiviewRangeExtensions = 10,
     /// Scalable Format Range Extensions Profile (general_profile_idc = 10)
     /// - Scalable video with extended bit depths/chroma formats
     /// - Identified when general_profile_compatibility_flag[7] is set
@@ -223,9 +217,6 @@ impl From<u8> for ChromaFormat {
         }
     }
 }
-
-/// Extended SAR aspect_ratio_idc value
-pub const EXTENDED_SAR: u8 = 255;
 
 /// Predefined Sample Aspect Ratio (SAR) values
 /// Table E-1 in H.265 specification
@@ -545,7 +536,7 @@ pub struct VuiParameters {
 
 impl VuiParameters {
     /// Parse VUI parameters from a BitReader
-    pub fn parse<R: Read>(reader: &mut BitReader<R, BigEndian>, max_sub_layers_minus1: u8) -> Result<Self> {
+    pub fn parse<R: Read>(reader: &mut BitReader<R, BigEndian>, max_sub_layers: u8) -> Result<Self> {
         // Aspect ratio info
         let aspect_ratio_info_present_flag = reader.read_bit()?;
         let aspect_ratio_info = if aspect_ratio_info_present_flag {
@@ -598,7 +589,7 @@ impl VuiParameters {
             let timing = TimingInfo::parse(reader)?;
             let hrd_present = reader.read_bit()?;
             let hrd = if hrd_present {
-                Some(HrdParameters::parse(reader, true, max_sub_layers_minus1)?)
+                Some(HrdParameters::parse(reader, true, max_sub_layers)?)
             } else {
                 None
             };
@@ -653,7 +644,7 @@ impl VuiParameters {
 
     /// Check if video uses full range
     pub fn is_full_range(&self) -> bool {
-        self.video_signal_type.as_ref().map_or(false, |vs| vs.is_full_range())
+        self.video_signal_type.as_ref().is_some_and(|vs| vs.is_full_range())
     }
 
     /// Get colour description if available
@@ -691,23 +682,23 @@ impl ShortTermRefPicSet {
     ) -> Result<Self> {
         let mut rps = Self::default();
 
-        // inter_ref_pic_set_prediction_flag
+        // Read inter_ref_pic_set_prediction_flag
         if st_rps_idx != 0 {
             rps.inter_ref_pic_set_prediction_flag = reader.read_bit()?;
         }
 
         if rps.inter_ref_pic_set_prediction_flag {
             // Prediction from another set
-            let delta_idx_minus1 = if st_rps_idx == num_short_term_ref_pic_sets {
-                reader.read_ue()? as usize
+            let delta_idx = if st_rps_idx == num_short_term_ref_pic_sets {
+                reader.read_ue()? as usize + 1
             } else {
-                0
+                1
             };
 
             let _delta_rps_sign = reader.read_bit()?;
-            let _abs_delta_rps_minus1 = reader.read_ue()?;
+            let _abs_delta_rps = reader.read_ue()? + 1;
 
-            let ref_rps_idx = st_rps_idx - (delta_idx_minus1 + 1);
+            let ref_rps_idx = st_rps_idx - delta_idx;
             if ref_rps_idx >= previous_sets.len() {
                 return Err(invalid_data_error!("ref_rps_idx", ref_rps_idx));
             }
@@ -875,46 +866,48 @@ impl Sps {
 
     /// Parse SPS from a BitReader
     pub fn parse_from_bit_reader<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<Self> {
-        // sps_video_parameter_set_id (4 bits)
+        // Read sps_video_parameter_set_id
         let sps_video_parameter_set_id = reader.read::<4, u8>()?;
-
-        // sps_max_sub_layers (3 bits, stored as minus1)
-        let sps_max_sub_layers_minus1 = reader.read::<3, u8>()?;
-        if sps_max_sub_layers_minus1 > 6 {
-            return Err(invalid_data_error!("sps_max_sub_layers", sps_max_sub_layers_minus1 + 1));
+        if sps_video_parameter_set_id as usize >= MAX_VPS_COUNT {
+            return Err(invalid_data_error!("sps_video_parameter_set_id", sps_video_parameter_set_id));
         }
-        let sps_max_sub_layers = sps_max_sub_layers_minus1 + 1;
 
-        // sps_temporal_id_nesting_flag (1 bit)
+        // Read sps_max_sub_layers
+        let sps_max_sub_layers = reader.read::<3, u8>()? + 1;
+        if sps_max_sub_layers as usize > MAX_SUB_LAYERS {
+            return Err(invalid_data_error!("sps_max_sub_layers", sps_max_sub_layers));
+        }
+
+        // Read sps_temporal_id_nesting_flag
         let sps_temporal_id_nesting_flag = reader.read_bit()?;
 
-        // profile_tier_level
-        let profile_tier_level = ProfileTierLevel::parse(reader, true, sps_max_sub_layers_minus1)?;
+        // Parse profile_tier_level
+        let profile_tier_level = ProfileTierLevel::parse(reader, true, sps_max_sub_layers)?;
 
-        // sps_seq_parameter_set_id
+        // Read sps_seq_parameter_set_id
         let sps_seq_parameter_set_id = reader.read_ue()? as u8;
-        if sps_seq_parameter_set_id > 15 {
+        if sps_seq_parameter_set_id as usize >= MAX_SPS_COUNT {
             return Err(invalid_data_error!("sps_seq_parameter_set_id", sps_seq_parameter_set_id));
         }
 
-        // chroma_format_idc
+        // Read chroma_format_idc
         let chroma_format_idc = reader.read_ue()?;
         let chroma_format = ChromaFormat::from(chroma_format_idc as u8);
 
-        // separate_colour_plane_flag (only if chroma_format_idc == 3)
+        // Read separate_colour_plane_flag (only if chroma_format_idc == 3)
         let separate_colour_plane_flag = if chroma_format_idc == 3 {
             reader.read_bit()?
         } else {
             false
         };
 
-        // pic_width_in_luma_samples
+        // Read pic_width_in_luma_samples
         let pic_width_in_luma_samples = reader.read_ue()?;
 
-        // pic_height_in_luma_samples
+        // Read pic_height_in_luma_samples
         let pic_height_in_luma_samples = reader.read_ue()?;
 
-        // conformance_window_flag
+        // Read conformance_window_flag and conformance window offsets
         let conformance_window_flag = reader.read_bit()?;
         let (conf_win_left_offset, conf_win_right_offset, conf_win_top_offset, conf_win_bottom_offset) = if conformance_window_flag {
             (reader.read_ue()?, reader.read_ue()?, reader.read_ue()?, reader.read_ue()?)
@@ -922,25 +915,25 @@ impl Sps {
             (0, 0, 0, 0)
         };
 
-        // bit_depth_luma
+        // Read bit_depth_luma
         let bit_depth_luma = reader.read_ue()? as u8 + 8;
 
-        // bit_depth_chroma
+        // Read bit_depth_chroma
         let bit_depth_chroma = reader.read_ue()? as u8 + 8;
 
-        // log2_max_pic_order_cnt_lsb
+        // Read log2_max_pic_order_cnt_lsb
         let log2_max_pic_order_cnt_lsb = reader.read_ue()? as u8 + 4;
 
-        // sps_sub_layer_ordering_info_present_flag
+        // Read sps_sub_layer_ordering_info_present_flag
         let sps_sub_layer_ordering_info_present_flag = reader.read_bit()?;
 
-        // Sub-layer ordering info
+        // Parse sub-layer ordering info
+        let num_sub_layers = sps_max_sub_layers as usize;
         let start_idx = if sps_sub_layer_ordering_info_present_flag {
             0
         } else {
-            sps_max_sub_layers_minus1 as usize
+            num_sub_layers - 1
         };
-        let num_sub_layers = sps_max_sub_layers as usize;
 
         let mut sps_max_dec_pic_buffering = smallvec![0u32; num_sub_layers];
         let mut sps_max_num_reorder_pics = smallvec![0u32; num_sub_layers];
@@ -961,25 +954,25 @@ impl Sps {
             }
         }
 
-        // log2_min_luma_coding_block_size
+        // Read log2_min_luma_coding_block_size
         let log2_min_luma_coding_block_size = reader.read_ue()? + 3;
 
-        // log2_diff_max_min_luma_coding_block_size
+        // Read log2_diff_max_min_luma_coding_block_size
         let log2_diff_max_min_luma_coding_block_size = reader.read_ue()?;
 
-        // log2_min_luma_transform_block_size
+        // Read log2_min_luma_transform_block_size
         let log2_min_luma_transform_block_size = reader.read_ue()? + 2;
 
-        // log2_diff_max_min_luma_transform_block_size
+        // Read log2_diff_max_min_luma_transform_block_size
         let log2_diff_max_min_luma_transform_block_size = reader.read_ue()?;
 
-        // max_transform_hierarchy_depth_inter
+        // Read max_transform_hierarchy_depth_inter
         let max_transform_hierarchy_depth_inter = reader.read_ue()?;
 
-        // max_transform_hierarchy_depth_intra
+        // Read max_transform_hierarchy_depth_intra
         let max_transform_hierarchy_depth_intra = reader.read_ue()?;
 
-        // scaling_list_enabled_flag
+        // Read scaling_list_enabled_flag and parse scaling list data
         let scaling_list_enabled_flag = reader.read_bit()?;
         let (sps_scaling_list_data_present_flag, scaling_list_data) = if scaling_list_enabled_flag {
             let present = reader.read_bit()?;
@@ -994,13 +987,13 @@ impl Sps {
             (false, None)
         };
 
-        // amp_enabled_flag
+        // Read amp_enabled_flag
         let amp_enabled_flag = reader.read_bit()?;
 
-        // sample_adaptive_offset_enabled_flag
+        // Read sample_adaptive_offset_enabled_flag
         let sample_adaptive_offset_enabled_flag = reader.read_bit()?;
 
-        // pcm_enabled_flag
+        // Read pcm_enabled_flag and PCM parameters
         let pcm_enabled_flag = reader.read_bit()?;
         let (
             pcm_sample_bit_depth_luma,
@@ -1009,8 +1002,11 @@ impl Sps {
             log2_diff_max_min_pcm_luma_coding_block_size,
             pcm_loop_filter_disabled_flag,
         ) = if pcm_enabled_flag {
+            // Read pcm_sample_bit_depth_luma
             let luma_bits = reader.read::<4, u8>()? + 1;
+            // Read pcm_sample_bit_depth_chroma
             let chroma_bits = reader.read::<4, u8>()? + 1;
+            // Read log2_min_pcm_luma_coding_block_size
             let min_size = reader.read_ue()? + 3;
             let diff_size = reader.read_ue()?;
             let loop_filter = reader.read_bit()?;
@@ -1019,20 +1015,23 @@ impl Sps {
             (0, 0, 0, 0, false)
         };
 
-        // num_short_term_ref_pic_sets
+        // Read num_short_term_ref_pic_sets
         let num_short_term_ref_pic_sets = reader.read_ue()?;
 
-        // short_term_ref_pic_set
+        // Parse short_term_ref_pic_set for each set
         let mut short_term_ref_pic_sets = Vec::with_capacity(num_short_term_ref_pic_sets as usize);
         for i in 0..num_short_term_ref_pic_sets as usize {
             let rps = ShortTermRefPicSet::parse(reader, i, num_short_term_ref_pic_sets as usize, &short_term_ref_pic_sets)?;
             short_term_ref_pic_sets.push(rps);
         }
 
-        // long_term_ref_pics_present_flag
+        // Read long_term_ref_pics_present_flag and parse long-term reference pictures
         let long_term_ref_pics_present_flag = reader.read_bit()?;
         let (num_long_term_ref_pics_sps, lt_ref_pic_poc_lsb_sps, used_by_curr_pic_lt_sps_flag) = if long_term_ref_pics_present_flag {
             let num_lt = reader.read_ue()?;
+            if num_lt as usize > MAX_LONG_TERM_REF_PICS {
+                return Err(invalid_data_error!("num_long_term_ref_pics_sps", num_lt));
+            }
             let mut poc_lsb = SmallVec::with_capacity(num_lt as usize);
             let mut used_flags = SmallVec::with_capacity(num_lt as usize);
             let log2_max_poc_lsb = log2_max_pic_order_cnt_lsb as u32;
@@ -1045,21 +1044,21 @@ impl Sps {
             (0, SmallVec::new(), SmallVec::new())
         };
 
-        // sps_temporal_mvp_enabled_flag
+        // Read sps_temporal_mvp_enabled_flag
         let sps_temporal_mvp_enabled_flag = reader.read_bit()?;
 
-        // strong_intra_smoothing_enabled_flag
+        // Read strong_intra_smoothing_enabled_flag
         let strong_intra_smoothing_enabled_flag = reader.read_bit()?;
 
-        // vui_parameters_present_flag
+        // Read vui_parameters_present_flag and parse VUI parameters
         let vui_parameters_present_flag = reader.read_bit()?;
         let vui_parameters = if vui_parameters_present_flag {
-            Some(VuiParameters::parse(reader, sps_max_sub_layers_minus1)?)
+            Some(VuiParameters::parse(reader, sps_max_sub_layers)?)
         } else {
             None
         };
 
-        // sps_extension_present_flag
+        // Read sps_extension_present_flag and extension flags
         let sps_extension_present_flag = reader.read_bit()?;
         let (sps_range_extension_flag, sps_multilayer_extension_flag, sps_3d_extension_flag, sps_scc_extension_flag, sps_extension_4bits) =
             if sps_extension_present_flag {
@@ -1182,13 +1181,13 @@ impl Sps {
     /// Get picture width in CTBs
     #[inline]
     pub fn pic_width_in_ctbs(&self) -> u32 {
-        (self.pic_width_in_luma_samples + self.ctb_size() - 1) / self.ctb_size()
+        self.pic_width_in_luma_samples.div_ceil(self.ctb_size())
     }
 
     /// Get picture height in CTBs
     #[inline]
     pub fn pic_height_in_ctbs(&self) -> u32 {
-        (self.pic_height_in_luma_samples + self.ctb_size() - 1) / self.ctb_size()
+        self.pic_height_in_luma_samples.div_ceil(self.ctb_size())
     }
 
     /// Get total picture size in CTBs (width * height)
@@ -1253,7 +1252,7 @@ impl Sps {
 
     /// Check if video uses full range
     pub fn is_full_range(&self) -> bool {
-        self.vui_parameters.as_ref().map_or(false, |vui_params| vui_params.is_full_range())
+        self.vui_parameters.as_ref().is_some_and(|vui_params| vui_params.is_full_range())
     }
 
     /// Get colour description if available

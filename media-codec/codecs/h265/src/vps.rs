@@ -6,10 +6,7 @@ use media_codec_bitstream::{BigEndian, BitReader};
 use media_core::{invalid_data_error, Result};
 use smallvec::SmallVec;
 
-/// Maximum number of sub-layers
-const MAX_SUB_LAYERS: usize = 7;
-/// Maximum CPB count
-const MAX_CPB_CNT: usize = 32;
+use crate::constants::{MAX_CPB_COUNT, MAX_SUB_LAYERS, MAX_VPS_COUNT, MAX_VPS_LAYERS};
 
 /// Profile Tier Level information
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -62,65 +59,65 @@ pub struct ProfileTierLevel {
 
 impl ProfileTierLevel {
     /// Parse ProfileTierLevel from a BitReader
-    pub fn parse<R: Read>(reader: &mut BitReader<R, BigEndian>, profile_present_flag: bool, max_num_sub_layers_minus1: u8) -> Result<Self> {
+    pub fn parse<R: Read>(reader: &mut BitReader<R, BigEndian>, profile_present_flag: bool, max_num_sub_layers: u8) -> Result<Self> {
         let mut ptl = Self::default();
 
         if profile_present_flag {
-            // general_profile_space (2 bits)
+            // Read general_profile_space (2 bits)
             ptl.general_profile_space = reader.read::<2, u8>()?;
-            // general_tier_flag (1 bit)
+            // Read general_tier_flag (1 bit)
             ptl.general_tier_flag = reader.read_bit()?;
-            // general_profile_idc (5 bits)
+            // Read general_profile_idc (5 bits)
             ptl.general_profile_idc = reader.read::<5, u8>()?;
-            // general_profile_compatibility_flag[32] (32 bits)
+            // Read general_profile_compatibility_flag[32] (32 bits)
             ptl.general_profile_compatibility_flags = reader.read::<32, u32>()?;
-            // general_progressive_source_flag
+            // Read general_progressive_source_flag
             ptl.general_progressive_source_flag = reader.read_bit()?;
-            // general_interlaced_source_flag
+            // Read general_interlaced_source_flag
             ptl.general_interlaced_source_flag = reader.read_bit()?;
-            // general_non_packed_constraint_flag
+            // Read general_non_packed_constraint_flag
             ptl.general_non_packed_constraint_flag = reader.read_bit()?;
-            // general_frame_only_constraint_flag
+            // Read general_frame_only_constraint_flag
             ptl.general_frame_only_constraint_flag = reader.read_bit()?;
-            // general_reserved_zero_44bits (44 bits - constraint indicator flags)
+            // Read general_reserved_zero_44bits (44 bits - constraint indicator flags)
             let high = reader.read::<32, u64>()?;
             let low = reader.read::<12, u64>()?;
             ptl.general_constraint_indicator_flags = (high << 12) | low;
         }
 
-        // general_level_idc (8 bits)
+        // general_level_idc
         ptl.general_level_idc = reader.read::<8, u8>()?;
 
-        // Sub-layer flags
-        let num_sub_layers = max_num_sub_layers_minus1 as usize;
-        ptl.sub_layer_profile_present_flag.reserve(num_sub_layers);
-        ptl.sub_layer_level_present_flag.reserve(num_sub_layers);
+        // Sub-layer flags (count = max_num_sub_layers - 1)
+        let sub_layer_count = (max_num_sub_layers - 1) as usize;
+        ptl.sub_layer_profile_present_flag.reserve(sub_layer_count);
+        ptl.sub_layer_level_present_flag.reserve(sub_layer_count);
 
-        for _ in 0..num_sub_layers {
+        for _ in 0..sub_layer_count {
             ptl.sub_layer_profile_present_flag.push(reader.read_bit()?);
             ptl.sub_layer_level_present_flag.push(reader.read_bit()?);
         }
 
-        // Reserved bits for alignment if max_num_sub_layers_minus1 > 0
-        if max_num_sub_layers_minus1 > 0 {
-            for _ in num_sub_layers..8 {
+        // Reserved bits for alignment if max_num_sub_layers > 1
+        if max_num_sub_layers > 1 {
+            for _ in sub_layer_count..8 {
                 let _ = reader.read::<2, u8>()?; // reserved_zero_2bits
             }
         }
 
         // Sub-layer profile and level data
-        ptl.sub_layer_profile_space = smallvec::smallvec![0; num_sub_layers];
-        ptl.sub_layer_tier_flag = smallvec::smallvec![false; num_sub_layers];
-        ptl.sub_layer_profile_idc = smallvec::smallvec![0; num_sub_layers];
-        ptl.sub_layer_profile_compatibility_flags = smallvec::smallvec![0; num_sub_layers];
-        ptl.sub_layer_progressive_source_flag = smallvec::smallvec![false; num_sub_layers];
-        ptl.sub_layer_interlaced_source_flag = smallvec::smallvec![false; num_sub_layers];
-        ptl.sub_layer_non_packed_constraint_flag = smallvec::smallvec![false; num_sub_layers];
-        ptl.sub_layer_frame_only_constraint_flag = smallvec::smallvec![false; num_sub_layers];
-        ptl.sub_layer_constraint_indicator_flags = smallvec::smallvec![0; num_sub_layers];
-        ptl.sub_layer_level_idc = smallvec::smallvec![0; num_sub_layers];
+        ptl.sub_layer_profile_space = smallvec::smallvec![0; sub_layer_count];
+        ptl.sub_layer_tier_flag = smallvec::smallvec![false; sub_layer_count];
+        ptl.sub_layer_profile_idc = smallvec::smallvec![0; sub_layer_count];
+        ptl.sub_layer_profile_compatibility_flags = smallvec::smallvec![0; sub_layer_count];
+        ptl.sub_layer_progressive_source_flag = smallvec::smallvec![false; sub_layer_count];
+        ptl.sub_layer_interlaced_source_flag = smallvec::smallvec![false; sub_layer_count];
+        ptl.sub_layer_non_packed_constraint_flag = smallvec::smallvec![false; sub_layer_count];
+        ptl.sub_layer_frame_only_constraint_flag = smallvec::smallvec![false; sub_layer_count];
+        ptl.sub_layer_constraint_indicator_flags = smallvec::smallvec![0; sub_layer_count];
+        ptl.sub_layer_level_idc = smallvec::smallvec![0; sub_layer_count];
 
-        for i in 0..num_sub_layers {
+        for i in 0..sub_layer_count {
             if ptl.sub_layer_profile_present_flag[i] {
                 ptl.sub_layer_profile_space[i] = reader.read::<2, u8>()?;
                 ptl.sub_layer_tier_flag[i] = reader.read_bit()?;
@@ -193,15 +190,15 @@ impl ProfileTierLevel {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SubLayerHrdParameters {
     /// Bit rate values
-    pub bit_rate_value: SmallVec<[u32; MAX_CPB_CNT]>,
+    pub bit_rate_value: SmallVec<[u32; MAX_CPB_COUNT]>,
     /// CPB size values
-    pub cpb_size_value: SmallVec<[u32; MAX_CPB_CNT]>,
+    pub cpb_size_value: SmallVec<[u32; MAX_CPB_COUNT]>,
     /// CPB size DU values (if sub_pic_hrd_params_present_flag)
-    pub cpb_size_du_value: SmallVec<[u32; MAX_CPB_CNT]>,
+    pub cpb_size_du_value: SmallVec<[u32; MAX_CPB_COUNT]>,
     /// Bit rate DU values (if sub_pic_hrd_params_present_flag)
-    pub bit_rate_du_value: SmallVec<[u32; MAX_CPB_CNT]>,
+    pub bit_rate_du_value: SmallVec<[u32; MAX_CPB_COUNT]>,
     /// CBR flags
-    pub cbr_flag: SmallVec<[bool; MAX_CPB_CNT]>,
+    pub cbr_flag: SmallVec<[bool; MAX_CPB_COUNT]>,
 }
 
 impl SubLayerHrdParameters {
@@ -275,7 +272,13 @@ pub struct HrdParameters {
 
 impl HrdParameters {
     /// Parse HrdParameters from a BitReader
-    pub fn parse<R: Read>(reader: &mut BitReader<R, BigEndian>, common_inf_present_flag: bool, max_num_sub_layers_minus1: u8) -> Result<Self> {
+    ///
+    /// # Arguments
+    /// * `reader` - BitReader to read from
+    /// * `common_inf_present_flag` - Whether common info is present
+    /// * `max_num_sub_layers` - Maximum number of sub-layers (actual value,
+    ///   1-7)
+    pub fn parse<R: Read>(reader: &mut BitReader<R, BigEndian>, common_inf_present_flag: bool, max_num_sub_layers: u8) -> Result<Self> {
         let mut hrd = Self::default();
 
         if common_inf_present_flag {
@@ -305,7 +308,7 @@ impl HrdParameters {
             }
         }
 
-        let num_sub_layers = (max_num_sub_layers_minus1 + 1) as usize;
+        let num_sub_layers = max_num_sub_layers as usize;
         hrd.fixed_pic_rate_general_flag = smallvec::smallvec![false; num_sub_layers];
         hrd.fixed_pic_rate_within_cvs_flag = smallvec::smallvec![false; num_sub_layers];
         hrd.elemental_duration_in_tc = smallvec::smallvec![0; num_sub_layers];
@@ -428,46 +431,52 @@ impl Vps {
 
     /// Parse VPS from a BitReader
     pub fn parse_from_bit_reader<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<Self> {
-        // vps_video_parameter_set_id (4 bits)
+        // Read vps_video_parameter_set_id
         let vps_video_parameter_set_id = reader.read::<4, u8>()?;
-        if vps_video_parameter_set_id > 15 {
+        if vps_video_parameter_set_id as usize >= MAX_VPS_COUNT {
             return Err(invalid_data_error!("vps_video_parameter_set_id", vps_video_parameter_set_id));
         }
 
-        // vps_base_layer_internal_flag (1 bit)
+        // Read vps_base_layer_internal_flag
         let vps_base_layer_internal_flag = reader.read_bit()?;
-        // vps_base_layer_available_flag (1 bit)
+
+        // Read vps_base_layer_available_flag
         let vps_base_layer_available_flag = reader.read_bit()?;
-        // vps_max_layers (6 bits, stored as minus1)
+
+        // Read vps_max_layers
         let vps_max_layers = reader.read::<6, u8>()? + 1;
-        // vps_max_sub_layers (3 bits, stored as minus1)
-        let vps_max_sub_layers_minus1 = reader.read::<3, u8>()?;
-        if vps_max_sub_layers_minus1 > 6 {
-            return Err(invalid_data_error!("vps_max_sub_layers", vps_max_sub_layers_minus1 + 1));
+        if vps_max_layers as usize > MAX_VPS_LAYERS {
+            return Err(invalid_data_error!("vps_max_layers", vps_max_layers));
         }
-        let vps_max_sub_layers = vps_max_sub_layers_minus1 + 1;
-        // vps_temporal_id_nesting_flag (1 bit)
+
+        // Read vps_max_sub_layers
+        let vps_max_sub_layers = reader.read::<3, u8>()? + 1;
+        if vps_max_sub_layers as usize > MAX_SUB_LAYERS {
+            return Err(invalid_data_error!("vps_max_sub_layers", vps_max_sub_layers));
+        }
+
+        // Read vps_temporal_id_nesting_flag
         let vps_temporal_id_nesting_flag = reader.read_bit()?;
 
-        // vps_reserved_0xffff_16bits (16 bits) - must be 0xFFFF
+        // Read reserved (must be 0xFFFF)
         let reserved = reader.read::<16, u16>()?;
         if reserved != 0xFFFF {
-            return Err(invalid_data_error!("vps_reserved_0xffff_16bits", reserved));
+            return Err(invalid_data_error!("reserved", reserved));
         }
 
-        // profile_tier_level
-        let profile_tier_level = ProfileTierLevel::parse(reader, true, vps_max_sub_layers_minus1)?;
+        // Parse profile_tier_level
+        let profile_tier_level = ProfileTierLevel::parse(reader, true, vps_max_sub_layers)?;
 
-        // vps_sub_layer_ordering_info_present_flag
+        // Read vps_sub_layer_ordering_info_present_flag
         let vps_sub_layer_ordering_info_present_flag = reader.read_bit()?;
 
-        // Sub-layer ordering info
+        // Parse sub-layer ordering info
+        let num_sub_layers = vps_max_sub_layers as usize;
         let start_idx = if vps_sub_layer_ordering_info_present_flag {
             0
         } else {
-            vps_max_sub_layers_minus1 as usize
+            num_sub_layers - 1
         };
-        let num_sub_layers = vps_max_sub_layers as usize;
 
         let mut vps_max_dec_pic_buffering = smallvec::smallvec![0u32; num_sub_layers];
         let mut vps_max_num_reorder_pics = smallvec::smallvec![0u32; num_sub_layers];
@@ -488,12 +497,13 @@ impl Vps {
             }
         }
 
-        // vps_max_layer_id (6 bits)
+        // Read vps_max_layer_id
         let vps_max_layer_id = reader.read::<6, u8>()?;
-        // vps_num_layer_sets
+
+        // Read vps_num_layer_sets
         let vps_num_layer_sets = reader.read_ue()? + 1;
 
-        // layer_id_included_flag
+        // Parse layer_id_included_flag for each layer set
         let mut layer_id_included_flag = Vec::with_capacity(vps_num_layer_sets as usize);
         // Layer set 0 is implicit
         layer_id_included_flag.push(vec![true]); // layer 0 in set 0
@@ -506,7 +516,7 @@ impl Vps {
             layer_id_included_flag.push(layer_flags);
         }
 
-        // vps_timing_info_present_flag
+        // Read vps_timing_info_present_flag
         let vps_timing_info_present_flag = reader.read_bit()?;
 
         let mut vps_num_units_in_tick = 0;
@@ -518,17 +528,24 @@ impl Vps {
         let mut cprms_present_flag = Vec::new();
         let mut hrd_parameters = Vec::new();
 
+        // Parse timing info and HRD parameters (if present)
         if vps_timing_info_present_flag {
+            // Read vps_num_units_in_tick
             vps_num_units_in_tick = reader.read::<32, u32>()?;
+            // Read vps_time_scale
             vps_time_scale = reader.read::<32, u32>()?;
+            // Read vps_poc_proportional_to_timing_flag
             vps_poc_proportional_to_timing_flag = reader.read_bit()?;
 
             if vps_poc_proportional_to_timing_flag {
+                // Read vps_num_ticks_poc_diff_one
                 vps_num_ticks_poc_diff_one = reader.read_ue()? + 1;
             }
 
+            // Read vps_num_hrd_parameters
             vps_num_hrd_parameters = reader.read_ue()?;
 
+            // Parse HRD parameters for each HRD
             for i in 0..vps_num_hrd_parameters as usize {
                 hrd_layer_set_idx.push(reader.read_ue()?);
 
@@ -539,11 +556,11 @@ impl Vps {
                 };
                 cprms_present_flag.push(cprms_flag);
 
-                hrd_parameters.push(HrdParameters::parse(reader, cprms_flag, vps_max_sub_layers_minus1)?);
+                hrd_parameters.push(HrdParameters::parse(reader, cprms_flag, vps_max_sub_layers)?);
             }
         }
 
-        // vps_extension_flag
+        // Read vps_extension_flag
         let vps_extension_flag = reader.read_bit()?;
 
         Ok(Self {

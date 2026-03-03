@@ -6,6 +6,10 @@ use media_codec_bitstream::{BigEndian, BitReader};
 use media_core::Result;
 use smallvec::SmallVec;
 
+use crate::constants::{
+    DEFAULT_DC_COEFF, NUM_16X16_MATRICES, NUM_32X32_MATRICES_FULL, NUM_32X32_MATRICES_REDUCED, NUM_4X4_MATRICES, NUM_8X8_MATRICES,
+};
+
 /// Diagonal scan order for 4x4 blocks
 ///
 /// Maps linear index (0..16) to (x, y) coordinates in scan order.
@@ -151,7 +155,8 @@ impl ScalingListSizeId {
 /// For 32x32 blocks:
 /// - 0: Intra Y
 /// - 3: Inter Y
-/// (Cb/Cr matrices exist only when chroma_format_idc == 3)
+///
+/// Cb/Cr matrices exist only when chroma_format_idc == 3
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
 pub enum MatrixId {
@@ -231,22 +236,6 @@ pub fn get_default_scaling_list(size_id: ScalingListSizeId, matrix_id: MatrixId)
     }
 }
 
-/// Get the default DC coefficient for 16x16 and 32x32 scaling lists
-pub const fn get_default_dc_coefficient(matrix_id: MatrixId) -> u8 {
-    // Default DC coefficient is always 16 for H.265
-    if matrix_id.is_intra() {
-        16
-    } else {
-        16
-    }
-}
-
-pub const NUM_4X4_MATRICES: usize = 6;
-pub const NUM_8X8_MATRICES: usize = 6;
-pub const NUM_16X16_MATRICES: usize = 6;
-pub const NUM_32X32_MATRICES_FULL: usize = 6;
-pub const NUM_32X32_MATRICES_REDUCED: usize = 2;
-
 /// Source of scaling list values
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum ScalingListSource {
@@ -287,7 +276,7 @@ impl ScalingList {
         Self {
             coefficients: vec![16; num_coeffs],
             dc_coeff: match size_id {
-                ScalingListSizeId::Size16x16 | ScalingListSizeId::Size32x32 => Some(16),
+                ScalingListSizeId::Size16x16 | ScalingListSizeId::Size32x32 => Some(DEFAULT_DC_COEFF),
                 _ => None,
             },
             source: ScalingListSource::Default,
@@ -298,7 +287,7 @@ impl ScalingList {
     pub fn with_defaults(size_id: ScalingListSizeId, matrix_id: MatrixId) -> Self {
         let defaults = get_default_scaling_list(size_id, matrix_id);
         let dc_coeff = match size_id {
-            ScalingListSizeId::Size16x16 | ScalingListSizeId::Size32x32 => Some(get_default_dc_coefficient(matrix_id)),
+            ScalingListSizeId::Size16x16 | ScalingListSizeId::Size32x32 => Some(DEFAULT_DC_COEFF),
             _ => None,
         };
 
@@ -506,8 +495,8 @@ impl ScalingListData {
         // For 16x16 and 32x32, parse DC coefficient separately
         let dc_coeff = match size_id {
             ScalingListSizeId::Size16x16 | ScalingListSizeId::Size32x32 => {
-                let scaling_list_dc_coef_minus8 = reader.read_se()?;
-                let dc = ((scaling_list_dc_coef_minus8 + 8) & 0xFF) as u8;
+                let scaling_list_dc_coef = reader.read_se()? + 8;
+                let dc = (scaling_list_dc_coef & 0xFF) as u8;
                 next_coef = dc as i32;
                 Some(dc)
             }
@@ -521,17 +510,16 @@ impl ScalingListData {
         };
 
         // Parse coefficients in scan order
-        for i in 0..num_coeffs {
+        for (x, y) in scan.iter().take(num_coeffs) {
             let scaling_list_delta_coef = reader.read_se()?;
             next_coef = (next_coef + scaling_list_delta_coef + 256) % 256;
 
             // Convert from scan order to raster order
-            let (x, y) = scan[i];
             let block_size = match size_id {
                 ScalingListSizeId::Size4x4 => 4,
                 _ => 8,
             };
-            let raster_idx = (y as usize) * block_size + (x as usize);
+            let raster_idx = (*y as usize) * block_size + (*x as usize);
             coefficients[raster_idx] = next_coef as u8;
         }
 
