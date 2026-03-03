@@ -6,10 +6,7 @@ use media_codec_bitstream::{BigEndian, BitReader};
 use media_core::{invalid_data_error, Result};
 use smallvec::SmallVec;
 
-use crate::{nal::NalUnitType, pps::Pps, sps::Sps};
-
-/// Maximum number of reference pictures
-const MAX_REFS: usize = 32;
+use crate::{constants::MAX_REFS, nal::NalUnitType, pps::Pps, sps::Sps};
 
 /// Slice type as defined in ITU-T H.264 Table 7-6
 ///
@@ -223,12 +220,13 @@ impl PredWeightTable {
         num_ref_idx_l1_active: u32,
         chroma_array_type: u8,
     ) -> Result<Self> {
-        let mut pwt = Self::default();
+        let mut pwt = Self {
+            // Read luma_log2_weight_denom
+            luma_log2_weight_denom: reader.read_ue()?,
+            ..Default::default()
+        };
 
-        // luma_log2_weight_denom
-        pwt.luma_log2_weight_denom = reader.read_ue()?;
-
-        // chroma_log2_weight_denom
+        // Read chroma_log2_weight_denom
         if chroma_array_type != 0 {
             pwt.chroma_log2_weight_denom = reader.read_ue()?;
         }
@@ -489,30 +487,30 @@ impl SliceHeader {
 
         let is_idr = matches!(nal_unit_type, NalUnitType::SliceIdr);
 
-        // first_mb_in_slice
+        // Read first_mb_in_slice
         header.first_mb_in_slice = reader.read_ue()?;
 
-        // slice_type
+        // Read slice_type
         let slice_type_raw = reader.read_ue()? as u8;
         header.slice_type = SliceType::from_u8(slice_type_raw).ok_or_else(|| invalid_data_error!("slice_type", slice_type_raw))?;
 
-        // pic_parameter_set_id
+        // Read pic_parameter_set_id
         let pic_parameter_set_id = reader.read_ue()?;
         if pic_parameter_set_id > 255 {
             return Err(invalid_data_error!("pic_parameter_set_id", pic_parameter_set_id));
         }
         header.pic_parameter_set_id = pic_parameter_set_id as u8;
 
-        // colour_plane_id (for separate colour plane)
+        // Read colour_plane_id (for separate colour plane)
         if sps.separate_colour_plane_flag {
             header.colour_plane_id = reader.read::<2, u8>()?;
         }
 
-        // frame_num
+        // Read frame_num
         let frame_num_bits = sps.log2_max_frame_num;
         header.frame_num = reader.read_var(frame_num_bits)?;
 
-        // field_pic_flag and bottom_field_flag
+        // Read field_pic_flag and bottom_field_flag
         if !sps.frame_mbs_only_flag {
             header.field_pic_flag = reader.read_bit()?;
             if header.field_pic_flag {
@@ -520,12 +518,12 @@ impl SliceHeader {
             }
         }
 
-        // idr_pic_id (for IDR slices)
+        // Read idr_pic_id (for IDR slices)
         if is_idr {
             header.idr_pic_id = reader.read_ue()?;
         }
 
-        // Picture order count
+        // Read Picture order count
         if sps.pic_order_cnt_type == 0 {
             let poc_lsb_bits = sps.log2_max_pic_order_cnt_lsb;
             header.pic_order_cnt_lsb = reader.read_var(poc_lsb_bits)?;
@@ -542,17 +540,17 @@ impl SliceHeader {
             }
         }
 
-        // redundant_pic_cnt
+        // Read redundant_pic_cnt
         if pps.redundant_pic_cnt_present_flag {
             header.redundant_pic_cnt = reader.read_ue()?;
         }
 
-        // direct_spatial_mv_pred_flag (for B slices)
+        // Read direct_spatial_mv_pred_flag (for B slices)
         if header.slice_type.is_b() {
             header.direct_spatial_mv_pred_flag = reader.read_bit()?;
         }
 
-        // num_ref_idx_active_override_flag and ref_idx counts
+        // Read num_ref_idx_active_override_flag and ref_idx counts
         if header.slice_type.is_p() || header.slice_type.is_sp() || header.slice_type.is_b() {
             header.num_ref_idx_active_override_flag = reader.read_bit()?;
             if header.num_ref_idx_active_override_flag {
@@ -566,12 +564,12 @@ impl SliceHeader {
             }
         }
 
-        // ref_pic_list_modification
+        // Read ref_pic_list_modification
         if !header.slice_type.is_intra() {
             header.ref_pic_list_modification = Some(RefPicListModification::parse(reader, header.slice_type)?);
         }
 
-        // pred_weight_table
+        // Read pred_weight_table
         let chroma_array_type = if sps.separate_colour_plane_flag {
             0
         } else {
@@ -590,12 +588,12 @@ impl SliceHeader {
             )?);
         }
 
-        // dec_ref_pic_marking
+        // Read dec_ref_pic_marking
         if nal_ref_idc != 0 {
             header.dec_ref_pic_marking = Some(DecRefPicMarking::parse(reader, is_idr)?);
         }
 
-        // cabac_init_idc
+        // Read cabac_init_idc
         if pps.entropy_coding_mode_flag && !header.slice_type.is_intra() {
             header.cabac_init_idc = reader.read_ue()?;
             if header.cabac_init_idc > 2 {
@@ -603,7 +601,7 @@ impl SliceHeader {
             }
         }
 
-        // slice_qp_delta
+        // Read slice_qp_delta
         header.slice_qp_delta = reader.read_se()?;
 
         // SP/SI specific parameters
@@ -626,7 +624,7 @@ impl SliceHeader {
             }
         }
 
-        // slice_group_change_cycle
+        // Read slice_group_change_cycle
         if pps.num_slice_groups > 1 {
             if let Some(ref sg_params) = pps.slice_group_params {
                 let map_type = sg_params.slice_group_map_type as u8;

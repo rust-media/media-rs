@@ -3,13 +3,15 @@
 use std::io::Read;
 
 use media_codec_bitstream::{BigEndian, BitReader};
-use media_core::{invalid_data_error, Result};
+use media_core::{invalid_data_error, none_param_error, not_found_error, Result};
 use smallvec::SmallVec;
 
-use crate::scaling_list::{ScalingList4x4, ScalingList8x8};
-
-/// Maximum number of slice groups
-const MAX_SLICE_GROUPS: usize = 8;
+use crate::{
+    constants::{MAX_PPS_COUNT, MAX_SLICE_GROUPS, MAX_SPS_COUNT},
+    ps::ParameterSets,
+    scaling_list::{ScalingList4x4, ScalingList8x8},
+    sps::Sps,
+};
 
 /// Slice group map type
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -252,36 +254,63 @@ impl PpsScalingMatrix {
 }
 
 impl Pps {
-    /// Parse PPS from raw NAL unit RBSP data (with EPB already removed)
-    pub fn parse(data: &[u8]) -> Result<Self> {
-        Self::parse_with_sps_info(data, 1, false)
+    pub fn parse_ids(data: &[u8]) -> Result<(u8, u8)> {
+        let mut reader = BitReader::new(data);
+        Self::parse_ids_from_bit_reader(&mut reader)
+    }
+
+    pub fn parse_with_sps(data: &[u8], sps: &Sps) -> Result<Self> {
+        let mut reader = BitReader::new(data);
+        Self::parse_from_bit_reader(&mut reader, Some(sps), None)
     }
 
     /// Parse PPS from raw NAL unit RBSP data with SPS information
-    pub fn parse_with_sps_info(data: &[u8], chroma_format_idc: u32, has_separate_colour_plane: bool) -> Result<Self> {
+    pub fn parse_with_param_sets(data: &[u8], param_sets: &ParameterSets) -> Result<Self> {
         let mut reader = BitReader::new(data);
-        Self::parse_from_bit_reader(&mut reader, chroma_format_idc, has_separate_colour_plane)
+        Self::parse_from_bit_reader(&mut reader, None, Some(param_sets))
     }
 
-    /// Parse PPS from a BitReader
-    pub fn parse_from_bit_reader<R: Read>(
-        reader: &mut BitReader<R, BigEndian>,
-        chroma_format_idc: u32,
-        _has_separate_colour_plane: bool,
-    ) -> Result<Self> {
+    pub fn parse_ids_from_bit_reader<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<(u8, u8)> {
         // Read pic_parameter_set_id
         let pic_parameter_set_id = reader.read_ue()?;
-        if pic_parameter_set_id > 255 {
-            return Err(invalid_data_error!("pic_parameter_set_id", pic_parameter_set_id));
+        if pic_parameter_set_id >= MAX_PPS_COUNT as u32 {
+            return Err(invalid_data_error!("pps_id", pic_parameter_set_id));
         }
         let pic_parameter_set_id = pic_parameter_set_id as u8;
 
         // Read seq_parameter_set_id
         let seq_parameter_set_id = reader.read_ue()?;
-        if seq_parameter_set_id > 31 {
-            return Err(invalid_data_error!("seq_parameter_set_id", seq_parameter_set_id));
+        if seq_parameter_set_id >= MAX_SPS_COUNT as u32 {
+            return Err(invalid_data_error!("sps_id", seq_parameter_set_id));
         }
         let seq_parameter_set_id = seq_parameter_set_id as u8;
+
+        Ok((pic_parameter_set_id, seq_parameter_set_id))
+    }
+
+    /// Parse PPS from a BitReader
+    pub fn parse_from_bit_reader<R: Read>(
+        reader: &mut BitReader<R, BigEndian>,
+        sps: Option<&Sps>,
+        param_sets: Option<&ParameterSets>,
+    ) -> Result<Self> {
+        let (pic_parameter_set_id, seq_parameter_set_id) = Self::parse_ids_from_bit_reader(reader)?;
+
+        // Get SPS either from direct parameter or from param_sets
+        let sps = if let Some(sps) = sps {
+            if sps.seq_parameter_set_id != seq_parameter_set_id {
+                return Err(invalid_data_error!("sps_id", seq_parameter_set_id));
+            };
+
+            sps
+        } else if let Some(param_sets) = param_sets {
+            param_sets.get_sps(seq_parameter_set_id as u32).ok_or_else(|| not_found_error!("sps_id", seq_parameter_set_id))?
+        } else {
+            return Err(none_param_error!("sps or param_sets"));
+        };
+
+        let chroma_format_idc = sps.chroma_format as u32;
+        let qp_offset = (sps.bit_depth_luma as i32 - 8) * 6; // QP offset for bit depths > 8
 
         // Read entropy_coding_mode_flag
         let entropy_coding_mode_flag = reader.read_bit()?;
@@ -318,10 +347,10 @@ impl Pps {
         let weighted_bipred_idc = reader.read::<2, u8>()?;
 
         // Read pic_init_qp and convert
-        let pic_init_qp = reader.read_se()? + 26;
+        let pic_init_qp = reader.read_se()? + 26 + qp_offset;
 
         // Read pic_init_qs and convert
-        let pic_init_qs = reader.read_se()? + 26;
+        let pic_init_qs = reader.read_se()? + 26 + qp_offset;
 
         // Read chroma_qp_index_offset
         let chroma_qp_index_offset = reader.read_se()?;

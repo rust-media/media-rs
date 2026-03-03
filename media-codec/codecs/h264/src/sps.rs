@@ -6,18 +6,19 @@ use media_codec_bitstream::{BigEndian, BitReader};
 use media_core::{invalid_data_error, Result};
 use smallvec::SmallVec;
 
-use crate::scaling_list::ScalingMatrix;
-
-/// Maximum CPB count
-const MAX_CPB_CNT: usize = 32;
+use crate::{
+    constants::{EXTENDED_SAR, MAX_CPB_COUNT, MAX_SPS_COUNT},
+    scaling_list::ScalingMatrix,
+};
 
 /// This struct stores them in the same order as the bitstream (MSB first)
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct ConstraintSetFlags(u8);
 
+#[rustfmt::skip]
 impl ConstraintSetFlags {
     /// Bit mask for constraint_set0_flag (bit 7)
-    const FLAG0: u8 = 1 << (7 - 0); // 0b1000_0000
+    const FLAG0: u8 = 1 << 7;       // 0b1000_0000
     /// Bit mask for constraint_set1_flag (bit 6)
     const FLAG1: u8 = 1 << (7 - 1); // 0b0100_0000
     /// Bit mask for constraint_set2_flag (bit 5)
@@ -244,9 +245,6 @@ impl From<u8> for ChromaFormat {
         }
     }
 }
-
-/// Extended SAR aspect_ratio_idc value
-pub const EXTENDED_SAR: u8 = 255;
 
 /// Predefined Sample Aspect Ratio (SAR) values
 /// Table E-1 in H.264 specification
@@ -486,11 +484,11 @@ pub struct HrdParameters {
     /// CPB size scale
     pub cpb_size_scale: u8,
     /// Bit rate values for each CPB
-    pub bit_rate_value: SmallVec<[u32; MAX_CPB_CNT]>,
+    pub bit_rate_value: SmallVec<[u32; MAX_CPB_COUNT]>,
     /// CPB size values for each CPB
-    pub cpb_size_value: SmallVec<[u32; MAX_CPB_CNT]>,
+    pub cpb_size_value: SmallVec<[u32; MAX_CPB_COUNT]>,
     /// CBR (Constant Bit Rate) flags for each CPB
-    pub cbr_flag: SmallVec<[bool; MAX_CPB_CNT]>,
+    pub cbr_flag: SmallVec<[bool; MAX_CPB_COUNT]>,
     /// Initial CPB removal delay length
     pub initial_cpb_removal_delay_length: u8,
     /// CPB removal delay length
@@ -740,7 +738,7 @@ impl VuiParameters {
 
     /// Check if video uses full range
     pub fn is_full_range(&self) -> bool {
-        self.video_signal_type.as_ref().map_or(false, |vs| vs.is_full_range())
+        self.video_signal_type.as_ref().is_some_and(|vs| vs.is_full_range())
     }
 
     /// Get colour description if available
@@ -861,8 +859,8 @@ impl Sps {
 
         // Read seq_parameter_set_id
         let seq_parameter_set_id = reader.read_ue()?;
-        if seq_parameter_set_id > 31 {
-            return Err(invalid_data_error!("seq_parameter_set_id", seq_parameter_set_id));
+        if seq_parameter_set_id >= MAX_SPS_COUNT as u32 {
+            return Err(invalid_data_error!("sps_id", seq_parameter_set_id));
         }
         let seq_parameter_set_id = seq_parameter_set_id as u8;
 
@@ -1073,7 +1071,7 @@ impl Sps {
 
     /// Check if video uses full range
     pub fn is_full_range(&self) -> bool {
-        self.vui_parameters.as_ref().map_or(false, |vui_params| vui_params.is_full_range())
+        self.vui_parameters.as_ref().is_some_and(|vui_params| vui_params.is_full_range())
     }
 
     /// Get timing info if available

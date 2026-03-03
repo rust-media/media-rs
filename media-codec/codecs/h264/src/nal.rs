@@ -54,8 +54,8 @@ pub enum NalUnitType {
 
 impl NalUnitType {
     /// Create from raw NAL unit type value
-    pub fn from_u8(value: u8) -> Option<Self> {
-        let nal_unit_type = match value {
+    pub fn from_u8(value: u8) -> Self {
+        match value {
             0 => Self::Unspecified,
             1 => Self::SliceNonIdr,
             2 => Self::SlicePartA,
@@ -76,10 +76,8 @@ impl NalUnitType {
             19 => Self::SliceAux,
             20 => Self::SliceExt,
             21 => Self::SliceExtDepth,
-            _ => return None,
-        };
-
-        Some(nal_unit_type)
+            _ => Self::Unspecified,
+        }
     }
 }
 
@@ -132,7 +130,10 @@ impl NalHeader for H264NalHeader {
         let byte = data[0];
         let forbidden_zero_bit = (byte >> 7) != 0;
         let nal_ref_idc = (byte >> 5) & 0x03;
-        let nal_unit_type = NalUnitType::from_u8(byte & 0x1F).ok_or_else(|| invalid_data_error!("H264 NAL: invalid nal_unit_type"))?;
+        let nal_unit_type = NalUnitType::from_u8(byte & 0x1F);
+        if nal_unit_type == NalUnitType::Unspecified {
+            return Err(invalid_data_error!("H264 NAL: invalid unit type"));
+        }
 
         // Check forbidden_zero_bit
         if forbidden_zero_bit {
