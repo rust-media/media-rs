@@ -3,7 +3,20 @@ use media_codec_h265::{
     pps::Pps,
     slice::{SliceSegmentHeader, SliceType},
     sps::Sps,
+    vps::Vps,
 };
+
+#[rustfmt::skip]
+const VPS_DATA: &[u8] = &[
+    0x0C,                               // vps_id = 0, base_internal = 1, base_available = 1, max_layers[5:4] = 0
+    0x01,                               // max_layers[3:0] = 0, max_sub_layers = 0, temporal_id_nesting = 1
+    0xFF, 0xFF,                         // reserved
+    0x01,                               // profile_space = 0, tier = 0(Main), profile_idc = 1(Main)
+    0x60, 0x00, 0x00, 0x00,             // profile_compatibility_flags
+    0xB0, 0x00, 0x00, 0x00, 0x00, 0x00, // constraint_flags (48 bits)
+    0x5D,                               // level_idc = 93 (Level 3.1)
+    0x95, 0xC0, 0x80,
+];
 
 /// SPS data
 #[rustfmt::skip]
@@ -40,8 +53,9 @@ const IDR_SLICE_HEADER: &[u8] = &[
 
 #[test]
 fn test_parse_idr_slice_header() {
-    let sps = Sps::parse(SPS_DATA).unwrap();
-    let pps = Pps::parse(PPS_DATA).unwrap();
+    let vps = Vps::parse(VPS_DATA).unwrap();
+    let sps = Sps::parse_with_vps(SPS_DATA, &vps).unwrap();
+    let pps = Pps::parse_with_sps(PPS_DATA, &sps).unwrap();
 
     let header = SliceSegmentHeader::parse(IDR_SLICE_HEADER, NalUnitType::IdrNLp, &sps, &pps).unwrap();
 

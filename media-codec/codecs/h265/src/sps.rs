@@ -3,13 +3,14 @@
 use std::io::Read;
 
 use media_codec_bitstream::{BigEndian, BitReader};
-use media_core::{invalid_data_error, Result};
+use media_core::{invalid_data_error, not_found_error, Result};
 use smallvec::{smallvec, SmallVec};
 
 use crate::{
     constants::{EXTENDED_SAR, MAX_LONG_TERM_REF_PICS, MAX_REFS, MAX_SPS_COUNT, MAX_SUB_LAYERS, MAX_VPS_COUNT},
+    ps::ParameterSets,
     scaling_list::ScalingListData,
-    vps::{HrdParameters, ProfileTierLevel},
+    vps::{HrdParameters, ProfileTierLevel, Vps},
 };
 
 /// H.265/HEVC Profile
@@ -858,24 +859,61 @@ pub struct Sps {
 }
 
 impl Sps {
-    /// Parse SPS from raw NAL unit RBSP data (with EPB already removed)
-    pub fn parse(data: &[u8]) -> Result<Self> {
+    pub fn parse_vps_id(data: &[u8]) -> Result<u8> {
         let mut reader = BitReader::new(data);
-        Self::parse_from_bit_reader(&mut reader)
+        Self::parse_vps_id_from_bit_reader(&mut reader)
+    }
+
+    pub fn parse_with_vps(data: &[u8], vps: &Vps) -> Result<Self> {
+        let mut reader = BitReader::new(data);
+        Self::parse_from_bit_reader(&mut reader, Some(vps), None)
+    }
+
+    pub fn parse_with_param_sets(data: &[u8], param_sets: &ParameterSets) -> Result<Self> {
+        let mut reader = BitReader::new(data);
+        Self::parse_from_bit_reader(&mut reader, None, Some(param_sets))
+    }
+
+    pub fn parse_vps_id_from_bit_reader<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<u8> {
+        // Read sps_video_parameter_set_id
+        let video_parameter_set_id = reader.read::<4, u8>()?;
+        if video_parameter_set_id as usize >= MAX_VPS_COUNT {
+            return Err(invalid_data_error!("sps_video_parameter_set_id", video_parameter_set_id));
+        }
+
+        Ok(video_parameter_set_id)
     }
 
     /// Parse SPS from a BitReader
-    pub fn parse_from_bit_reader<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<Self> {
-        // Read sps_video_parameter_set_id
-        let sps_video_parameter_set_id = reader.read::<4, u8>()?;
-        if sps_video_parameter_set_id as usize >= MAX_VPS_COUNT {
-            return Err(invalid_data_error!("sps_video_parameter_set_id", sps_video_parameter_set_id));
-        }
+    pub fn parse_from_bit_reader<R: Read>(
+        reader: &mut BitReader<R, BigEndian>,
+        vps: Option<&Vps>,
+        param_sets: Option<&ParameterSets>,
+    ) -> Result<Self> {
+        let sps_video_parameter_set_id = Self::parse_vps_id_from_bit_reader(reader)?;
+
+        let vps = if let Some(vps) = vps {
+            if sps_video_parameter_set_id != vps.video_parameter_set_id {
+                return Err(invalid_data_error!("vps_id", sps_video_parameter_set_id));
+            }
+
+            Some(vps)
+        } else if let Some(param_sets) = param_sets {
+            Some(param_sets.get_vps(sps_video_parameter_set_id as u32).ok_or_else(|| not_found_error!("vps_id", sps_video_parameter_set_id))?)
+        } else {
+            None
+        };
 
         // Read sps_max_sub_layers
         let sps_max_sub_layers = reader.read::<3, u8>()? + 1;
         if sps_max_sub_layers as usize > MAX_SUB_LAYERS {
             return Err(invalid_data_error!("sps_max_sub_layers", sps_max_sub_layers));
+        }
+
+        if let Some(vps) = vps {
+            if sps_max_sub_layers > vps.vps_max_sub_layers {
+                return Err(invalid_data_error!("sps_max_sub_layers", sps_max_sub_layers));
+            }
         }
 
         // Read sps_temporal_id_nesting_flag
