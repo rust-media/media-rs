@@ -759,7 +759,7 @@ pub struct Sps {
     /// Profile tier level
     pub profile_tier_level: ProfileTierLevel,
     /// SPS ID (0-15)
-    pub sps_seq_parameter_set_id: u8,
+    pub seq_parameter_set_id: u8,
     /// Chroma format
     pub chroma_format: ChromaFormat,
     /// Separate colour plane flag (for chroma_format_idc == 3)
@@ -875,10 +875,10 @@ impl Sps {
     }
 
     pub fn parse_vps_id_from_bit_reader<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<u8> {
-        // Read sps_video_parameter_set_id
+        // Read video_parameter_set_id
         let video_parameter_set_id = reader.read::<4, u8>()?;
         if video_parameter_set_id as usize >= MAX_VPS_COUNT {
-            return Err(invalid_data_error!("sps_video_parameter_set_id", video_parameter_set_id));
+            return Err(invalid_data_error!("vps_id", video_parameter_set_id));
         }
 
         Ok(video_parameter_set_id)
@@ -890,16 +890,16 @@ impl Sps {
         vps: Option<&Vps>,
         param_sets: Option<&ParameterSets>,
     ) -> Result<Self> {
-        let sps_video_parameter_set_id = Self::parse_vps_id_from_bit_reader(reader)?;
+        let video_parameter_set_id = Self::parse_vps_id_from_bit_reader(reader)?;
 
         let vps = if let Some(vps) = vps {
-            if sps_video_parameter_set_id != vps.video_parameter_set_id {
-                return Err(invalid_data_error!("vps_id", sps_video_parameter_set_id));
+            if video_parameter_set_id != vps.video_parameter_set_id {
+                return Err(invalid_data_error!("vps_id", video_parameter_set_id));
             }
 
             Some(vps)
         } else if let Some(param_sets) = param_sets {
-            Some(param_sets.get_vps(sps_video_parameter_set_id as u32).ok_or_else(|| not_found_error!("vps_id", sps_video_parameter_set_id))?)
+            Some(param_sets.get_vps(video_parameter_set_id as u32).ok_or_else(|| not_found_error!("vps_id", video_parameter_set_id))?)
         } else {
             None
         };
@@ -922,10 +922,10 @@ impl Sps {
         // Parse profile_tier_level
         let profile_tier_level = ProfileTierLevel::parse(reader, true, sps_max_sub_layers)?;
 
-        // Read sps_seq_parameter_set_id
-        let sps_seq_parameter_set_id = reader.read_ue()? as u8;
-        if sps_seq_parameter_set_id as usize >= MAX_SPS_COUNT {
-            return Err(invalid_data_error!("sps_seq_parameter_set_id", sps_seq_parameter_set_id));
+        // Read seq_parameter_set_id
+        let seq_parameter_set_id = reader.read_ue()?;
+        if seq_parameter_set_id as usize >= MAX_SPS_COUNT {
+            return Err(invalid_data_error!("sps_id", seq_parameter_set_id));
         }
 
         // Read chroma_format_idc
@@ -1106,11 +1106,11 @@ impl Sps {
             };
 
         Ok(Self {
-            video_parameter_set_id: sps_video_parameter_set_id,
+            video_parameter_set_id: video_parameter_set_id as u8,
             sps_max_sub_layers,
             sps_temporal_id_nesting_flag,
             profile_tier_level,
-            sps_seq_parameter_set_id,
+            seq_parameter_set_id: seq_parameter_set_id as u8,
             chroma_format,
             separate_colour_plane_flag,
             pic_width_in_luma_samples,

@@ -1,6 +1,7 @@
 use media_codec_h265::{
     nal::NalUnitType,
     pps::Pps,
+    ps::ParameterSets,
     slice::{SliceSegmentHeader, SliceType},
     sps::Sps,
     vps::Vps,
@@ -56,11 +57,15 @@ fn test_parse_idr_slice_header() {
     let vps = Vps::parse(VPS_DATA).unwrap();
     let sps = Sps::parse_with_vps(SPS_DATA, &vps).unwrap();
     let pps = Pps::parse_with_sps(PPS_DATA, &sps).unwrap();
+    let mut param_sets = ParameterSets::new();
+    param_sets.add_vps(vps);
+    param_sets.add_sps(sps).unwrap();
+    param_sets.add_pps(pps).unwrap();
 
-    let header = SliceSegmentHeader::parse(IDR_SLICE_HEADER, NalUnitType::IdrNLp, &sps, &pps).unwrap();
+    let header = SliceSegmentHeader::parse(IDR_SLICE_HEADER, NalUnitType::IdrNLp, &param_sets).unwrap();
 
     assert!(header.first_slice_segment_in_pic_flag);
-    assert_eq!(header.slice_pic_parameter_set_id, 0);
+    assert_eq!(header.pic_parameter_set_id, 0);
     assert_eq!(header.slice_type, SliceType::I);
 }
 
