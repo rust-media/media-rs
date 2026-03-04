@@ -15,7 +15,7 @@ use crate::{
 pub struct ParameterSets {
     /// VPS list (indexed by video_parameter_set_id)
     pub vps_list: [Option<Box<Vps>>; MAX_VPS_COUNT],
-    /// SPS list (indexed by sps_seq_parameter_set_id)
+    /// SPS list (indexed by seq_parameter_set_id)
     pub sps_list: [Option<Box<Sps>>; MAX_SPS_COUNT],
     /// PPS list (indexed by pic_parameter_set_id)
     pub pps_list: [Option<Box<Pps>>; MAX_PPS_COUNT],
@@ -50,7 +50,7 @@ impl ParameterSets {
     }
 
     pub fn add_sps(&mut self, sps: Sps) -> Result<()> {
-        let sps_id = sps.sps_seq_parameter_set_id as usize;
+        let sps_id = sps.seq_parameter_set_id as usize;
         let vps_id = sps.video_parameter_set_id as usize;
 
         self.vps_list.get(vps_id).and_then(|v| v.as_ref()).ok_or_else(|| not_found_error!("vps_id", vps_id))?;

@@ -859,7 +859,7 @@ impl Sps {
 
         // Read seq_parameter_set_id
         let seq_parameter_set_id = reader.read_ue()?;
-        if seq_parameter_set_id >= MAX_SPS_COUNT as u32 {
+        if seq_parameter_set_id as usize >= MAX_SPS_COUNT {
             return Err(invalid_data_error!("sps_id", seq_parameter_set_id));
         }
         let seq_parameter_set_id = seq_parameter_set_id as u8;

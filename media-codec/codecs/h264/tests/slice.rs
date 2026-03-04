@@ -1,6 +1,7 @@
 use media_codec_h264::{
     nal::NalUnitType,
     pps::Pps,
+    ps::ParameterSets,
     slice::{SliceHeader, SliceType},
     sps::Sps,
 };
@@ -36,13 +37,15 @@ const IDR_SLICE_HEADER: &[u8] = &[
 fn test_parse_idr_slice_header() {
     let sps = Sps::parse(SPS_DATA).unwrap();
     let pps = Pps::parse_with_sps(PPS_DATA, &sps).unwrap();
+    let mut param_sets = ParameterSets::new();
+    param_sets.add_sps(sps);
+    param_sets.add_pps(pps).unwrap();
 
     let header = SliceHeader::parse(
         IDR_SLICE_HEADER,
         NalUnitType::SliceIdr,
         3, // nal_ref_idc (reference picture)
-        &sps,
-        &pps,
+        &param_sets,
     )
     .unwrap();
 

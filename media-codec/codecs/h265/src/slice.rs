@@ -3,13 +3,14 @@
 use std::io::Read;
 
 use media_codec_bitstream::{BigEndian, BitReader};
-use media_core::{invalid_data_error, Result};
+use media_core::{invalid_data_error, not_found_error, Result};
 use smallvec::SmallVec;
 
 use crate::{
-    constants::MAX_REFS,
+    constants::{MAX_PPS_COUNT, MAX_REFS},
     nal::NalUnitType,
     pps::Pps,
+    ps::ParameterSets,
     sps::{ShortTermRefPicSet, Sps},
 };
 
@@ -266,7 +267,7 @@ pub struct SliceSegmentHeader {
     /// No output of prior pics flag (only for IRAP)
     pub no_output_of_prior_pics_flag: bool,
     /// PPS ID (0-63)
-    pub slice_pic_parameter_set_id: u8,
+    pub pic_parameter_set_id: u8,
     /// Dependent slice segment flag
     pub dependent_slice_segment_flag: bool,
     /// Slice segment address
@@ -347,13 +348,17 @@ pub struct SliceSegmentHeader {
 
 impl SliceSegmentHeader {
     /// Parse slice segment header from raw NAL unit RBSP data
-    pub fn parse(data: &[u8], nal_unit_type: NalUnitType, sps: &Sps, pps: &Pps) -> Result<Self> {
+    pub fn parse(data: &[u8], nal_unit_type: NalUnitType, param_sets: &ParameterSets) -> Result<Self> {
         let mut reader = BitReader::new(data);
-        Self::parse_from_bit_reader(&mut reader, nal_unit_type, sps, pps)
+        Self::parse_from_bit_reader(&mut reader, nal_unit_type, param_sets)
     }
 
     /// Parse slice segment header from a BitReader
-    pub fn parse_from_bit_reader<R: Read>(reader: &mut BitReader<R, BigEndian>, nal_unit_type: NalUnitType, sps: &Sps, pps: &Pps) -> Result<Self> {
+    pub fn parse_from_bit_reader<R: Read>(
+        reader: &mut BitReader<R, BigEndian>,
+        nal_unit_type: NalUnitType,
+        param_sets: &ParameterSets,
+    ) -> Result<Self> {
         let mut header = Self {
             // first_slice_segment_in_pic_flag
             first_slice_segment_in_pic_flag: reader.read_bit()?,
@@ -365,19 +370,23 @@ impl SliceSegmentHeader {
             header.no_output_of_prior_pics_flag = reader.read_bit()?;
         }
 
-        // slice_pic_parameter_set_id
-        header.slice_pic_parameter_set_id = reader.read_ue()? as u8;
-        if header.slice_pic_parameter_set_id > 63 {
-            return Err(invalid_data_error!("slice_pic_parameter_set_id", header.slice_pic_parameter_set_id));
+        // Read pic_parameter_set_id
+        let pic_parameter_set_id = reader.read_ue()?;
+        if pic_parameter_set_id as usize >= MAX_PPS_COUNT {
+            return Err(invalid_data_error!("pps_id", pic_parameter_set_id));
         }
+        header.pic_parameter_set_id = pic_parameter_set_id as u8;
 
-        // dependent_slice_segment_flag
+        let pps = param_sets.get_pps(header.pic_parameter_set_id as u32).ok_or_else(|| not_found_error!("pps_id", header.pic_parameter_set_id))?;
+        let sps = param_sets.get_sps(pps.seq_parameter_set_id as u32).ok_or_else(|| not_found_error!("sps_id", pps.seq_parameter_set_id))?;
+
+        // Read dependent_slice_segment_flag
         if !header.first_slice_segment_in_pic_flag {
             if pps.dependent_slice_segments_enabled_flag {
                 header.dependent_slice_segment_flag = reader.read_bit()?;
             }
 
-            // slice_segment_address
+            // Read slice_segment_address
             let pic_size_in_ctbs_y = sps.pic_size_in_ctbs();
             let bits_needed = (32 - pic_size_in_ctbs_y.leading_zeros()).max(1);
             header.slice_segment_address = reader.read_var(bits_needed)?;
@@ -388,34 +397,34 @@ impl SliceSegmentHeader {
             return Ok(header);
         }
 
-        // slice_reserved_flag (num_extra_slice_header_bits)
+        // Read slice_reserved_flags
         for _ in 0..pps.num_extra_slice_header_bits {
             let _ = reader.read_bit()?; // slice_reserved_flag[i]
         }
 
-        // slice_type
+        // Read slice_type
         let slice_type_raw = reader.read_ue()? as u8;
         header.slice_type = SliceType::from_u8(slice_type_raw).ok_or_else(|| invalid_data_error!("slice_type", slice_type_raw))?;
 
-        // pic_output_flag
+        // Read pic_output_flag
         if pps.output_flag_present_flag {
             header.pic_output_flag = reader.read_bit()?;
         } else {
             header.pic_output_flag = true;
         }
 
-        // colour_plane_id
+        // Read colour_plane_id
         if sps.separate_colour_plane_flag {
             header.colour_plane_id = reader.read::<2, u8>()?;
         }
 
         // For non-IDR slices
         if !nal_unit_type.is_idr() {
-            // slice_pic_order_cnt_lsb
+            // Read slice_pic_order_cnt_lsb
             let poc_lsb_bits = sps.log2_max_pic_order_cnt_lsb as u32;
             header.slice_pic_order_cnt_lsb = reader.read_var(poc_lsb_bits)?;
 
-            // short_term_ref_pic_set_sps_flag
+            // Read short_term_ref_pic_set_sps_flag
             header.short_term_ref_pic_set_sps_flag = reader.read_bit()?;
 
             if !header.short_term_ref_pic_set_sps_flag {
@@ -427,7 +436,7 @@ impl SliceSegmentHeader {
                     &sps.short_term_ref_pic_sets,
                 )?);
             } else if sps.num_short_term_ref_pic_sets > 1 {
-                // short_term_ref_pic_set_idx
+                // Read short_term_ref_pic_set_idx
                 let bits_needed = (32 - sps.num_short_term_ref_pic_sets.leading_zeros()).max(1);
                 header.short_term_ref_pic_set_idx = reader.read_var(bits_needed)?;
             }
@@ -461,13 +470,13 @@ impl SliceSegmentHeader {
                 }
             }
 
-            // slice_temporal_mvp_enabled_flag
+            // Read slice_temporal_mvp_enabled_flag
             if sps.sps_temporal_mvp_enabled_flag {
                 header.slice_temporal_mvp_enabled_flag = reader.read_bit()?;
             }
         }
 
-        // slice_sao_luma_flag and slice_sao_chroma_flag
+        // Read slice_sao_luma_flag and slice_sao_chroma_flag
         if sps.sample_adaptive_offset_enabled_flag {
             header.slice_sao_luma_flag = reader.read_bit()?;
             let chroma_array_type = if sps.separate_colour_plane_flag {
@@ -482,7 +491,7 @@ impl SliceSegmentHeader {
 
         // Reference picture list related
         if header.slice_type.is_inter() {
-            // num_ref_idx_active_override_flag
+            // Read num_ref_idx_active_override_flag
             let num_ref_idx_active_override_flag = reader.read_bit()?;
             if num_ref_idx_active_override_flag {
                 header.num_ref_idx_l0_active = reader.read_ue()? + 1;
@@ -494,22 +503,22 @@ impl SliceSegmentHeader {
                 header.num_ref_idx_l1_active = pps.num_ref_idx_l1_default_active;
             }
 
-            // ref_pic_lists_modification
+            // Read ref_pic_lists_modification
             if pps.lists_modification_present_flag {
                 header.ref_pic_list_modification = RefPicListModification::parse(reader, &header)?;
             }
 
-            // mvd_l1_zero_flag
+            // Read mvd_l1_zero_flag
             if header.slice_type.is_b() {
                 header.mvd_l1_zero_flag = reader.read_bit()?;
             }
 
-            // cabac_init_flag
+            // Read cabac_init_flag
             if pps.cabac_init_present_flag {
                 header.cabac_init_flag = reader.read_bit()?;
             }
 
-            // collocated_from_l0_flag and collocated_ref_idx
+            // Read collocated_from_l0_flag and collocated_ref_idx
             if header.slice_temporal_mvp_enabled_flag {
                 if header.slice_type.is_b() {
                     header.collocated_from_l0_flag = reader.read_bit()?;
@@ -528,22 +537,22 @@ impl SliceSegmentHeader {
                 }
             }
 
-            // pred_weight_table
+            // Read pred_weight_table
             if (pps.weighted_pred_flag && header.slice_type.is_p()) || (pps.weighted_bipred_flag && header.slice_type.is_b()) {
                 header.pred_weight_table = Some(PredWeightTable::parse(reader, &header, sps)?);
             }
 
-            // max_num_merge_cand
+            // Read max_num_merge_cand
             let five_minus_max_num_merge_cand = reader.read_ue()?;
             header.max_num_merge_cand = 5 - five_minus_max_num_merge_cand;
 
             // use_integer_mv_flag (SCC extension) - skip for now
         }
 
-        // slice_qp_delta
+        // Read slice_qp_delta
         header.slice_qp_delta = reader.read_se()?;
 
-        // slice_cb_qp_offset and slice_cr_qp_offset
+        // Read slice_cb_qp_offset and slice_cr_qp_offset
         if pps.pps_slice_chroma_qp_offsets_present_flag {
             header.slice_cb_qp_offset = reader.read_se()?;
             header.slice_cr_qp_offset = reader.read_se()?;
@@ -551,7 +560,7 @@ impl SliceSegmentHeader {
 
         // cu_chroma_qp_offset_enabled_flag (range extension) - skip for now
 
-        // deblocking_filter_override_flag
+        // Read deblocking_filter_override_flag
         if pps.deblocking_filter_control_present_flag {
             if let Some(ref dbf_params) = pps.deblocking_filter_params {
                 if dbf_params.deblocking_filter_override_enabled_flag {
@@ -572,7 +581,7 @@ impl SliceSegmentHeader {
             }
         }
 
-        // slice_loop_filter_across_slices_enabled_flag
+        // Read slice_loop_filter_across_slices_enabled_flag
         let has_tiles_or_entropy_sync = pps.tiles_enabled_flag || pps.entropy_coding_sync_enabled_flag;
         if has_tiles_or_entropy_sync {
             header.slice_loop_filter_across_slices_enabled_flag = reader.read_bit()?;

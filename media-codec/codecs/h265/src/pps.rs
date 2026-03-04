@@ -225,14 +225,14 @@ impl Pps {
     }
 
     pub fn parse_ids_from_bit_reader<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<(u8, u8)> {
-        // Read pps_pic_parameter_set_id
+        // Read pic_parameter_set_id
         let pic_parameter_set_id = reader.read_ue()?;
         if pic_parameter_set_id as usize >= MAX_PPS_COUNT {
             return Err(invalid_data_error!("pps_id", pic_parameter_set_id));
         }
         let pic_parameter_set_id = pic_parameter_set_id as u8;
 
-        // Read pps_seq_parameter_set_id
+        // Read seq_parameter_set_id
         let seq_parameter_set_id = reader.read_ue()?;
         if seq_parameter_set_id as usize >= MAX_SPS_COUNT {
             return Err(invalid_data_error!("sps_id", seq_parameter_set_id));
@@ -251,7 +251,7 @@ impl Pps {
         let (pic_parameter_set_id, seq_parameter_set_id) = Self::parse_ids_from_bit_reader(reader)?;
 
         let sps = if let Some(sps) = sps {
-            if seq_parameter_set_id != sps.sps_seq_parameter_set_id {
+            if seq_parameter_set_id != sps.seq_parameter_set_id {
                 return Err(invalid_data_error!("sps_id", seq_parameter_set_id));
             }
 

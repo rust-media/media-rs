@@ -3,10 +3,15 @@
 use std::io::Read;
 
 use media_codec_bitstream::{BigEndian, BitReader};
-use media_core::{invalid_data_error, Result};
+use media_core::{invalid_data_error, not_found_error, Result};
 use smallvec::SmallVec;
 
-use crate::{constants::MAX_REFS, nal::NalUnitType, pps::Pps, sps::Sps};
+use crate::{
+    constants::{MAX_PPS_COUNT, MAX_REFS},
+    nal::NalUnitType,
+    pps::Pps,
+    ps::ParameterSets,
+};
 
 /// Slice type as defined in ITU-T H.264 Table 7-6
 ///
@@ -470,9 +475,9 @@ pub struct SliceHeader {
 
 impl SliceHeader {
     /// Parse slice header from raw NAL unit RBSP data
-    pub fn parse(data: &[u8], nal_unit_type: NalUnitType, nal_ref_idc: u8, sps: &Sps, pps: &Pps) -> Result<Self> {
+    pub fn parse(data: &[u8], nal_unit_type: NalUnitType, nal_ref_idc: u8, param_sets: &ParameterSets) -> Result<Self> {
         let mut reader = BitReader::new(data);
-        Self::parse_from_bit_reader(&mut reader, nal_unit_type, nal_ref_idc, sps, pps)
+        Self::parse_from_bit_reader(&mut reader, nal_unit_type, nal_ref_idc, param_sets)
     }
 
     /// Parse slice header from a BitReader
@@ -480,8 +485,7 @@ impl SliceHeader {
         reader: &mut BitReader<R, BigEndian>,
         nal_unit_type: NalUnitType,
         nal_ref_idc: u8,
-        sps: &Sps,
-        pps: &Pps,
+        param_sets: &ParameterSets,
     ) -> Result<Self> {
         let mut header = Self::default();
 
@@ -496,10 +500,13 @@ impl SliceHeader {
 
         // Read pic_parameter_set_id
         let pic_parameter_set_id = reader.read_ue()?;
-        if pic_parameter_set_id > 255 {
-            return Err(invalid_data_error!("pic_parameter_set_id", pic_parameter_set_id));
+        if pic_parameter_set_id as usize >= MAX_PPS_COUNT {
+            return Err(invalid_data_error!("pps_id", pic_parameter_set_id));
         }
         header.pic_parameter_set_id = pic_parameter_set_id as u8;
+
+        let pps = param_sets.get_pps(pic_parameter_set_id).ok_or_else(|| not_found_error!("pps_id", pic_parameter_set_id))?;
+        let sps = param_sets.get_sps(pps.seq_parameter_set_id as u32).ok_or_else(|| not_found_error!("sps_id", pps.seq_parameter_set_id))?;
 
         // Read colour_plane_id (for separate colour plane)
         if sps.separate_colour_plane_flag {

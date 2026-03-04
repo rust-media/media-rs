@@ -7,7 +7,7 @@ use media_core::{invalid_data_error, none_param_error, not_found_error, Result};
 use smallvec::SmallVec;
 
 use crate::{
-    constants::{MAX_PPS_COUNT, MAX_SLICE_GROUPS, MAX_SPS_COUNT},
+    constants::{MAX_PPS_COUNT, MAX_REFS, MAX_SLICE_GROUPS, MAX_SPS_COUNT},
     ps::ParameterSets,
     scaling_list::{ScalingList4x4, ScalingList8x8},
     sps::Sps,
@@ -264,7 +264,6 @@ impl Pps {
         Self::parse_from_bit_reader(&mut reader, Some(sps), None)
     }
 
-    /// Parse PPS from raw NAL unit RBSP data with SPS information
     pub fn parse_with_param_sets(data: &[u8], param_sets: &ParameterSets) -> Result<Self> {
         let mut reader = BitReader::new(data);
         Self::parse_from_bit_reader(&mut reader, None, Some(param_sets))
@@ -273,14 +272,14 @@ impl Pps {
     pub fn parse_ids_from_bit_reader<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<(u8, u8)> {
         // Read pic_parameter_set_id
         let pic_parameter_set_id = reader.read_ue()?;
-        if pic_parameter_set_id >= MAX_PPS_COUNT as u32 {
+        if pic_parameter_set_id as usize >= MAX_PPS_COUNT {
             return Err(invalid_data_error!("pps_id", pic_parameter_set_id));
         }
         let pic_parameter_set_id = pic_parameter_set_id as u8;
 
         // Read seq_parameter_set_id
         let seq_parameter_set_id = reader.read_ue()?;
-        if seq_parameter_set_id >= MAX_SPS_COUNT as u32 {
+        if seq_parameter_set_id as usize >= MAX_SPS_COUNT {
             return Err(invalid_data_error!("sps_id", seq_parameter_set_id));
         }
         let seq_parameter_set_id = seq_parameter_set_id as u8;
@@ -330,13 +329,13 @@ impl Pps {
 
         // Read num_ref_idx_l0_default_active and convert
         let num_ref_idx_l0_default_active = reader.read_ue()? + 1;
-        if num_ref_idx_l0_default_active > 32 {
+        if num_ref_idx_l0_default_active as usize > MAX_REFS {
             return Err(invalid_data_error!("num_ref_idx_l0_default_active", num_ref_idx_l0_default_active));
         }
 
         // Read num_ref_idx_l1_default_active and convert
         let num_ref_idx_l1_default_active = reader.read_ue()? + 1;
-        if num_ref_idx_l1_default_active > 32 {
+        if num_ref_idx_l1_default_active as usize > MAX_REFS {
             return Err(invalid_data_error!("num_ref_idx_l1_default_active", num_ref_idx_l1_default_active));
         }
 
