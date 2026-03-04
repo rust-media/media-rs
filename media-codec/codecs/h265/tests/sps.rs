@@ -1,4 +1,19 @@
-use media_codec_h265::sps::{ChromaFormat, Sps};
+use media_codec_h265::{
+    sps::{ChromaFormat, Sps},
+    vps::Vps,
+};
+
+#[rustfmt::skip]
+const VPS_DATA: &[u8] = &[
+    0x0C,                               // vps_id = 0, base_internal = 1, base_available = 1, max_layers[5:4] = 0
+    0x01,                               // max_layers[3:0] = 0, max_sub_layers = 0, temporal_id_nesting = 1
+    0xFF, 0xFF,                         // reserved
+    0x01,                               // profile_space = 0, tier = 0(Main), profile_idc = 1(Main)
+    0x60, 0x00, 0x00, 0x00,             // profile_compatibility_flags
+    0xB0, 0x00, 0x00, 0x00, 0x00, 0x00, // constraint_flags (48 bits)
+    0x5D,                               // level_idc = 93 (Level 3.1)
+    0x95, 0xC0, 0x80,                   // 1001 0101 1100 0000 1000 0000
+];
 
 #[rustfmt::skip]
 const SPS_DATA: &[u8] = &[
@@ -15,7 +30,8 @@ const SPS_DATA: &[u8] = &[
 
 #[test]
 fn test_parse_sps() {
-    let sps = Sps::parse(SPS_DATA).unwrap();
+    let vps = Vps::parse(VPS_DATA).unwrap();
+    let sps = Sps::parse_with_vps(SPS_DATA, &vps).unwrap();
 
     assert_eq!(sps.video_parameter_set_id, 0);
     assert_eq!(sps.sps_max_sub_layers, 1);

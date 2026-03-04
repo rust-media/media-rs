@@ -3,12 +3,14 @@
 use std::io::Read;
 
 use media_codec_bitstream::{BigEndian, BitReader};
-use media_core::{invalid_data_error, Result};
+use media_core::{invalid_data_error, none_param_error, not_found_error, Result};
 use smallvec::SmallVec;
 
 use crate::{
     constants::{MAX_PPS_COUNT, MAX_QP_OFFSET, MAX_REFS, MAX_SPS_COUNT, MAX_TILE_COLUMNS, MAX_TILE_ROWS, MIN_QP_OFFSET},
+    ps::ParameterSets,
     scaling_list::ScalingListData,
+    sps::{ChromaFormat, Sps},
 };
 
 /// Tile information in PPS
@@ -207,14 +209,22 @@ pub struct Pps {
 }
 
 impl Pps {
-    /// Parse PPS from raw NAL unit RBSP data (with EPB already removed)
-    pub fn parse(data: &[u8]) -> Result<Self> {
+    pub fn parse_ids(data: &[u8]) -> Result<(u8, u8)> {
         let mut reader = BitReader::new(data);
-        Self::parse_from_bit_reader(&mut reader)
+        Self::parse_ids_from_bit_reader(&mut reader)
     }
 
-    /// Parse PPS from a BitReader
-    pub fn parse_from_bit_reader<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<Self> {
+    pub fn parse_with_sps(data: &[u8], sps: &Sps) -> Result<Self> {
+        let mut reader = BitReader::new(data);
+        Self::parse_from_bit_reader(&mut reader, Some(sps), None)
+    }
+
+    pub fn parse_with_param_sets(data: &[u8], param_sets: &ParameterSets) -> Result<Self> {
+        let mut reader = BitReader::new(data);
+        Self::parse_from_bit_reader(&mut reader, None, Some(param_sets))
+    }
+
+    pub fn parse_ids_from_bit_reader<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<(u8, u8)> {
         // Read pps_pic_parameter_set_id
         let pic_parameter_set_id = reader.read_ue()?;
         if pic_parameter_set_id as usize >= MAX_PPS_COUNT {
@@ -228,6 +238,29 @@ impl Pps {
             return Err(invalid_data_error!("sps_id", seq_parameter_set_id));
         }
         let seq_parameter_set_id = seq_parameter_set_id as u8;
+
+        Ok((pic_parameter_set_id, seq_parameter_set_id))
+    }
+
+    /// Parse PPS from a BitReader
+    pub fn parse_from_bit_reader<R: Read>(
+        reader: &mut BitReader<R, BigEndian>,
+        sps: Option<&Sps>,
+        param_sets: Option<&ParameterSets>,
+    ) -> Result<Self> {
+        let (pic_parameter_set_id, seq_parameter_set_id) = Self::parse_ids_from_bit_reader(reader)?;
+
+        let sps = if let Some(sps) = sps {
+            if seq_parameter_set_id != sps.sps_seq_parameter_set_id {
+                return Err(invalid_data_error!("sps_id", seq_parameter_set_id));
+            }
+
+            sps
+        } else if let Some(param_sets) = param_sets {
+            param_sets.get_sps(seq_parameter_set_id as u32).ok_or_else(|| not_found_error!("sps_id", seq_parameter_set_id))?
+        } else {
+            return Err(none_param_error!("sps or param_sets"));
+        };
 
         // Read dependent_slice_segments_enabled_flag
         let dependent_slice_segments_enabled_flag = reader.read_bit()?;
@@ -325,7 +358,8 @@ impl Pps {
         // Read pps_scaling_list_data_present_flag and parse scaling list data
         let pps_scaling_list_data_present_flag = reader.read_bit()?;
         let scaling_list_data = if pps_scaling_list_data_present_flag {
-            Some(ScalingListData::parse(reader, false)?)
+            let is_444 = sps.chroma_format == ChromaFormat::YUV444;
+            Some(ScalingListData::parse(reader, is_444)?)
         } else {
             None
         };
