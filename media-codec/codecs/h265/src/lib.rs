@@ -9,4 +9,3 @@ pub mod sps;
 pub mod vps;
 
 pub use nal::{H265NalHeader, NalUnitType};
-pub use scaling_list::{MatrixId, ScalingList, ScalingListData, ScalingListSizeId, ScalingListSource};

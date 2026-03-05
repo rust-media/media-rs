@@ -7,8 +7,8 @@ use media_core::{invalid_data_error, not_found_error, Result};
 use smallvec::{smallvec, SmallVec};
 
 use crate::{
-    constants::{EXTENDED_SAR, MAX_LONG_TERM_REF_PICS, MAX_REFS, MAX_SPS_COUNT, MAX_SUB_LAYERS, MAX_VPS_COUNT},
     ps::ParameterSets,
+    constants::{MAX_LONG_TERM_REF_PICS, MAX_REFS, MAX_SPS_COUNT, MAX_SUB_LAYERS, MAX_VPS_COUNT},
     scaling_list::ScalingListData,
     vps::{HrdParameters, ProfileTierLevel, Vps},
 };
@@ -219,77 +219,144 @@ impl From<u8> for ChromaFormat {
     }
 }
 
-/// Predefined Sample Aspect Ratio (SAR) values
-/// Table E-1 in H.265 specification
-const SAR_TABLE: [(u16, u16); 17] = [
-    (0, 0),    // 0: Unspecified
-    (1, 1),    // 1: 1:1 (square)
-    (12, 11),  // 2: 12:11
-    (10, 11),  // 3: 10:11
-    (16, 11),  // 4: 16:11
-    (40, 33),  // 5: 40:33
-    (24, 11),  // 6: 24:11
-    (20, 11),  // 7: 20:11
-    (32, 11),  // 8: 32:11
-    (80, 33),  // 9: 80:33
-    (18, 11),  // 10: 18:11
-    (15, 11),  // 11: 15:11
-    (64, 33),  // 12: 64:33
-    (160, 99), // 13: 160:99
-    (4, 3),    // 14: 4:3
-    (3, 2),    // 15: 3:2
-    (2, 1),    // 16: 2:1
-];
+/// Extended SAR aspect_ratio_idc value (indicates sar_width/sar_height follow)
+pub const EXTENDED_SAR: u8 = 255;
 
-/// Aspect Ratio Information
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct AspectRatioInfo {
-    /// Aspect ratio IDC (0-16 for predefined, 255 for extended SAR)
-    pub aspect_ratio_idc: u8,
-    /// Sample aspect ratio width (only valid when aspect_ratio_idc == 255)
-    pub sar_width: u16,
-    /// Sample aspect ratio height (only valid when aspect_ratio_idc == 255)
-    pub sar_height: u16,
+/// Aspect Ratio Information (SAR - Sample Aspect Ratio)
+///
+/// Each variant stores (aspect_ratio_idc, sar_width, sar_height).
+/// Defined in ITU-T H.265 Table E-1.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AspectRatioInfo {
+    Unspecified,
+    Ratio1x1,
+    Ratio12x11,
+    Ratio10x11,
+    Ratio16x11,
+    Ratio40x33,
+    Ratio24x11,
+    Ratio20x11,
+    Ratio32x11,
+    Ratio80x33,
+    Ratio18x11,
+    Ratio15x11,
+    Ratio64x33,
+    Ratio160x99,
+    Ratio4x3,
+    Ratio3x2,
+    Ratio2x1,
+    Reserved(u8),
+    /// Extended SAR (aspect_ratio_idc = 255) with custom width and height
+    Extended(u16, u16),
+}
+
+impl Default for AspectRatioInfo {
+    fn default() -> Self {
+        Self::Unspecified
+    }
 }
 
 impl AspectRatioInfo {
     /// Parse AspectRatioInfo from a BitReader
     pub fn parse<R: Read>(reader: &mut BitReader<R, BigEndian>) -> Result<Self> {
         let aspect_ratio_idc = reader.read::<8, u8>()?;
-        let (sar_width, sar_height) = if aspect_ratio_idc == EXTENDED_SAR {
-            (reader.read::<16, u16>()?, reader.read::<16, u16>()?)
+
+        if aspect_ratio_idc == EXTENDED_SAR {
+            let sar_width = reader.read::<16, u16>()?;
+            let sar_height = reader.read::<16, u16>()?;
+            Ok(Self::Extended(sar_width, sar_height))
         } else {
-            (0, 0)
-        };
-
-        Ok(Self {
-            aspect_ratio_idc,
-            sar_width,
-            sar_height,
-        })
-    }
-
-    /// Get the sample aspect ratio as (width, height)
-    /// Returns None if unspecified (aspect_ratio_idc == 0)
-    pub fn sample_aspect_ratio(&self) -> Option<(u16, u16)> {
-        match self.aspect_ratio_idc {
-            0 => None, // Unspecified
-            EXTENDED_SAR => Some((self.sar_width, self.sar_height)),
-            idc if (idc as usize) < SAR_TABLE.len() => Some(SAR_TABLE[idc as usize]),
-            _ => None,
+            Ok(Self::from_idc(aspect_ratio_idc))
         }
     }
 
-    /// Check if this is an extended SAR
+    /// Get the aspect_ratio_idc value
     #[inline]
-    pub fn is_extended_sar(&self) -> bool {
-        self.aspect_ratio_idc == EXTENDED_SAR
+    pub const fn idc(&self) -> u8 {
+        match self {
+            Self::Unspecified => 0,
+            Self::Ratio1x1 => 1,
+            Self::Ratio12x11 => 2,
+            Self::Ratio10x11 => 3,
+            Self::Ratio16x11 => 4,
+            Self::Ratio40x33 => 5,
+            Self::Ratio24x11 => 6,
+            Self::Ratio20x11 => 7,
+            Self::Ratio32x11 => 8,
+            Self::Ratio80x33 => 9,
+            Self::Ratio18x11 => 10,
+            Self::Ratio15x11 => 11,
+            Self::Ratio64x33 => 12,
+            Self::Ratio160x99 => 13,
+            Self::Ratio4x3 => 14,
+            Self::Ratio3x2 => 15,
+            Self::Ratio2x1 => 16,
+            Self::Reserved(idc) => *idc,
+            Self::Extended(_, _) => EXTENDED_SAR,
+        }
+    }
+
+    /// Get the sample aspect ratio as (width, height)
+    /// Returns None if unspecified
+    pub const fn sample_aspect_ratio(&self) -> Option<(u16, u16)> {
+        match self {
+            Self::Unspecified => None,
+            Self::Ratio1x1 => Some((1, 1)),
+            Self::Ratio12x11 => Some((12, 11)),
+            Self::Ratio10x11 => Some((10, 11)),
+            Self::Ratio16x11 => Some((16, 11)),
+            Self::Ratio40x33 => Some((40, 33)),
+            Self::Ratio24x11 => Some((24, 11)),
+            Self::Ratio20x11 => Some((20, 11)),
+            Self::Ratio32x11 => Some((32, 11)),
+            Self::Ratio80x33 => Some((80, 33)),
+            Self::Ratio18x11 => Some((18, 11)),
+            Self::Ratio15x11 => Some((15, 11)),
+            Self::Ratio64x33 => Some((64, 33)),
+            Self::Ratio160x99 => Some((160, 99)),
+            Self::Ratio4x3 => Some((4, 3)),
+            Self::Ratio3x2 => Some((3, 2)),
+            Self::Ratio2x1 => Some((2, 1)),
+            Self::Reserved(_) => None,
+            Self::Extended(w, h) => Some((*w, *h)),
+        }
+    }
+
+    /// Create from aspect_ratio_idc value
+    pub const fn from_idc(idc: u8) -> Self {
+        match idc {
+            0 => Self::Unspecified,
+            1 => Self::Ratio1x1,
+            2 => Self::Ratio12x11,
+            3 => Self::Ratio10x11,
+            4 => Self::Ratio16x11,
+            5 => Self::Ratio40x33,
+            6 => Self::Ratio24x11,
+            7 => Self::Ratio20x11,
+            8 => Self::Ratio32x11,
+            9 => Self::Ratio80x33,
+            10 => Self::Ratio18x11,
+            11 => Self::Ratio15x11,
+            12 => Self::Ratio64x33,
+            13 => Self::Ratio160x99,
+            14 => Self::Ratio4x3,
+            15 => Self::Ratio3x2,
+            16 => Self::Ratio2x1,
+            // Reserved values (17-254) treated as unspecified
+            _ => Self::Unspecified,
+        }
+    }
+
+    /// Check if aspect ratio is extended
+    #[inline]
+    pub const fn is_extended(&self) -> bool {
+        matches!(self, Self::Extended(_, _))
     }
 
     /// Check if aspect ratio is specified
     #[inline]
-    pub fn is_specified(&self) -> bool {
-        self.aspect_ratio_idc != 0
+    pub const fn is_specified(&self) -> bool {
+        !matches!(self, Self::Unspecified | Self::Reserved(_))
     }
 }
 

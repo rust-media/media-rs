@@ -41,6 +41,3 @@ pub const MAX_WIDTH: usize = MAX_MB_WIDTH * 16;
 
 /// Maximum picture height in pixels
 pub const MAX_HEIGHT: usize = MAX_MB_HEIGHT * 16;
-
-/// Extended SAR aspect_ratio_idc value (indicates sar_width/sar_height follow)
-pub const EXTENDED_SAR: u8 = 255;
