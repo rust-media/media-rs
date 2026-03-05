@@ -48,9 +48,6 @@ pub const NUM_32X32_MATRICES_REDUCED: usize = 2;
 /// Default DC coefficient for 16x16 and 32x32 scaling lists
 pub const DEFAULT_DC_COEFF: u8 = 16;
 
-/// Extended SAR aspect_ratio_idc value (indicates sar_width/sar_height follow)
-pub const EXTENDED_SAR: u8 = 255;
-
 /// Maximum number of layers in VPS (1-63)
 pub const MAX_VPS_LAYERS: usize = 63;
 
