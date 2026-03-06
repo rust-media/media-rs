@@ -87,6 +87,14 @@ impl<'a, E: Endianness> BitReader<Cursor<&'a [u8]>, E> {
             total_bits: data.len() * 8,
         }
     }
+
+    /// Get the remaining data as a byte-aligned slice
+    pub fn remaining_slice(&mut self) -> &'a [u8] {
+        let cursor = self.inner.aligned_reader();
+        let pos = cursor.position() as usize;
+        let data = *cursor.get_ref();
+        &data[pos..]
+    }
 }
 
 // Exp-Golomb methods for BigEndian
