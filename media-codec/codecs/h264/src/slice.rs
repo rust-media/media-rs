@@ -95,6 +95,15 @@ impl SliceType {
     }
 }
 
+/// Picture structure
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum PictureStructure {
+    #[default]
+    Frame,
+    TopField,
+    BottomField,
+}
+
 /// Reference picture list modification operation
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RefPicListModOp {
@@ -428,6 +437,8 @@ pub struct SliceHeader {
     pub field_pic_flag: bool,
     /// Bottom field flag
     pub bottom_field_flag: bool,
+    /// Picture
+    pub picture_structure: PictureStructure,
     /// IDR picture ID (for IDR slices)
     pub idr_pic_id: u32,
     /// Picture order count LSB (for pic_order_cnt_type == 0)
@@ -463,12 +474,18 @@ pub struct SliceHeader {
     pub sp_for_switch_flag: bool,
     /// Slice QS delta (for SP/SI slices)
     pub slice_qs_delta: i32,
+    /// Slice QS
+    pub slice_qs: u32,
+    /// Chroma QP for Cb
+    pub chroma_qp_cb: u8,
+    /// Chroma QP for Cr
+    pub chroma_qp_cr: u8,
     /// Disable deblocking filter IDC (0-2)
     pub disable_deblocking_filter_idc: u32,
-    /// Slice alpha C0 offset div 2
-    pub slice_alpha_c0_offset_div2: i32,
-    /// Slice beta offset div 2
-    pub slice_beta_offset_div2: i32,
+    /// Slice alpha C0 offset
+    pub slice_alpha_c0_offset: i32,
+    /// Slice beta offset
+    pub slice_beta_offset: i32,
     /// Slice group change cycle (for slice groups)
     pub slice_group_change_cycle: u32,
 }
@@ -517,13 +534,18 @@ impl SliceHeader {
         let frame_num_bits = sps.log2_max_frame_num;
         header.frame_num = reader.read_var(frame_num_bits)?;
 
-        // Read field_pic_flag and bottom_field_flag
-        if !sps.frame_mbs_only_flag {
-            header.field_pic_flag = reader.read_bit()?;
-            if header.field_pic_flag {
-                header.bottom_field_flag = reader.read_bit()?;
+        // Read field_pic_flag, bottom_field_flag and set picture_structure
+        header.picture_structure = if !sps.frame_mbs_only_flag && reader.read_bit()? {
+            header.field_pic_flag = true;
+            if reader.read_bit()? {
+                header.bottom_field_flag = true;
+                PictureStructure::BottomField
+            } else {
+                PictureStructure::TopField
             }
-        }
+        } else {
+            PictureStructure::Frame
+        };
 
         // Read idr_pic_id (for IDR slices)
         if is_idr {
@@ -561,9 +583,17 @@ impl SliceHeader {
         if header.slice_type.is_p() || header.slice_type.is_sp() || header.slice_type.is_b() {
             header.num_ref_idx_active_override_flag = reader.read_bit()?;
             if header.num_ref_idx_active_override_flag {
-                header.num_ref_idx_l0_active = reader.read_ue()? + 1;
+                let num_ref_idx_l0_active_minus1 = reader.read_ue()?;
+                if num_ref_idx_l0_active_minus1 as usize > MAX_REFS {
+                    return Err(invalid_data_error!("num_ref_idx_l0_active_minus1", num_ref_idx_l0_active_minus1));
+                }
+                header.num_ref_idx_l0_active = num_ref_idx_l0_active_minus1 + 1;
                 if header.slice_type.is_b() {
-                    header.num_ref_idx_l1_active = reader.read_ue()? + 1;
+                    let num_ref_idx_l1_active_minus1 = reader.read_ue()?;
+                    if num_ref_idx_l1_active_minus1 as usize > MAX_REFS {
+                        return Err(invalid_data_error!("num_ref_idx_l1_active_minus1", num_ref_idx_l1_active_minus1));
+                    }
+                    header.num_ref_idx_l1_active = num_ref_idx_l1_active_minus1 + 1;
                 }
             } else {
                 header.num_ref_idx_l0_active = pps.num_ref_idx_l0_default_active;
@@ -608,8 +638,13 @@ impl SliceHeader {
             }
         }
 
-        // Read slice_qp_delta
+        // Read slice_qp_delta and validate slice QP
         header.slice_qp_delta = reader.read_se()?;
+        let qp_offset = 6 * (sps.bit_depth_luma as i32 - 8);
+        let slice_qp = header.slice_qp(pps);
+        if slice_qp < 0 || slice_qp > 51 + qp_offset {
+            return Err(invalid_data_error!("slice_qp_delta", header.slice_qp_delta));
+        }
 
         // SP/SI specific parameters
         if header.slice_type.is_sp() || header.slice_type.is_si() {
@@ -617,7 +652,16 @@ impl SliceHeader {
                 header.sp_for_switch_flag = reader.read_bit()?;
             }
             header.slice_qs_delta = reader.read_se()?;
+            let slice_qs = header.slice_qs(pps);
+            if slice_qs < 0 || slice_qs > 51 {
+                return Err(invalid_data_error!("slice_qs_delta", header.slice_qs_delta));
+            }
+
+            header.slice_qs = slice_qs as u32;
         }
+
+        header.chroma_qp_cb = pps.chroma_qp_tables.get_cb(slice_qp);
+        header.chroma_qp_cr = pps.chroma_qp_tables.get_cr(slice_qp);
 
         // Deblocking filter control
         if pps.deblocking_filter_control_present_flag {
@@ -626,8 +670,19 @@ impl SliceHeader {
                 return Err(invalid_data_error!("disable_deblocking_filter_idc", header.disable_deblocking_filter_idc));
             }
             if header.disable_deblocking_filter_idc != 1 {
-                header.slice_alpha_c0_offset_div2 = reader.read_se()?;
-                header.slice_beta_offset_div2 = reader.read_se()?;
+                let slice_alpha_c0_offset_div2: i32 = reader.read_se()?;
+                let slice_beta_offset_div2: i32 = reader.read_se()?;
+
+                if slice_alpha_c0_offset_div2 < -6 || slice_alpha_c0_offset_div2 > 6 {
+                    return Err(invalid_data_error!("slice_alpha_c0_offset_div2", slice_alpha_c0_offset_div2));
+                }
+
+                if slice_beta_offset_div2 < -6 || slice_beta_offset_div2 > 6 {
+                    return Err(invalid_data_error!("slice_beta_offset_div2", slice_beta_offset_div2));
+                }
+
+                header.slice_alpha_c0_offset = slice_alpha_c0_offset_div2 * 2;
+                header.slice_beta_offset = slice_beta_offset_div2 * 2;
             }
         }
 
@@ -647,13 +702,13 @@ impl SliceHeader {
         Ok(header)
     }
 
-    /// Get slice QP (actual value)
+    /// Get slice QP
     #[inline]
     pub fn slice_qp(&self, pps: &Pps) -> i32 {
         pps.pic_init_qp + self.slice_qp_delta
     }
 
-    /// Get slice QS (actual value, for SP/SI slices)
+    /// Get slice QS
     #[inline]
     pub fn slice_qs(&self, pps: &Pps) -> i32 {
         pps.pic_init_qs + self.slice_qs_delta
@@ -689,16 +744,16 @@ impl SliceHeader {
         !self.field_pic_flag
     }
 
-    /// Get slice alpha offset (actual value)
+    /// Get slice alpha offset
     #[inline]
     pub fn alpha_c0_offset(&self) -> i32 {
-        self.slice_alpha_c0_offset_div2 * 2
+        self.slice_alpha_c0_offset
     }
 
-    /// Get slice beta offset (actual value)
+    /// Get slice beta offset
     #[inline]
     pub fn beta_offset(&self) -> i32 {
-        self.slice_beta_offset_div2 * 2
+        self.slice_beta_offset
     }
 
     /// Check if deblocking filter is disabled for this slice
