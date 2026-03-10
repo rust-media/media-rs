@@ -1,6 +1,6 @@
 [package]
 name = "media-codec-types"
-description = "Defines types for codec implementations"
+description = "Provides common types for codec implementations"
 homepage.workspace = true
 repository.workspace = true
 documentation = "https://docs.rs/media-codec-types"
