@@ -7,11 +7,67 @@ use media_core::{invalid_data_error, none_param_error, not_found_error, Result};
 use smallvec::SmallVec;
 
 use crate::{
-    constants::{MAX_PPS_COUNT, MAX_REFS, MAX_SLICE_GROUPS, MAX_SPS_COUNT},
+    constants::{MAX_PPS_COUNT, MAX_QP_COUNT, MAX_REFS, MAX_SLICE_GROUPS, MAX_SPS_COUNT},
     ps::ParameterSets,
     scaling_list::{ScalingList4x4, ScalingList8x8},
     sps::Sps,
+    tables::CHROMA_QP,
 };
+
+/// Precomputed chroma QP tables for a PPS
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ChromaQpTables {
+    /// Cb QP table
+    pub cb: [u8; MAX_QP_COUNT],
+    /// Cr QP table
+    pub cr: [u8; MAX_QP_COUNT],
+}
+
+impl Default for ChromaQpTables {
+    fn default() -> Self {
+        Self {
+            cb: [0u8; MAX_QP_COUNT],
+            cr: [0u8; MAX_QP_COUNT],
+        }
+    }
+}
+
+impl ChromaQpTables {
+    /// Build chroma QP tables from PPS offsets and bit depth
+    pub fn new(chroma_qp_index_offset: i32, second_chroma_qp_index_offset: i32, bit_depth: u32) -> Self {
+        let mut tables = Self::default();
+        Self::build_qp_table(&mut tables.cb, chroma_qp_index_offset, bit_depth);
+        Self::build_qp_table(&mut tables.cr, second_chroma_qp_index_offset, bit_depth);
+        tables
+    }
+
+    /// Build a single chroma QP table
+    fn build_qp_table(table: &mut [u8; MAX_QP_COUNT], index: i32, depth: u32) {
+        let max_qp = (51 + 6 * (depth as i32 - 8)) as usize;
+        for (i, item) in table.iter_mut().enumerate().take(max_qp + 1) {
+            let qp = (i as i32 + index).clamp(0, max_qp as i32) as usize;
+            *item = CHROMA_QP[depth as usize - 8][qp];
+        }
+    }
+
+    /// Get chroma Cb QP for a given luma QP
+    #[inline]
+    pub fn get_cb(&self, qp_y: i32) -> u8 {
+        self.cb[qp_y.clamp(0, MAX_QP_COUNT as i32 - 1) as usize]
+    }
+
+    /// Get chroma Cr QP for a given luma QP
+    #[inline]
+    pub fn get_cr(&self, qp_y: i32) -> u8 {
+        self.cr[qp_y.clamp(0, MAX_QP_COUNT as i32 - 1) as usize]
+    }
+
+    /// Get both tables as array reference
+    #[inline]
+    pub fn as_array(&self) -> [&[u8; MAX_QP_COUNT]; 2] {
+        [&self.cb, &self.cr]
+    }
+}
 
 /// Slice group map type
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -166,6 +222,8 @@ pub struct Pps {
     pub scaling_matrix: Option<PpsScalingMatrix>,
     /// Second chroma QP index offset (for High Profile and above)
     pub second_chroma_qp_index_offset: i32,
+    /// Precomputed chroma QP tables (built after parsing with SPS bit_depth)
+    pub chroma_qp_tables: ChromaQpTables,
 }
 
 /// PPS Scaling Matrix
@@ -385,6 +443,9 @@ impl Pps {
             scaling_matrix = matrix;
         }
 
+        // Build chroma QP tables
+        let chroma_qp_tables = ChromaQpTables::new(chroma_qp_index_offset, second_chroma_qp_index_offset, sps.bit_depth_luma as u32);
+
         Ok(Self {
             pic_parameter_set_id,
             seq_parameter_set_id,
@@ -405,6 +466,7 @@ impl Pps {
             transform_8x8_mode_flag,
             scaling_matrix,
             second_chroma_qp_index_offset,
+            chroma_qp_tables,
         })
     }
 
