@@ -90,10 +90,10 @@ pub struct DeblockingFilterParams {
     pub deblocking_filter_override_enabled_flag: bool,
     /// PPS deblocking filter disabled flag
     pub pps_deblocking_filter_disabled_flag: bool,
-    /// PPS beta offset div2
-    pub pps_beta_offset_div2: i32,
-    /// PPS tc offset div2
-    pub pps_tc_offset_div2: i32,
+    /// PPS beta offset
+    pub pps_beta_offset: i32,
+    /// PPS tc offset
+    pub pps_tc_offset: i32,
 }
 
 impl DeblockingFilterParams {
@@ -102,8 +102,8 @@ impl DeblockingFilterParams {
         let deblocking_filter_override_enabled_flag = reader.read_bit()?;
         let pps_deblocking_filter_disabled_flag = reader.read_bit()?;
 
-        let (pps_beta_offset_div2, pps_tc_offset_div2) = if !pps_deblocking_filter_disabled_flag {
-            (reader.read_se()?, reader.read_se()?)
+        let (pps_beta_offset, pps_tc_offset) = if !pps_deblocking_filter_disabled_flag {
+            (reader.read_se()? * 2, reader.read_se()? * 2)
         } else {
             (0, 0)
         };
@@ -111,21 +111,9 @@ impl DeblockingFilterParams {
         Ok(Self {
             deblocking_filter_override_enabled_flag,
             pps_deblocking_filter_disabled_flag,
-            pps_beta_offset_div2,
-            pps_tc_offset_div2,
+            pps_beta_offset,
+            pps_tc_offset,
         })
-    }
-
-    /// Get beta offset (actual value)
-    #[inline]
-    pub fn beta_offset(&self) -> i32 {
-        self.pps_beta_offset_div2 * 2
-    }
-
-    /// Get tc offset (actual value)
-    #[inline]
-    pub fn tc_offset(&self) -> i32 {
-        self.pps_tc_offset_div2 * 2
     }
 }
 
