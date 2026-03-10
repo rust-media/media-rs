@@ -334,10 +334,10 @@ pub struct SliceSegmentHeader {
     pub deblocking_filter_override_flag: bool,
     /// Slice deblocking filter disabled flag
     pub slice_deblocking_filter_disabled_flag: bool,
-    /// Slice beta offset div2
-    pub slice_beta_offset_div2: i32,
-    /// Slice tc offset div2
-    pub slice_tc_offset_div2: i32,
+    /// Slice beta offset
+    pub slice_beta_offset: i32,
+    /// Slice tc offset
+    pub slice_tc_offset: i32,
     /// Slice loop filter across slices enabled flag
     pub slice_loop_filter_across_slices_enabled_flag: bool,
     /// Number of entry point offsets
@@ -571,13 +571,13 @@ impl SliceSegmentHeader {
             if header.deblocking_filter_override_flag {
                 header.slice_deblocking_filter_disabled_flag = reader.read_bit()?;
                 if !header.slice_deblocking_filter_disabled_flag {
-                    header.slice_beta_offset_div2 = reader.read_se()?;
-                    header.slice_tc_offset_div2 = reader.read_se()?;
+                    header.slice_beta_offset = reader.read_se()? * 2;
+                    header.slice_tc_offset = reader.read_se()? * 2;
                 }
             } else if let Some(ref dbf_params) = pps.deblocking_filter_params {
                 header.slice_deblocking_filter_disabled_flag = dbf_params.pps_deblocking_filter_disabled_flag;
-                header.slice_beta_offset_div2 = dbf_params.pps_beta_offset_div2;
-                header.slice_tc_offset_div2 = dbf_params.pps_tc_offset_div2;
+                header.slice_beta_offset = dbf_params.pps_beta_offset;
+                header.slice_tc_offset = dbf_params.pps_tc_offset;
             }
         }
 
@@ -617,7 +617,7 @@ impl SliceSegmentHeader {
         self.num_ref_idx_l1_active
     }
 
-    /// Get slice QP (actual value)
+    /// Get slice QP
     #[inline]
     pub fn slice_qp(&self, pps: &Pps) -> i32 {
         pps.init_qp + self.slice_qp_delta
@@ -644,12 +644,12 @@ impl SliceSegmentHeader {
     /// Get slice beta offset (actual value)
     #[inline]
     pub fn beta_offset(&self) -> i32 {
-        self.slice_beta_offset_div2 * 2
+        self.slice_beta_offset
     }
 
     /// Get slice tc offset (actual value)
     #[inline]
     pub fn tc_offset(&self) -> i32 {
-        self.slice_tc_offset_div2 * 2
+        self.slice_tc_offset
     }
 }

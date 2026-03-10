@@ -7,8 +7,8 @@ use media_core::{invalid_data_error, not_found_error, Result};
 use smallvec::{smallvec, SmallVec};
 
 use crate::{
-    ps::ParameterSets,
     constants::{MAX_LONG_TERM_REF_PICS, MAX_REFS, MAX_SPS_COUNT, MAX_SUB_LAYERS, MAX_VPS_COUNT},
+    ps::ParameterSets,
     scaling_list::ScalingListData,
     vps::{HrdParameters, ProfileTierLevel, Vps},
 };
