@@ -15,7 +15,7 @@ edition.workspace = true
 media-codec-types = { workspace = true, features = ["decoder"] }
 media-core.workspace = true
 media-format-types.workspace = true
-mp4-atom = { version = "0.10.1", features = ["bytes"] }
+mp4-atom = { package = "media-mp4-atom", version = "0.10.1", features = ["bytes"] }
 
 [features]
 default = ["audio", "video", "demuxer"]

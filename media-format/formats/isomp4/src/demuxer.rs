@@ -17,7 +17,10 @@ use media_core::audio::ChannelLayout;
 use media_core::video::ColorRange;
 use media_core::{invalid_error, not_found_error, rational::Rational64, time::USEC_PER_SEC, variant::Variant, MediaType, Result};
 use media_format_types::{
-    Format, FormatBuilder, demuxer::{Demuxer, DemuxerBuilder, DemuxerState, Reader, SeekFlags}, stream::Stream, track::Track
+    demuxer::{Demuxer, DemuxerBuilder, DemuxerState, Reader, SeekFlags},
+    stream::Stream,
+    track::Track,
+    Format, FormatBuilder,
 };
 use mp4_atom::{Atom, Codec as Mp4Codec, Ftyp, Header, Mdat, Moov, ReadAtom, ReadFrom, Stbl, StszSamples};
 #[cfg(feature = "audio")]
@@ -570,37 +573,13 @@ impl Demuxer for Mp4Demuxer {
 /// Builder for MP4 demuxer
 pub struct Mp4DemuxerBuilder;
 
-/// Probes data to determine if it's an ISO Base Media File Format container
-pub fn probe(data: &[u8]) -> bool {
-    if data.len() < 12 {
-        return false;
-    }
-
-    // Check for ftyp box at the beginning (most common)
-    if &data[4..8] == b"ftyp" {
-        return true;
-    }
-
-    // Check for mdat or moov box (less common but valid)
-    if &data[4..8] == b"mdat" || &data[4..8] == b"moov" || &data[4..8] == b"free" || &data[4..8] == b"skip" {
-        return true;
-    }
-
-    // Check for wide box followed by mdat (used in some QuickTime files)
-    if &data[4..8] == b"wide" && data.len() >= 16 && &data[12..16] == b"mdat" {
-        return true;
-    }
-
-    false
-}
-
 impl FormatBuilder for Mp4DemuxerBuilder {
     fn name(&self) -> &'static str {
         "mp4"
     }
 
     fn extensions(&self) -> &[&'static str] {
-       &["mp4", "mov", "m4v", "m4a"]
+        &["mp4", "mov", "m4v", "m4a"]
     }
 }
 
@@ -612,10 +591,7 @@ impl DemuxerBuilder for Mp4DemuxerBuilder {
     fn probe(&self, reader: &mut dyn Reader) -> bool {
         let mut buf = [0u8; 8];
         reader.read_exact(&mut buf).ok();
-        
-        matches!(
-            &buf[4..8],
-            b"ftyp" | b"moov" | b"mdat" | b"free" | b"skip" | b"wide"
-        )
+
+        matches!(&buf[4..8], b"ftyp" | b"moov" | b"mdat")
     }
 }
