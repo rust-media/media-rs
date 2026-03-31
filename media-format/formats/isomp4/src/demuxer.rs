@@ -374,6 +374,8 @@ impl Demuxer for Mp4Demuxer {
         let trak = &moov.trak[track_idx];
         let track_id = trak.tkhd.track_id;
 
+        let track = state.tracks.find_track(track_id as isize).ok_or_else(|| not_found_error!("track", track_id))?;
+
         let sample_index = self.track_sample_indices[track_idx];
         let stbl = &trak.mdia.minf.stbl;
 
@@ -454,8 +456,6 @@ impl Demuxer for Mp4Demuxer {
             };
             sample_offset += prev_size;
         }
-
-        let track = state.tracks.find_track(track_id as isize).ok_or_else(|| not_found_error!("track"))?;
 
         let mut packet = Packet::from_buffer(track.pool.get_buffer_with_length(sample_size));
         let buffer = packet.data_mut().ok_or_else(|| invalid_error!("packet buffer is not mutable"))?;
