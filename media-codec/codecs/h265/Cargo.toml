@@ -13,7 +13,7 @@ edition.workspace = true
 
 [dependencies]
 media-codec-bitstream.workspace = true
-media-codec-nal = { path = "../../nal" }
+media-codec-nal.workspace = true
 media-codec-types = { workspace = true, default-features = false, features = ["video"] }
 media-core = { workspace = true, features = ["video"] }
 smallvec.workspace = true
