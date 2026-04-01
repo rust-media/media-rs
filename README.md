@@ -44,6 +44,16 @@ A pure Rust media framework for handling multimedia tasks such as encoding, deco
   - [ ] **AAC**
   - [ ] **Opus**
 
+### Format
+- **Demuxer**
+  - [x] **ISOBMFF/MP4/MOV**
+  - [x] **Matroska/WebM**
+  - [ ] **AVI**
+- **Muxer**
+  - [ ] **ISOBMFF/MP4/MOV**
+  - [ ] **Matroska/WebM**
+  - [ ] **AVI**
+
 ### Filter
 - **Video Filters** - Process video and apply effects
 - **Audio Filters** - Process audio and apply effects

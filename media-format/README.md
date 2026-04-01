@@ -6,3 +6,14 @@
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE-MIT)
 
 A generic framework for demuxing and muxing media containers.
+
+## Features
+
+- **Demuxer**
+  - [x] **ISOBMFF/MP4/MOV**
+  - [x] **Matroska/WebM**
+  - [ ] **AVI**
+- **Muxer**
+  - [ ] **ISOBMFF/MP4/MOV**
+  - [ ] **Matroska/WebM**
+  - [ ] **AVI**
