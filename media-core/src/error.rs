@@ -79,6 +79,16 @@ macro_rules! failed_error {
 }
 
 #[macro_export]
+macro_rules! again_error {
+    ($param:literal) => {
+        $crate::error::Error::Again($param.into())
+    };
+    ($param:expr) => {
+        $crate::error::Error::Again(format!("{:?}", $param).into())
+    };
+}
+
+#[macro_export]
 macro_rules! invalid_param_error {
     ($param:expr) => {
         $crate::error::Error::InvalidParameter(stringify!($param).into(), format!("{:?}", $param).into())
@@ -132,11 +142,27 @@ macro_rules! unsupported_error {
 }
 
 #[macro_export]
-macro_rules! again_error {
+macro_rules! read_failed_error {
     ($param:literal) => {
-        $crate::error::Error::Again($param.into())
+        $crate::error::Error::ReadFailed($param.into())
     };
     ($param:expr) => {
-        $crate::error::Error::Again(format!("{:?}", $param).into())
+        $crate::error::Error::ReadFailed(format!("{:?}", $param).into())
+    };
+    ($key:expr, $value:expr) => {
+        $crate::error::Error::ReadFailed(format!("{}: {:?}", $key, $value).into())
+    };
+}
+
+#[macro_export]
+macro_rules! write_failed_error {
+    ($param:literal) => {
+        $crate::error::Error::WriteFailed($param.into())
+    };
+    ($param:expr) => {
+        $crate::error::Error::WriteFailed(format!("{:?}", $param).into())
+    };
+    ($key:expr, $value:expr) => {
+        $crate::error::Error::WriteFailed(format!("{}: {:?}", $key, $value).into())
     };
 }
