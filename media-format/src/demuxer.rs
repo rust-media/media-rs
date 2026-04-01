@@ -5,7 +5,7 @@ use std::sync::{Arc, LazyLock, RwLock};
 use media_codec_types::packet::Packet;
 use media_core::{invalid_error, not_found_error, Result};
 pub use media_format_types::demuxer::*;
-use media_format_types::{demuxer, stream::StreamCollection, track::TrackCollection};
+use media_format_types::{stream::StreamCollection, track::TrackCollection};
 
 use crate::format::{find_format_by_extension, register_format, FormatList, LazyFormatList};
 

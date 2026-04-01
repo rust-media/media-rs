@@ -1,0 +1,37 @@
+[package]
+name = "media-format-matroska"
+description = "Demuxer and muxer for Matroska/WebM"
+homepage.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/media-format-matroska"
+version = "0.1.0"
+authors.workspace = true
+license.workspace = true
+categories = ["multimedia", "multimedia::audio", "multimedia::video"]
+keywords = ["matroska", "mkv", "webm", "demuxer"]
+edition.workspace = true
+
+[dependencies]
+media-codec-h264 = { workspace = true, optional = true }
+media-codec-h265 = { workspace = true, optional = true }
+media-codec-types = { workspace = true, features = ["decoder"] }
+media-core.workspace = true
+media-format-types.workspace = true
+mkv-element = { version = "0.4.0", features = ["utils"] }
+
+[features]
+default = ["audio", "video", "demuxer"]
+audio = [
+    "media-core/audio",
+    "media-codec-types/audio",
+    "media-format-types/audio",
+]
+video = [
+    "media-core/video",
+    "media-codec-types/video",
+    "media-format-types/video",
+    "media-codec-h264",
+    "media-codec-h265",
+]
+demuxer = ["media-format-types/demuxer"]
+muxer = ["media-format-types/muxer"]

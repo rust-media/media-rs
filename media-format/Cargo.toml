@@ -1,6 +1,6 @@
 [package]
 name = "media-format"
-description = "Media container format demuxer and muxer registry"
+description = "A generic framework for demuxing and muxing media containers"
 homepage.workspace = true
 repository.workspace = true
 documentation = "https://docs.rs/media-format"
@@ -8,7 +8,7 @@ version.workspace = true
 authors.workspace = true
 license.workspace = true
 categories = ["multimedia", "multimedia::audio", "multimedia::video"]
-keywords = ["media", "container", "demuxer", "muxer"]
+keywords = ["container", "demuxer", "muxer"]
 edition.workspace = true
 
 [dependencies]
@@ -17,29 +17,35 @@ media-codec-types.workspace = true
 media-core.workspace = true
 media-format-types.workspace = true
 media-format-isomp4 = { version = "0.1.0", default-features = false, path = "formats/isomp4", optional = true }
+media-format-matroska = { version = "0.1.0", default-features = false, path = "formats/matroska", optional = true }
 
 [features]
 default = ["audio", "video", "demuxer", "all-formats"]
 all-formats = ["all-demuxers", "all-muxers"]
-all-demuxers = ["isomp4"]
+all-demuxers = ["isomp4", "matroska"]
 all-muxers = []
 audio = [
     "media-core/audio",
     "media-format-types/audio",
     "media-format-isomp4?/audio",
+    "media-format-matroska?/audio",
 ]
 video = [
     "media-core/video",
     "media-format-types/video",
     "media-format-isomp4?/video",
+    "media-format-matroska?/video",
 ]
 demuxer = [
     "media-format-types/demuxer",
     "media-format-isomp4?/demuxer",
+    "media-format-matroska?/demuxer",
 ]
 muxer = [
     "media-format-types/muxer",
     "media-format-isomp4?/muxer",
+    "media-format-matroska?/muxer",
 ]
 # Formats
 isomp4 = ["dep:media-format-isomp4"]
+matroska = ["dep:media-format-matroska"]
