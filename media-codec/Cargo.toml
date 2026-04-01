@@ -19,7 +19,7 @@ media-codec-types.workspace = true
 media-core.workspace = true
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
-media-codec-video-toolbox = { version = "0.1.0", path = "codecs/video-toolbox", optional = true }
+media-codec-video-toolbox = { version = "0.2.0", path = "codecs/video-toolbox", optional = true }
 
 [features]
 default = ["audio", "video", "decoder", "encoder", "all-codecs"]
