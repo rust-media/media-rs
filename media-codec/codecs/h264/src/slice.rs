@@ -653,7 +653,7 @@ impl SliceHeader {
             }
             header.slice_qs_delta = reader.read_se()?;
             let slice_qs = header.slice_qs(pps);
-            if slice_qs < 0 || slice_qs > 51 {
+            if !(0..=51).contains(&slice_qs) {
                 return Err(invalid_data_error!("slice_qs_delta", header.slice_qs_delta));
             }
 
@@ -673,11 +673,11 @@ impl SliceHeader {
                 let slice_alpha_c0_offset_div2: i32 = reader.read_se()?;
                 let slice_beta_offset_div2: i32 = reader.read_se()?;
 
-                if slice_alpha_c0_offset_div2 < -6 || slice_alpha_c0_offset_div2 > 6 {
+                if !(-6..=6).contains(&slice_alpha_c0_offset_div2) {
                     return Err(invalid_data_error!("slice_alpha_c0_offset_div2", slice_alpha_c0_offset_div2));
                 }
 
-                if slice_beta_offset_div2 < -6 || slice_beta_offset_div2 > 6 {
+                if !(-6..=6).contains(&slice_beta_offset_div2) {
                     return Err(invalid_data_error!("slice_beta_offset_div2", slice_beta_offset_div2));
                 }
 

@@ -146,8 +146,11 @@ impl Display for CodecID {
 
 impl CodecID {
     pub const NONE: CodecID = CodecID(0);
+    #[cfg(feature = "video")]
     pub const AVC: CodecID = CodecID::H264;
+    #[cfg(feature = "video")]
     pub const HEVC: CodecID = CodecID::H265;
+    #[cfg(feature = "video")]
     pub const VVC: CodecID = CodecID::H266;
 
     pub fn media_type(&self) -> MediaType {

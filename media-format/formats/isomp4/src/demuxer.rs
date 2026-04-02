@@ -2,15 +2,17 @@
 
 use std::{io::SeekFrom, num::NonZeroU32};
 
+#[cfg(any(feature = "audio", feature = "video"))]
+use media_codec_types::decoder::ExtraData;
 #[cfg(feature = "audio")]
 use media_codec_types::AudioParameters;
+#[cfg(feature = "video")]
+use media_codec_types::VideoParameters;
 use media_codec_types::{
     decoder::DecoderParameters,
     packet::{Packet, PacketFlags},
     CodecID, CodecParameters,
 };
-#[cfg(feature = "video")]
-use media_codec_types::{decoder::ExtraData, VideoParameters};
 #[cfg(feature = "audio")]
 use media_core::audio::ChannelLayout;
 #[cfg(feature = "video")]

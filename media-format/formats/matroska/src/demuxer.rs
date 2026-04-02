@@ -6,7 +6,7 @@ use std::{io::SeekFrom, num::NonZeroU32};
 use media_codec_h264::avcc::Avcc;
 #[cfg(feature = "video")]
 use media_codec_h265::hvcc::Hvcc;
-#[cfg(feature = "video")]
+#[cfg(any(feature = "audio", feature = "video"))]
 use media_codec_types::decoder::ExtraData;
 #[cfg(feature = "audio")]
 use media_codec_types::AudioParameters;
@@ -388,10 +388,8 @@ impl MkvDemuxer {
             }
 
             // Skip the element
-            if size > 0 {
-                if reader.seek(SeekFrom::Current(size as i64)).is_err() {
-                    return Ok(false);
-                }
+            if size > 0 && reader.seek(SeekFrom::Current(size as i64)).is_err() {
+                return Ok(false);
             }
 
             skip_count += 1;
@@ -410,18 +408,7 @@ impl MkvDemuxer {
         let mut element_count = 0;
         let mut unknown_element_count = 0;
 
-        loop {
-            // Save position for potential seek back
-            let pos_before_header = match reader.stream_position() {
-                Ok(p) => p,
-                Err(_) => break,
-            };
-
-            let sub_header = match Header::read_from(reader) {
-                Ok(h) => h,
-                Err(_) => break, // End of file or read error
-            };
-
+        while let (Ok(pos_before_header), Ok(sub_header)) = (reader.stream_position(), Header::read_from(reader)) {
             // Check for next top-level element
             if sub_header.id == Cluster::ID {
                 // Hit next cluster - seek back to cluster start and exit
@@ -491,10 +478,8 @@ impl MkvDemuxer {
                 }
                 Position::ID | PrevSize::ID | Void::ID => {
                     // Skip known but unimportant elements
-                    if element_size > 0 {
-                        if reader.seek(SeekFrom::Current(element_size as i64)).is_err() {
-                            break;
-                        }
+                    if element_size > 0 && reader.seek(SeekFrom::Current(element_size as i64)).is_err() {
+                        break;
                     }
                     unknown_element_count = 0;
                 }
@@ -506,10 +491,8 @@ impl MkvDemuxer {
                     }
 
                     // Skip unknown element
-                    if element_size > 0 {
-                        if reader.seek(SeekFrom::Current(element_size as i64)).is_err() {
-                            break;
-                        }
+                    if element_size > 0 && reader.seek(SeekFrom::Current(element_size as i64)).is_err() {
+                        break;
                     }
                 }
             }
@@ -602,13 +585,11 @@ impl Demuxer for MkvDemuxer {
                         // Try to locate Cues using SeekHead
                         if cues.is_none() {
                             if let Some(cues_pos) = Self::find_cues_position(&seek_head, self.segment_data_position) {
-                                if cues_pos > current_pos {
-                                    if reader.seek(SeekFrom::Start(cues_pos)).is_ok() {
-                                        if let Ok(cues_header) = Header::read_from(reader) {
-                                            if cues_header.id == Cues::ID {
-                                                if let Ok(c) = Cues::read_element(&cues_header, reader) {
-                                                    cues = Some(c);
-                                                }
+                                if cues_pos > current_pos && reader.seek(SeekFrom::Start(cues_pos)).is_ok() {
+                                    if let Ok(cues_header) = Header::read_from(reader) {
+                                        if cues_header.id == Cues::ID {
+                                            if let Ok(c) = Cues::read_element(&cues_header, reader) {
+                                                cues = Some(c);
                                             }
                                         }
                                     }
@@ -629,10 +610,8 @@ impl Demuxer for MkvDemuxer {
                             break;
                         }
 
-                        if size > 0 {
-                            if reader.seek(SeekFrom::Current(size as i64)).is_err() {
-                                break;
-                            }
+                        if size > 0 && reader.seek(SeekFrom::Current(size as i64)).is_err() {
+                            break;
                         }
                     }
 
@@ -835,19 +814,17 @@ impl Demuxer for MkvDemuxer {
 
                 // Find frames for our target track in this cluster
                 if let Some(ref cluster) = self.current_cluster {
-                    for frame_result in cluster.frames() {
-                        if let Ok(frame) = frame_result {
-                            // For ANY mode, consider all frames; otherwise only keyframes
-                            if frame.track_number == target_track_number && (search_any || frame.is_keyframe) {
-                                if frame.timestamp <= target_ticks {
-                                    // Frame before or at target - update best_before
-                                    if best_before.is_none() || frame.timestamp > best_before.as_ref().unwrap().1 {
-                                        best_before = Some((cluster_start_pos, frame.timestamp));
-                                    }
-                                } else if best_after.is_none() {
-                                    // First frame after target
-                                    best_after = Some((cluster_start_pos, frame.timestamp));
+                    for frame in cluster.frames().flatten() {
+                        // For ANY mode, consider all frames; otherwise only keyframes
+                        if frame.track_number == target_track_number && (search_any || frame.is_keyframe) {
+                            if frame.timestamp <= target_ticks {
+                                // Frame before or at target - update best_before
+                                if best_before.is_none() || frame.timestamp > best_before.as_ref().unwrap().1 {
+                                    best_before = Some((cluster_start_pos, frame.timestamp));
                                 }
+                            } else if best_after.is_none() {
+                                // First frame after target
+                                best_after = Some((cluster_start_pos, frame.timestamp));
                             }
                         }
                     }

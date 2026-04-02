@@ -9,6 +9,7 @@ use media_format_isomp4::Mp4DemuxerBuilder;
 use media_format_matroska::MkvDemuxerBuilder;
 
 #[cfg(feature = "demuxer")]
+#[allow(unused_imports)]
 use crate::demuxer::register_demuxer;
 
 /// Initializes the format registry with built-in formats
