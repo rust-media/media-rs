@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use ctor::ctor;
-#[cfg(all(feature = "decoder", feature = "video-toolbox", any(target_os = "macos", target_os = "ios")))]
+#[cfg(all(feature = "decoder", feature = "video", feature = "video-toolbox", any(target_os = "macos", target_os = "ios")))]
 use media_codec_video_toolbox::decoder::VTDecoderBuilder;
 
 #[cfg(feature = "decoder")]
@@ -17,6 +17,6 @@ use crate::encoder::register_encoder;
 #[ctor]
 pub fn initialize() {
     // Register decoders
-    #[cfg(all(feature = "decoder", feature = "video-toolbox", any(target_os = "macos", target_os = "ios")))]
+    #[cfg(all(feature = "decoder", feature = "video", feature = "video-toolbox", any(target_os = "macos", target_os = "ios")))]
     register_decoder(Arc::new(VTDecoderBuilder), false);
 }

@@ -226,8 +226,9 @@ pub const EXTENDED_SAR: u8 = 255;
 ///
 /// Each variant stores (aspect_ratio_idc, sar_width, sar_height).
 /// Defined in ITU-T H.265 Table E-1.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
 pub enum AspectRatioInfo {
+    #[default]
     Unspecified,
     Ratio1x1,
     Ratio12x11,
@@ -248,12 +249,6 @@ pub enum AspectRatioInfo {
     Reserved(u8),
     /// Extended SAR (aspect_ratio_idc = 255) with custom width and height
     Extended(u16, u16),
-}
-
-impl Default for AspectRatioInfo {
-    fn default() -> Self {
-        Self::Unspecified
-    }
 }
 
 impl AspectRatioInfo {
@@ -1173,7 +1168,7 @@ impl Sps {
             };
 
         Ok(Self {
-            video_parameter_set_id: video_parameter_set_id as u8,
+            video_parameter_set_id,
             sps_max_sub_layers,
             sps_temporal_id_nesting_flag,
             profile_tier_level,
