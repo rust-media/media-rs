@@ -21,7 +21,7 @@ members = [
 [workspace.package]
 homepage = "https://github.com/rust-media"
 repository = "https://github.com/rust-media/media-rs"
-version = "0.9.0"
+version = "0.9.1"
 authors = ["Zhou Wei <zhouwei@ehom.net>"]
 license = "MIT OR Apache-2.0"
 categories = ["multimedia", "multimedia::audio", "multimedia::video"]
@@ -30,16 +30,16 @@ edition = "2021"
 rust-version = "1.85.0"
 
 [workspace.dependencies]
-media-core = { version = "0.9.0", default-features = false, path = "./media-core" }
-media-codec = { version = "0.9.0", default-features = false, path = "./media-codec" }
+media-core = { version = "0.9.1", default-features = false, path = "./media-core" }
+media-codec = { version = "0.9.1", default-features = false, path = "./media-codec" }
 media-codec-bitstream = { version = "0.1.0", path = "./media-codec/bitstream" }
 media-codec-nal = { version = "0.1.0", path = "./media-codec/nal" }
-media-codec-h264 = { version = "0.1.0", default-features = false, path = "./media-codec/codecs/h264" }
-media-codec-h265 = { version = "0.1.0", default-features = false, path = "./media-codec/codecs/h265" }
-media-codec-types = { version = "0.9.0", default-features = false, path = "./media-codec/types" }
-media-device = { version = "0.9.0", default-features = false, path = "./media-device" }
-media-format = { version = "0.9.0", default-features = false, path = "./media-format" }
-media-format-types = { version = "0.9.0", default-features = false, path = "./media-format/types" }
+media-codec-h264 = { version = "0.1.1", default-features = false, path = "./media-codec/codecs/h264" }
+media-codec-h265 = { version = "0.1.1", default-features = false, path = "./media-codec/codecs/h265" }
+media-codec-types = { version = "0.9.1", default-features = false, path = "./media-codec/types" }
+media-device = { version = "0.9.1", default-features = false, path = "./media-device" }
+media-format = { version = "0.9.1", default-features = false, path = "./media-format" }
+media-format-types = { version = "0.9.1", default-features = false, path = "./media-format/types" }
 aligned-vec = "0.6"
 bitflags = "2.11"
 bytemuck = { version = "1.25", features = ["derive"] }

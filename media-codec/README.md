@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202-blue.svg)](LICENSE-APACHE)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE-MIT)
 
-A generic encoding and decoding framework.
+A generic framework for encoding and decoding.
 
 ## Features
 
