@@ -6,13 +6,17 @@ use media_core::{
     frame::{Frame, SharedFrame},
     variant::Variant,
 };
-use media_device::{camera::CameraManager, Device, OutputDevice};
+use media_device::{
+    camera::{CameraManager, DefaultCameraManager},
+    capture::CaptureDevice,
+    Device,
+};
 
 fn main() {
     std::env::set_var("RUST_LOG", "info");
     env_logger::init();
-    // Create a default instance of camera manager
-    let mut cam_mgr = match CameraManager::new_default() {
+    // Create a camera manager from the platform default backend
+    let mut cam_mgr = match CameraManager::<DefaultCameraManager>::new() {
         Ok(cam_mgr) => cam_mgr,
         Err(e) => {
             error!("{:?}", e.to_string());

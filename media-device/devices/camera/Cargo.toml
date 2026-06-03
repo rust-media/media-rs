@@ -1,0 +1,62 @@
+[package]
+name = "media-device-camera"
+description = "A cross-platform camera capture device implementation"
+homepage.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/media-device-camera"
+version = "0.1.0"
+authors.workspace = true
+license.workspace = true
+categories = ["multimedia", "multimedia::video"]
+keywords = ["camera", "capture", "video", "media"]
+edition.workspace = true
+
+[dependencies]
+cfg-if.workspace = true
+media-core = { workspace = true, features = ["video"] }
+media-device-types = { workspace = true, features = ["capture", "video"] }
+os-ver.workspace = true
+
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+av-foundation = "0.7.0"
+dispatch2 = "0.1"
+core-foundation.workspace = true
+core-media.workspace = true
+core-video.workspace = true
+objc2 = "0.5"
+objc2-foundation = { version = "0.2", features = ["NSArray", "NSDictionary", "NSObject"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-core = "0.61"
+
+[target.'cfg(target_os = "windows")'.dependencies.windows]
+version = "0.61"
+features = [
+    "Win32",
+    "Win32_Foundation",
+    "Win32_Media",
+    "Win32_Media_DirectShow",
+    "Win32_Media_MediaFoundation",
+    "Win32_System_Com"
+]
+
+[features]
+default = ["capture", "video", "av-foundation-capture", "media-foundation-capture"]
+audio = ["media-device-types/audio"]
+video = [
+    "media-core/video",
+    "media-device-types/video",
+]
+capture = ["media-device-types/capture"]
+av-foundation-capture = []
+media-foundation-capture = []
+
+[package.metadata.docs.rs]
+default-target = "x86_64-pc-windows-msvc"
+targets = [
+    "x86_64-pc-windows-msvc",
+    "x86_64-apple-darwin",
+    "x86_64-apple-ios",
+    "aarch64-apple-darwin",
+    "aarch64-apple-ios",
+]

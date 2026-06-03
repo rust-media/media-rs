@@ -3,16 +3,19 @@ use media_core::{
     video::{ColorRange, VideoFormat},
     Result,
 };
-
-use crate::{DeviceEvent, DeviceManager};
+use media_device_types::{DeviceEvent, DeviceManager};
 
 cfg_if! {
     if #[cfg(target_os = "windows")] {
-        pub use crate::backend::media_foundation::MediaFoundationDeviceManager as DefaultCameraManager;
+        #[path = "windows/mod.rs"]
+        pub mod backend;
+
+        pub use backend::media_foundation::MediaFoundationDeviceManager as DefaultCameraManager;
     } else if #[cfg(any(target_os = "macos", target_os = "ios"))] {
-        pub use crate::backend::av_foundation::AVFoundationCaptureDeviceManager as DefaultCameraManager;
-    } else {
-        compile_error!("unsupported target");
+        #[path = "mac/mod.rs"]
+        pub mod backend;
+
+        pub use backend::av_foundation::AVFoundationCaptureDeviceManager as DefaultCameraManager;
     }
 }
 
@@ -77,11 +80,5 @@ impl<T: DeviceManager> CameraManager<T> {
 impl<T: DeviceManager> Drop for CameraManager<T> {
     fn drop(&mut self) {
         self.backend.deinit();
-    }
-}
-
-impl CameraManager<DefaultCameraManager> {
-    pub fn new_default() -> Result<Self> {
-        Self::new()
     }
 }

@@ -37,6 +37,10 @@ use media_core::{
     video::{ColorRange, PixelFormat, VideoFormat},
     Result,
 };
+use media_device_types::{
+    capture::CaptureDevice,
+    device::{Device, DeviceEvent, DeviceEventHandler, DeviceInformation, DeviceManager, OutputHandler},
+};
 use objc2::{
     declare_class, extern_methods, msg_send_id, mutability,
     rc::{Allocated, Id, Retained},
@@ -46,7 +50,7 @@ use objc2::{
 use objc2_foundation::{NSArray, NSMutableArray, NSMutableDictionary, NSNumber, NSObject, NSObjectProtocol, NSString};
 use os_ver::if_greater_than;
 
-use crate::{camera::CameraFormat, Device, DeviceEvent, DeviceEventHandler, DeviceInformation, DeviceManager, OutputDevice, OutputHandler};
+use crate::CameraFormat;
 
 pub struct AVFoundationCaptureDeviceManager {
     devices: Option<Vec<AVFoundationCaptureDevice>>,
@@ -178,17 +182,15 @@ impl AVFoundationCaptureDeviceManager {
         let mut devices = Vec::with_capacity(av_capture_devices.count() as _);
 
         for device in av_capture_devices.iter() {
-            let dev_info = DeviceInformation::from_av_capture_device(device);
+            let dev_info = Self::device_info_from_av_capture_device(device);
             devices.push(AVFoundationCaptureDevice::new(dev_info)?);
         }
 
         Ok(devices)
     }
-}
 
-impl DeviceInformation {
-    fn from_av_capture_device(device: &AVCaptureDevice) -> Self {
-        Self {
+    fn device_info_from_av_capture_device(device: &AVCaptureDevice) -> DeviceInformation {
+        DeviceInformation {
             name: device.localized_name().to_string(),
             id: device.unique_id().to_string(),
         }
@@ -606,7 +608,7 @@ impl Device for AVFoundationCaptureDevice {
     }
 }
 
-impl OutputDevice for AVFoundationCaptureDevice {
+impl CaptureDevice for AVFoundationCaptureDevice {
     fn set_output_handler<F>(&mut self, handler: F) -> Result<()>
     where
         F: Fn(Frame) -> Result<()> + Send + Sync + 'static,

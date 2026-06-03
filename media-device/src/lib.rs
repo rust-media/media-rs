@@ -1,18 +1,7 @@
-#[cfg(feature = "video")]
-#[cfg(any(target_os = "windows", target_os = "macos", target_os = "ios"))]
-pub mod camera;
-
-mod device;
-
-use cfg_if::cfg_if;
-pub use device::*;
-
-cfg_if! {
-    if #[cfg(target_os = "windows")] {
-        #[path = "windows/mod.rs"]
-        pub mod backend;
-    } else if #[cfg(any(target_os = "macos", target_os = "ios"))] {
-        #[path = "mac/mod.rs"]
-        pub mod backend;
-    }
-}
+#[cfg(all(feature = "capture", feature = "video", feature = "camera"))]
+pub use media_device_camera as camera;
+#[cfg(feature = "capture")]
+pub use media_device_types::capture;
+pub use media_device_types::device::*;
+#[cfg(feature = "render")]
+pub use media_device_types::render;

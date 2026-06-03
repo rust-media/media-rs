@@ -21,6 +21,10 @@ use media_core::{
     video::{ColorRange, CompressionFormat, Origin, PixelFormat, VideoFormat, VideoFrameDescriptor},
     Result,
 };
+use media_device_types::{
+    capture::CaptureDevice,
+    device::{Device, DeviceEvent, DeviceEventHandler, DeviceInformation, DeviceManager, OutputHandler},
+};
 use windows::{
     core::{implement, AsImpl, Interface, GUID, PWSTR},
     Win32::{
@@ -39,7 +43,7 @@ use windows::{
     },
 };
 
-use crate::{camera::CameraFormat, Device, DeviceEvent, DeviceEventHandler, DeviceInformation, DeviceManager, OutputDevice, OutputHandler};
+use crate::CameraFormat;
 
 pub struct MediaFoundationDeviceManager {
     devices: Option<Vec<MediaFoundationDevice>>,
@@ -109,7 +113,7 @@ impl DeviceManager for MediaFoundationDeviceManager {
         let mut devices = Vec::with_capacity(device_sources.len());
 
         for (index, activate) in device_sources.iter().enumerate() {
-            let dev_info = DeviceInformation::from_source_activate(activate)?;
+            let dev_info = Self::device_info_from_source_activate(activate)?;
             devices.push(MediaFoundationDevice::new(dev_info, index)?);
         }
 
@@ -176,10 +180,8 @@ impl MediaFoundationDeviceManager {
 
         Ok(device_sources)
     }
-}
 
-impl DeviceInformation {
-    fn from_source_activate(activate: &IMFActivate) -> Result<Self> {
+    fn device_info_from_source_activate(activate: &IMFActivate) -> Result<DeviceInformation> {
         let mut symbolic_link_ptr = PWSTR(null_mut());
         let mut symbolic_link_len = 0;
         unsafe {
@@ -212,7 +214,7 @@ impl DeviceInformation {
             name?
         };
 
-        Ok(Self {
+        Ok(DeviceInformation {
             id,
             name,
         })
@@ -792,7 +794,7 @@ impl Device for MediaFoundationDevice {
     }
 }
 
-impl OutputDevice for MediaFoundationDevice {
+impl CaptureDevice for MediaFoundationDevice {
     fn set_output_handler<F>(&mut self, handler: F) -> Result<()>
     where
         F: Fn(Frame) -> Result<()> + Send + Sync + 'static,

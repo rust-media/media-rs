@@ -9,13 +9,16 @@ pub struct DeviceInformation {
 }
 
 pub enum DeviceEvent {
-    Added(DeviceInformation), // Device added
-    Removed(String),          // Device removed, removed device ID
-    Refreshed(usize),         // All devices refreshed, number of devices
+    Added(DeviceInformation),
+    Removed(String),
+    Refreshed(usize),
 }
 
-#[allow(unused)]
-pub(crate) type OutputHandler = Arc<dyn Fn(Frame) -> Result<()> + Send + Sync>;
+pub type OutputHandler = Arc<dyn Fn(Frame) -> Result<()> + Send + Sync>;
+
+pub type InputHandler = Arc<dyn Fn(&mut Frame) -> Result<()> + Send + Sync>;
+
+pub type DeviceEventHandler = Box<dyn Fn(&DeviceEvent) + Send + Sync>;
 
 pub trait Device {
     fn name(&self) -> &str;
@@ -27,15 +30,6 @@ pub trait Device {
     fn running(&self) -> bool;
     fn formats(&self) -> Result<Variant>;
 }
-
-pub trait OutputDevice: Device {
-    fn set_output_handler<F>(&mut self, handler: F) -> Result<()>
-    where
-        F: Fn(Frame) -> Result<()> + Send + Sync + 'static;
-}
-
-#[allow(unused)]
-pub(crate) type DeviceEventHandler = Box<dyn Fn(&DeviceEvent) + Send + Sync>;
 
 pub trait DeviceManager {
     type DeviceType: Device;

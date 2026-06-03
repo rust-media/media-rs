@@ -7,15 +7,20 @@ members = [
     "media-codec/nal",
     "media-codec/types",
     "media-device",
+    "media-device/types",
     "media-filter",
     "media-format",
     "media-format/types",
-    "media-format/formats/isomp4",
     "media",
     # Codecs
     "media-codec/codecs/h264",
     "media-codec/codecs/h265",
     "media-codec/codecs/video-toolbox",
+    # Devices
+    "media-device/devices/camera",
+    # Formats
+    "media-format/formats/isomp4",
+    "media-format/formats/matroska",
 ]
 
 [workspace.package]
@@ -38,6 +43,8 @@ media-codec-h264 = { version = "0.1.1", default-features = false, path = "./medi
 media-codec-h265 = { version = "0.1.1", default-features = false, path = "./media-codec/codecs/h265" }
 media-codec-types = { version = "0.9.1", default-features = false, path = "./media-codec/types" }
 media-device = { version = "0.9.1", default-features = false, path = "./media-device" }
+media-device-camera = { version = "0.1.0", default-features = false, path = "./media-device/devices/camera" }
+media-device-types = { version = "0.9.1", default-features = false, path = "./media-device/types" }
 media-format = { version = "0.9.1", default-features = false, path = "./media-format" }
 media-format-types = { version = "0.9.1", default-features = false, path = "./media-format/types" }
 aligned-vec = "0.6"

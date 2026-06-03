@@ -1,0 +1,26 @@
+[package]
+name = "media-device-types"
+description = "Provides common types for device implementations"
+homepage.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/media-device-types"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+categories = ["multimedia", "multimedia::audio", "multimedia::video"]
+keywords = ["device", "capture", "playback", "camera"]
+edition.workspace = true
+
+[dependencies]
+media-core.workspace = true
+
+[features]
+default = ["audio", "video", "capture", "render"]
+audio = [
+    "media-core/audio",
+]
+video = [
+    "media-core/video",
+]
+capture = []
+render = []

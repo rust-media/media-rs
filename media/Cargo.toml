@@ -27,10 +27,13 @@ default = [
     "encoder",
     "demuxer",
     "muxer",
+    "capture",
+    "render",
     "codec",
     "device",
     "format",
     "media-codec?/all-codecs",
+    "media-device?/all-devices",
     "media-format?/all-formats",
 ]
 audio = [
@@ -49,6 +52,8 @@ decoder = ["media-codec?/decoder"]
 encoder = ["media-codec?/encoder"]
 demuxer = ["media-format?/demuxer"]
 muxer = ["media-format?/muxer"]
+capture = ["media-device?/capture"]
+render = ["media-device?/render"]
 codec = ["dep:media-codec"]
 device = ["dep:media-device"]
 format = ["dep:media-format"]

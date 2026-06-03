@@ -7,41 +7,18 @@ documentation = "https://docs.rs/media-device"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
-categories.workspace = true
+categories = ["multimedia", "multimedia::audio", "multimedia::video"]
 keywords = ["audio", "video", "camera", "capture", "playback"]
 edition.workspace = true
 
 [dependencies.media-core]
 workspace = true
 
+[dependencies.media-device-types]
+workspace = true
+
 [dependencies]
-cfg-if.workspace = true
-os-ver.workspace = true
-thiserror.workspace = true
-
-[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
-av-foundation = "0.7.0"
-dispatch2 = "0.1"
-core-audio-types.workspace = true
-core-foundation.workspace = true
-core-media.workspace = true
-core-video.workspace = true
-objc2 = "0.5"
-objc2-foundation = { version = "0.2", features = ["NSArray", "NSDictionary", "NSObject"] }
-
-[target.'cfg(target_os = "windows")'.dependencies]
-windows-core = "0.61"
-
-[target.'cfg(target_os = "windows")'.dependencies.windows]
-version = "0.61"
-features = [
-    "Win32",
-    "Win32_Foundation",
-    "Win32_Media",
-    "Win32_Media_DirectShow",
-    "Win32_Media_MediaFoundation",
-    "Win32_System_Com"
-]
+media-device-camera = { workspace = true, optional = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 wasm-bindgen = "0.2"
@@ -73,9 +50,31 @@ env_logger = "0.11"
 log = "0.4"
 
 [features]
-default = ["audio", "video"]
-audio = ["media-core/audio"]
-video = ["media-core/video"]
+default = ["audio", "video", "capture", "render", "all-devices"]
+all-devices = ["all-capture-devices", "all-render-devices"]
+all-capture-devices = ["av-foundation-capture", "media-foundation-capture"]
+all-render-devices = []
+audio = [
+    "media-core/audio",
+    "media-device-types/audio",
+    "media-device-camera?/audio",
+]
+video = [
+    "media-core/video",
+    "media-device-types/video",
+    "media-device-camera?/video",
+]
+capture = [
+    "media-device-types/capture",
+    "media-device-camera?/capture",
+]
+render = [
+    "media-device-types/render",
+]
+# Devices
+camera = ["dep:media-device-camera", "capture", "video"]
+av-foundation-capture = ["camera", "media-device-camera?/av-foundation-capture"]
+media-foundation-capture = ["camera", "media-device-camera?/media-foundation-capture"]
 
 [package.metadata.docs.rs]
 default-target = "x86_64-pc-windows-msvc"
