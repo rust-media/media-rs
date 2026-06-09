@@ -57,74 +57,6 @@ pub struct AVFoundationCaptureDeviceManager {
     handler: Option<DeviceEventHandler>,
 }
 
-impl DeviceManager for AVFoundationCaptureDeviceManager {
-    type DeviceType = AVFoundationCaptureDevice;
-    type Iter<'a>
-        = Iter<'a, AVFoundationCaptureDevice>
-    where
-        Self: 'a;
-    type IterMut<'a>
-        = IterMut<'a, AVFoundationCaptureDevice>
-    where
-        Self: 'a;
-
-    fn init() -> Result<Self>
-    where
-        Self: Sized,
-    {
-        Ok(Self {
-            devices: None,
-            handler: None,
-        })
-    }
-
-    fn deinit(&mut self) {}
-
-    fn index(&self, index: usize) -> Option<&Self::DeviceType> {
-        self.devices.as_ref().and_then(|devices| devices.get(index))
-    }
-
-    fn index_mut(&mut self, index: usize) -> Option<&mut Self::DeviceType> {
-        self.devices.as_mut().and_then(|devices| devices.get_mut(index))
-    }
-
-    fn lookup(&self, id: &str) -> Option<&Self::DeviceType> {
-        self.devices.as_ref().and_then(|devices| devices.iter().find(|device| device.info.id == id))
-    }
-
-    fn lookup_mut(&mut self, id: &str) -> Option<&mut Self::DeviceType> {
-        self.devices.as_mut().and_then(|devices| devices.iter_mut().find(|device| device.info.id == id))
-    }
-
-    fn iter(&self) -> Iter<'_, AVFoundationCaptureDevice> {
-        self.devices.as_deref().unwrap_or(&[]).iter()
-    }
-
-    fn iter_mut(&mut self) -> IterMut<'_, AVFoundationCaptureDevice> {
-        self.devices.as_deref_mut().unwrap_or(&mut []).iter_mut()
-    }
-
-    fn refresh(&mut self) -> Result<()> {
-        let devices = Self::list_devices()?;
-
-        let count = devices.len();
-        self.devices = Some(devices);
-        if let Some(handler) = &self.handler {
-            handler(&DeviceEvent::Refreshed(count));
-        }
-
-        Ok(())
-    }
-
-    fn set_change_handler<F>(&mut self, handler: F) -> Result<()>
-    where
-        F: Fn(&DeviceEvent) + Send + Sync + 'static,
-    {
-        self.handler = Some(Box::new(handler));
-        Ok(())
-    }
-}
-
 impl AVFoundationCaptureDeviceManager {
     cfg_if! {
         if #[cfg(target_os = "macos")] {
@@ -176,24 +108,92 @@ impl AVFoundationCaptureDeviceManager {
         }
     }
 
-    fn list_devices() -> Result<Vec<AVFoundationCaptureDevice>> {
+    fn get_device_info(device: Retained<AVCaptureDevice>) -> DeviceInformation {
+        DeviceInformation {
+            name: device.localized_name().to_string(),
+            id: device.unique_id().to_string(),
+        }
+    }
+
+    fn enumerate() -> Result<Vec<AVFoundationCaptureDevice>> {
         let av_capture_devices = Self::get_av_devices();
 
         let mut devices = Vec::with_capacity(av_capture_devices.count() as _);
 
         for device in av_capture_devices.iter() {
-            let dev_info = Self::device_info_from_av_capture_device(device);
+            let dev_info = Self::get_device_info(device);
             devices.push(AVFoundationCaptureDevice::new(dev_info)?);
         }
 
         Ok(devices)
     }
+}
 
-    fn device_info_from_av_capture_device(device: Retained<AVCaptureDevice>) -> DeviceInformation {
-        DeviceInformation {
-            name: device.localized_name().to_string(),
-            id: device.unique_id().to_string(),
+impl DeviceManager for AVFoundationCaptureDeviceManager {
+    type DeviceType = AVFoundationCaptureDevice;
+    type Iter<'a>
+        = Iter<'a, AVFoundationCaptureDevice>
+    where
+        Self: 'a;
+    type IterMut<'a>
+        = IterMut<'a, AVFoundationCaptureDevice>
+    where
+        Self: 'a;
+
+    fn init() -> Result<Self>
+    where
+        Self: Sized,
+    {
+        Ok(Self {
+            devices: None,
+            handler: None,
+        })
+    }
+
+    fn deinit(&mut self) {}
+
+    fn index(&self, index: usize) -> Option<&Self::DeviceType> {
+        self.devices.as_ref().and_then(|devices| devices.get(index))
+    }
+
+    fn index_mut(&mut self, index: usize) -> Option<&mut Self::DeviceType> {
+        self.devices.as_mut().and_then(|devices| devices.get_mut(index))
+    }
+
+    fn lookup(&self, id: &str) -> Option<&Self::DeviceType> {
+        self.devices.as_ref().and_then(|devices| devices.iter().find(|device| device.info.id == id))
+    }
+
+    fn lookup_mut(&mut self, id: &str) -> Option<&mut Self::DeviceType> {
+        self.devices.as_mut().and_then(|devices| devices.iter_mut().find(|device| device.info.id == id))
+    }
+
+    fn iter(&self) -> Iter<'_, AVFoundationCaptureDevice> {
+        self.devices.as_deref().unwrap_or(&[]).iter()
+    }
+
+    fn iter_mut(&mut self) -> IterMut<'_, AVFoundationCaptureDevice> {
+        self.devices.as_deref_mut().unwrap_or(&mut []).iter_mut()
+    }
+
+    fn refresh(&mut self) -> Result<()> {
+        let devices = Self::enumerate()?;
+
+        let count = devices.len();
+        self.devices = Some(devices);
+        if let Some(handler) = &self.handler {
+            handler(&DeviceEvent::Refreshed(count));
         }
+
+        Ok(())
+    }
+
+    fn set_change_handler<F>(&mut self, handler: F) -> Result<()>
+    where
+        F: Fn(&DeviceEvent) + Send + Sync + 'static,
+    {
+        self.handler = Some(Box::new(handler));
+        Ok(())
     }
 }
 
@@ -433,6 +433,23 @@ pub struct AVFoundationCaptureDevice {
     delegate: Option<Retained<OutputDelegate>>,
 }
 
+impl AVFoundationCaptureDevice {
+    fn new(dev_info: DeviceInformation) -> Result<Self> {
+        Ok(Self {
+            info: dev_info,
+            running: false,
+            formats: None,
+            current_format: None,
+            handler: None,
+            session: None,
+            device: None,
+            input: None,
+            output: None,
+            delegate: None,
+        })
+    }
+}
+
 impl Device for AVFoundationCaptureDevice {
     fn name(&self) -> &str {
         &self.info.name
@@ -610,19 +627,8 @@ impl CaptureHanlder for AVFoundationCaptureDevice {
     }
 }
 
-impl AVFoundationCaptureDevice {
-    fn new(dev_info: DeviceInformation) -> Result<Self> {
-        Ok(Self {
-            info: dev_info,
-            running: false,
-            formats: None,
-            current_format: None,
-            handler: None,
-            session: None,
-            device: None,
-            input: None,
-            output: None,
-            delegate: None,
-        })
+impl Drop for AVFoundationCaptureDevice {
+    fn drop(&mut self) {
+        let _ = self.stop();
     }
 }

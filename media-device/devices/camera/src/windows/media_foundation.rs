@@ -50,6 +50,87 @@ pub struct MediaFoundationDeviceManager {
     handler: Option<DeviceEventHandler>,
 }
 
+impl MediaFoundationDeviceManager {
+    pub fn new() -> Self {
+        Self {
+            devices: None,
+            handler: None,
+        }
+    }
+
+    fn get_device_sources() -> Result<Vec<IMFActivate>> {
+        let attributes: IMFAttributes = unsafe {
+            let mut attributes: Option<IMFAttributes> = None;
+            MFCreateAttributes(&mut attributes, 1).map_err(|err| Error::CreationFailed(err.message().into()))?;
+            attributes.ok_or_else(|| none_param_error!(attributes))?
+        };
+
+        unsafe {
+            attributes
+                .SetGUID(&MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, &MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID)
+                .map_err(|err| Error::SetFailed(err.message().into()))?;
+        }
+
+        let mut source_activate_ptr: MaybeUninit<*mut Option<IMFActivate>> = MaybeUninit::uninit();
+        let mut source_activate_count: u32 = 0;
+        unsafe {
+            MFEnumDeviceSources(&attributes, source_activate_ptr.as_mut_ptr(), &mut source_activate_count)
+                .map_err(|err| failed_error!(err.message()))?;
+        }
+
+        let mut device_sources = vec![];
+
+        if source_activate_count > 0 {
+            unsafe { from_raw_parts(source_activate_ptr.assume_init(), source_activate_count as usize) }.iter().for_each(|ptr| {
+                if let Some(activate) = ptr {
+                    device_sources.push(activate.clone());
+                }
+            });
+        };
+
+        Ok(device_sources)
+    }
+
+    fn get_device_info(activate: &IMFActivate) -> Result<DeviceInformation> {
+        let mut symbolic_link_ptr = PWSTR(null_mut());
+        let mut symbolic_link_len = 0;
+        unsafe {
+            activate
+                .GetAllocatedString(&MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, &mut symbolic_link_ptr, &mut symbolic_link_len)
+                .map_err(|err| failed_error!(err.message()))?;
+        }
+        if symbolic_link_ptr.is_null() {
+            return Err(none_param_error!(symbolic_link_ptr));
+        }
+        let id = unsafe {
+            let symbolic_link = symbolic_link_ptr.to_string().map_err(|err| failed_error!(err.to_string()));
+            CoTaskMemFree(Some(symbolic_link_ptr.as_ptr() as _));
+            symbolic_link?
+        };
+
+        let mut friendly_name_ptr = PWSTR(null_mut());
+        let mut friendly_name_len = 0;
+        unsafe {
+            activate
+                .GetAllocatedString(&MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME, &mut friendly_name_ptr, &mut friendly_name_len)
+                .map_err(|err| failed_error!(err.message()))?;
+        }
+        if friendly_name_ptr.is_null() {
+            return Err(none_param_error!(friendly_name_ptr));
+        }
+        let name = unsafe {
+            let name = friendly_name_ptr.to_string().map_err(|err| failed_error!(err.to_string()));
+            CoTaskMemFree(Some(friendly_name_ptr.as_ptr() as _));
+            name?
+        };
+
+        Ok(DeviceInformation {
+            id,
+            name,
+        })
+    }
+}
+
 impl DeviceManager for MediaFoundationDeviceManager {
     type DeviceType = MediaFoundationDevice;
     type Iter<'a>
@@ -113,7 +194,7 @@ impl DeviceManager for MediaFoundationDeviceManager {
         let mut devices = Vec::with_capacity(device_sources.len());
 
         for (index, activate) in device_sources.iter().enumerate() {
-            let dev_info = Self::device_info_from_source_activate(activate)?;
+            let dev_info = Self::get_device_info(activate)?;
             devices.push(MediaFoundationDevice::new(dev_info, index)?);
         }
 
@@ -137,87 +218,6 @@ impl DeviceManager for MediaFoundationDeviceManager {
 impl Default for MediaFoundationDeviceManager {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl MediaFoundationDeviceManager {
-    pub fn new() -> Self {
-        Self {
-            devices: None,
-            handler: None,
-        }
-    }
-
-    fn get_device_sources() -> Result<Vec<IMFActivate>> {
-        let attributes: IMFAttributes = unsafe {
-            let mut attributes: Option<IMFAttributes> = None;
-            MFCreateAttributes(&mut attributes, 1).map_err(|err| Error::CreationFailed(err.message().into()))?;
-            attributes.ok_or_else(|| none_param_error!(attributes))?
-        };
-
-        unsafe {
-            attributes
-                .SetGUID(&MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, &MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID)
-                .map_err(|err| Error::SetFailed(err.message().into()))?;
-        }
-
-        let mut source_activate_ptr: MaybeUninit<*mut Option<IMFActivate>> = MaybeUninit::uninit();
-        let mut source_activate_count: u32 = 0;
-        unsafe {
-            MFEnumDeviceSources(&attributes, source_activate_ptr.as_mut_ptr(), &mut source_activate_count)
-                .map_err(|err| failed_error!(err.message()))?;
-        }
-
-        let mut device_sources = vec![];
-
-        if source_activate_count > 0 {
-            unsafe { from_raw_parts(source_activate_ptr.assume_init(), source_activate_count as usize) }.iter().for_each(|ptr| {
-                if let Some(activate) = ptr {
-                    device_sources.push(activate.clone());
-                }
-            });
-        };
-
-        Ok(device_sources)
-    }
-
-    fn device_info_from_source_activate(activate: &IMFActivate) -> Result<DeviceInformation> {
-        let mut symbolic_link_ptr = PWSTR(null_mut());
-        let mut symbolic_link_len = 0;
-        unsafe {
-            activate
-                .GetAllocatedString(&MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, &mut symbolic_link_ptr, &mut symbolic_link_len)
-                .map_err(|err| failed_error!(err.message()))?;
-        }
-        if symbolic_link_ptr.is_null() {
-            return Err(none_param_error!(symbolic_link_ptr));
-        }
-        let id = unsafe {
-            let symbolic_link = symbolic_link_ptr.to_string().map_err(|err| failed_error!(err.to_string()));
-            CoTaskMemFree(Some(symbolic_link_ptr.as_ptr() as _));
-            symbolic_link?
-        };
-
-        let mut friendly_name_ptr = PWSTR(null_mut());
-        let mut friendly_name_len = 0;
-        unsafe {
-            activate
-                .GetAllocatedString(&MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME, &mut friendly_name_ptr, &mut friendly_name_len)
-                .map_err(|err| failed_error!(err.message()))?;
-        }
-        if friendly_name_ptr.is_null() {
-            return Err(none_param_error!(friendly_name_ptr));
-        }
-        let name = unsafe {
-            let name = friendly_name_ptr.to_string().map_err(|err| failed_error!(err.to_string()));
-            CoTaskMemFree(Some(friendly_name_ptr.as_ptr() as _));
-            name?
-        };
-
-        Ok(DeviceInformation {
-            id,
-            name,
-        })
     }
 }
 
@@ -663,6 +663,61 @@ pub struct MediaFoundationDevice {
     source_reader: Option<(Arc<Mutex<IMFSourceReader>>, IMFSourceReaderCallback)>,
 }
 
+impl MediaFoundationDevice {
+    fn new(dev_info: DeviceInformation, index: usize) -> Result<Self> {
+        Ok(Self {
+            info: dev_info,
+            index,
+            running: false,
+            current_format: None,
+            formats: None,
+            handler: None,
+            source_reader: None,
+        })
+    }
+
+    fn get_source_reader(&mut self) -> Result<(&Mutex<IMFSourceReader>, &mut SourceReaderCallback)> {
+        if self.source_reader.is_none() {
+            let device_sources = MediaFoundationDeviceManager::get_device_sources()?;
+            let activate = device_sources.get(self.index).ok_or_else(|| not_found_error!(self.index))?;
+            let media_source = unsafe { activate.ActivateObject::<IMFMediaSource>().map_err(|err| Error::OpenFailed(err.message().into()))? };
+
+            let attributes: IMFAttributes = unsafe {
+                let mut attributes: Option<IMFAttributes> = None;
+                MFCreateAttributes(&mut attributes, 1).map_err(|err| Error::CreationFailed(err.message().into()))?;
+                attributes.ok_or_else(|| none_param_error!(attributes))?
+            };
+
+            unsafe {
+                attributes.SetUINT32(&MF_READWRITE_DISABLE_CONVERTERS, true as u32).map_err(|err| Error::SetFailed(err.message().into()))?;
+            }
+
+            let handler = self.handler.as_ref().ok_or_else(|| none_param_error!(output_handler))?;
+            let callback: IMFSourceReaderCallback = SourceReaderCallback::new(self.info.clone(), handler.clone()).into();
+
+            unsafe {
+                attributes.SetUnknown(&MF_SOURCE_READER_ASYNC_CALLBACK, &callback).map_err(|err| Error::SetFailed(err.message().into()))?;
+            }
+
+            let source_reader = unsafe {
+                MFCreateSourceReaderFromMediaSource(&media_source, &attributes).map_err(|err| Error::CreationFailed(err.message().into()))?
+            };
+
+            #[allow(clippy::arc_with_non_send_sync)]
+            let source_reader = Arc::new(Mutex::new(source_reader));
+
+            unsafe {
+                callback.as_impl_ptr().as_mut().set_source_reader(&source_reader);
+            }
+
+            self.source_reader = Some((source_reader.clone(), callback));
+        }
+        let (source_reader, reader_callback) = self.source_reader.as_ref().unwrap();
+        let reader_callback = unsafe { reader_callback.as_impl_ptr().as_mut() };
+        Ok((source_reader.as_ref(), reader_callback))
+    }
+}
+
 impl Device for MediaFoundationDevice {
     fn name(&self) -> &str {
         &self.info.name
@@ -804,57 +859,8 @@ impl CaptureHanlder for MediaFoundationDevice {
     }
 }
 
-impl MediaFoundationDevice {
-    fn new(dev_info: DeviceInformation, index: usize) -> Result<Self> {
-        Ok(Self {
-            info: dev_info,
-            index,
-            running: false,
-            current_format: None,
-            formats: None,
-            handler: None,
-            source_reader: None,
-        })
-    }
-
-    fn get_source_reader(&mut self) -> Result<(&Mutex<IMFSourceReader>, &mut SourceReaderCallback)> {
-        if self.source_reader.is_none() {
-            let device_sources = MediaFoundationDeviceManager::get_device_sources()?;
-            let activate = device_sources.get(self.index).ok_or_else(|| not_found_error!(self.index))?;
-            let media_source = unsafe { activate.ActivateObject::<IMFMediaSource>().map_err(|err| Error::OpenFailed(err.message().into()))? };
-
-            let attributes: IMFAttributes = unsafe {
-                let mut attributes: Option<IMFAttributes> = None;
-                MFCreateAttributes(&mut attributes, 1).map_err(|err| Error::CreationFailed(err.message().into()))?;
-                attributes.ok_or_else(|| none_param_error!(attributes))?
-            };
-
-            unsafe {
-                attributes.SetUINT32(&MF_READWRITE_DISABLE_CONVERTERS, true as u32).map_err(|err| Error::SetFailed(err.message().into()))?;
-            }
-
-            let handler = self.handler.as_ref().ok_or_else(|| none_param_error!(output_handler))?;
-            let callback: IMFSourceReaderCallback = SourceReaderCallback::new(self.info.clone(), handler.clone()).into();
-
-            unsafe {
-                attributes.SetUnknown(&MF_SOURCE_READER_ASYNC_CALLBACK, &callback).map_err(|err| Error::SetFailed(err.message().into()))?;
-            }
-
-            let source_reader = unsafe {
-                MFCreateSourceReaderFromMediaSource(&media_source, &attributes).map_err(|err| Error::CreationFailed(err.message().into()))?
-            };
-
-            #[allow(clippy::arc_with_non_send_sync)]
-            let source_reader = Arc::new(Mutex::new(source_reader));
-
-            unsafe {
-                callback.as_impl_ptr().as_mut().set_source_reader(&source_reader);
-            }
-
-            self.source_reader = Some((source_reader.clone(), callback));
-        }
-        let (source_reader, reader_callback) = self.source_reader.as_ref().unwrap();
-        let reader_callback = unsafe { reader_callback.as_impl_ptr().as_mut() };
-        Ok((source_reader.as_ref(), reader_callback))
+impl Drop for MediaFoundationDevice {
+    fn drop(&mut self) {
+        let _ = self.stop();
     }
 }
