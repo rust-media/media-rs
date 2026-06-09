@@ -1,4 +1,5 @@
 use std::{
+    fmt::{Display, Formatter},
     iter, mem,
     num::{NonZeroU32, NonZeroU8},
 };
@@ -37,6 +38,12 @@ pub enum SampleFormat {
     S64P,   // signed 64 bits, planar
     F32P,   // float 32 bits, planar
     F64P,   // float 64 bits, planar
+}
+
+impl Display for SampleFormat {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 impl From<SampleFormat> for usize {

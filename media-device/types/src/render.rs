@@ -1,9 +1,14 @@
-use media_core::{frame::Frame, Result};
+use media_core::{
+    frame::{Frame, SharedFrame},
+    Result,
+};
 
-use crate::device::Device;
-
-pub trait RenderDevice: Device {
+pub trait RenderHandler {
     fn set_input_handler<F>(&mut self, handler: F) -> Result<()>
     where
         F: Fn(&mut Frame) -> Result<()> + Send + Sync + 'static;
+}
+
+pub trait Sink {
+    fn write_frame(&mut self, frame: SharedFrame) -> Result<()>;
 }

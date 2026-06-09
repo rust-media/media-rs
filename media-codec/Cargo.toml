@@ -48,6 +48,6 @@ encoder = [
     "media-codec-types/encoder",
 ]
 # Codecs
-h264 = ["dep:media-codec-h264"]
-h265 = ["dep:media-codec-h265"]
-video-toolbox = ["dep:media-codec-video-toolbox"]
+h264 = ["dep:media-codec-h264", "video"]
+h265 = ["dep:media-codec-h265", "video"]
+video-toolbox = ["dep:media-codec-video-toolbox", "video"]

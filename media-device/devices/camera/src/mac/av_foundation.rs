@@ -1,6 +1,6 @@
 use std::{
     slice::{Iter, IterMut},
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
 
 #[cfg(target_os = "macos")]
@@ -27,7 +27,7 @@ use core_video::pixel_buffer::{
     kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange, kCVPixelFormatType_420YpCbCr8Planar, kCVPixelFormatType_422YpCbCr8,
     kCVPixelFormatType_422YpCbCr8_yuvs, CVPixelBuffer, CVPixelBufferKeys,
 };
-use dispatch2::Queue;
+use dispatch2::{DispatchQueue, DispatchQueueAttr};
 use media_core::{
     error::Error,
     frame::Frame,
@@ -38,14 +38,14 @@ use media_core::{
     Result,
 };
 use media_device_types::{
-    capture::CaptureDevice,
+    capture::CaptureHanlder,
     device::{Device, DeviceEvent, DeviceEventHandler, DeviceInformation, DeviceManager, OutputHandler},
 };
 use objc2::{
-    declare_class, extern_methods, msg_send_id, mutability,
-    rc::{Allocated, Id, Retained},
+    define_class, msg_send,
+    rc::{Allocated, Retained},
     runtime::ProtocolObject,
-    ClassType, DeclaredClass,
+    AnyThread, DefinedClass,
 };
 use objc2_foundation::{NSArray, NSMutableArray, NSMutableDictionary, NSNumber, NSObject, NSObjectProtocol, NSString};
 use os_ver::if_greater_than;
@@ -128,10 +128,10 @@ impl DeviceManager for AVFoundationCaptureDeviceManager {
 impl AVFoundationCaptureDeviceManager {
     cfg_if! {
         if #[cfg(target_os = "macos")] {
-            fn get_av_devices() -> Id<NSArray<AVCaptureDevice>> {
+            fn get_av_devices() -> Retained<NSArray<AVCaptureDevice>> {
                 unsafe {
                     if_greater_than! {(10, 15) => {
-                        let mut device_types = NSMutableArray::new();
+                        let device_types = NSMutableArray::new();
 
                         device_types.addObject(AVCaptureDeviceTypeBuiltInWideAngleCamera);
                         if_greater_than! {(14) => {
@@ -170,7 +170,7 @@ impl AVFoundationCaptureDeviceManager {
                 }
             }
         } else {
-            fn get_av_devices() -> Id<NSArray<AVCaptureDevice>> {
+            fn get_av_devices() -> Retained<NSArray<AVCaptureDevice>> {
                 AVCaptureDevice::devices_with_media_type(AVMediaTypeVideo)
             }
         }
@@ -189,7 +189,7 @@ impl AVFoundationCaptureDeviceManager {
         Ok(devices)
     }
 
-    fn device_info_from_av_capture_device(device: &AVCaptureDevice) -> DeviceInformation {
+    fn device_info_from_av_capture_device(device: Retained<AVCaptureDevice>) -> DeviceInformation {
         DeviceInformation {
             name: device.localized_name().to_string(),
             id: device.unique_id().to_string(),
@@ -198,44 +198,37 @@ impl AVFoundationCaptureDeviceManager {
 }
 
 pub struct OutputDelegateIvars {
-    info: Option<DeviceInformation>,
-    handler: Option<OutputHandler>,
+    info: RwLock<Option<DeviceInformation>>,
+    handler: RwLock<Option<OutputHandler>>,
 }
 
 impl OutputDelegateIvars {
     fn new() -> Self {
         Self {
-            info: None,
-            handler: None,
+            info: RwLock::new(None),
+            handler: RwLock::new(None),
         }
     }
 
-    fn set_infomation(&mut self, info: DeviceInformation) {
-        self.info = Some(info);
+    fn set_infomation(&self, info: DeviceInformation) {
+        *self.info.write().unwrap() = Some(info);
     }
 
-    fn set_handler(&mut self, handler: OutputHandler) {
-        self.handler = Some(handler);
+    fn set_handler(&self, handler: OutputHandler) {
+        *self.handler.write().unwrap() = Some(handler);
     }
 }
 
-declare_class!(
+define_class!(
+    #[unsafe(super(NSObject))]
+    #[name = "OutputSampleBufferDelegate"]
+    #[ivars = OutputDelegateIvars]
     struct OutputDelegate;
-
-    unsafe impl ClassType for OutputDelegate {
-        type Super = NSObject;
-        type Mutability = mutability::Mutable;
-        const NAME: &'static str = "OutputSampleBufferDelegate";
-    }
-
-    impl DeclaredClass for OutputDelegate {
-        type Ivars = OutputDelegateIvars;
-    }
 
     unsafe impl NSObjectProtocol for OutputDelegate {}
 
     unsafe impl AVCaptureVideoDataOutputSampleBufferDelegate for OutputDelegate {
-        #[method(captureOutput:didOutputSampleBuffer:fromConnection:)]
+        #[unsafe(method(captureOutput:didOutputSampleBuffer:fromConnection:))]
         unsafe fn capture_output_did_output_sample_buffer(
             &self,
             _capture_output: &AVCaptureOutput,
@@ -249,32 +242,31 @@ declare_class!(
                 .and_then(|pixel_buffer| Frame::video_creator().create_from_pixel_buffer(&pixel_buffer).ok());
 
             if let Some(mut video_frame) = video_frame {
-                if let Some(handler) = self.ivars().handler.as_ref() {
-                    if let Some(info) = self.ivars().info.as_ref() {
-                        video_frame.source = Some(info.id.clone());
-                    }
-                    video_frame.pts = Some((sample_buffer.get_presentation_time_stamp().get_seconds() * MSEC_PER_SEC as f64) as i64);
+                video_frame.pts = Some((sample_buffer.get_presentation_time_stamp().get_seconds() * MSEC_PER_SEC as f64) as i64);
+                if let Some(info) = self.ivars().info.read().unwrap().as_ref() {
+                    video_frame.source = Some(info.id.clone());
+                }
+                if let Some(handler) = self.ivars().handler.read().unwrap().as_ref() {
                     handler(video_frame).ok();
                 }
             }
         }
     }
 
-    unsafe impl OutputDelegate {
-        #[method_id(init)]
-        fn init(this: Allocated<Self>) -> Option<Id<Self>> {
+    impl OutputDelegate {
+        #[unsafe(method_id(init))]
+        fn init(this: Allocated<Self>) -> Option<Retained<Self>> {
             let this = this.set_ivars(OutputDelegateIvars::new());
-            unsafe { msg_send_id![super(this), init] }
+            unsafe { msg_send![super(this), init] }
         }
     }
 );
 
-extern_methods!(
-    unsafe impl OutputDelegate {
-        #[method_id(new)]
-        pub fn new() -> Id<Self>;
+impl OutputDelegate {
+    fn new() -> Retained<Self> {
+        unsafe { msg_send![Self::alloc(), init] }
     }
-);
+}
 
 fn from_cm_codec_type(codec_type: CMVideoCodecType) -> Option<(VideoFormat, ColorRange)> {
     #[allow(non_upper_case_globals)]
@@ -321,7 +313,7 @@ fn from_av_capture_device_format(format: &AVCaptureDeviceFormat) -> Option<Camer
 }
 
 fn get_formats(device: &AVCaptureDevice) -> Vec<CameraFormat> {
-    device.formats().iter().filter_map(from_av_capture_device_format).collect()
+    device.formats().iter().filter_map(|f| from_av_capture_device_format(&f)).collect()
 }
 
 const SIMILAR_FORMAT_DIFF: f32 = 1.0;
@@ -340,7 +332,7 @@ fn select_supported_format(
     let mut matched_frame_rate = None;
 
     for format in formats.iter() {
-        if let Some(camera_format) = from_av_capture_device_format(format) {
+        if let Some(camera_format) = from_av_capture_device_format(&format) {
             let resolution_diff = match (width, height) {
                 (Some(width), Some(height)) => {
                     (camera_format.width as f32 - width as f32).abs() + (camera_format.height as f32 - height as f32).abs()
@@ -388,7 +380,7 @@ fn select_supported_format(
     match matched_format {
         Some(format) => {
             if device.lock_for_configuration().unwrap_or_default().is_true() {
-                device.set_active_format(format);
+                device.set_active_format(&format);
                 if let Some(frame_rate) = matched_frame_rate {
                     let frame_duration: CMTime = CMTime::make(1, frame_rate as i32);
                     device.set_active_video_min_frame_duration(frame_duration);
@@ -397,27 +389,27 @@ fn select_supported_format(
                 device.unlock_for_configuration();
             }
 
-            from_av_capture_device_format(format)
+            from_av_capture_device_format(&format)
         }
         None => None,
     }
 }
 
 fn set_output_settings(output: &AVCaptureVideoDataOutput, width: u32, height: u32, video_format: VideoFormat) {
-    let mut settings = NSMutableDictionary::<NSString, NSObject>::new();
+    let settings = NSMutableDictionary::<NSString, NSObject>::new();
     let pixel_format = into_cv_pixel_format(video_format);
 
-    settings.insert_id(
+    settings.insert(
         cf_string_to_ns_string(&CVPixelBufferKeys::PixelFormatType.into()),
-        Retained::into_super(Retained::into_super(NSNumber::numberWithUnsignedInt(pixel_format))),
+        &Retained::into_super(Retained::into_super(NSNumber::numberWithUnsignedInt(pixel_format))),
     );
-    settings.insert_id(
+    settings.insert(
         cf_string_to_ns_string(&CVPixelBufferKeys::Width.into()),
-        Retained::into_super(Retained::into_super(NSNumber::numberWithUnsignedInt(width))),
+        &Retained::into_super(Retained::into_super(NSNumber::numberWithUnsignedInt(width))),
     );
-    settings.insert_id(
+    settings.insert(
         cf_string_to_ns_string(&CVPixelBufferKeys::Height.into()),
-        Retained::into_super(Retained::into_super(NSNumber::numberWithUnsignedInt(height))),
+        &Retained::into_super(Retained::into_super(NSNumber::numberWithUnsignedInt(height))),
     );
 
     output.set_video_settings(&settings);
@@ -434,11 +426,11 @@ pub struct AVFoundationCaptureDevice {
     formats: Option<Vec<CameraFormat>>,
     current_format: Option<CameraFormat>,
     handler: Option<OutputHandler>,
-    session: Option<Id<AVCaptureSession>>,
-    device: Option<Id<AVCaptureDevice>>,
-    input: Option<Id<AVCaptureDeviceInput>>,
-    output: Option<Id<AVCaptureVideoDataOutput>>,
-    delegate: Option<Id<OutputDelegate>>,
+    session: Option<Retained<AVCaptureSession>>,
+    device: Option<Retained<AVCaptureDevice>>,
+    input: Option<Retained<AVCaptureDeviceInput>>,
+    output: Option<Retained<AVCaptureVideoDataOutput>>,
+    delegate: Option<Retained<OutputDelegate>>,
 }
 
 impl Device for AVFoundationCaptureDevice {
@@ -457,10 +449,10 @@ impl Device for AVFoundationCaptureDevice {
             let device = AVCaptureDevice::device_with_unique_id(&id).ok_or_else(|| not_found_error!(id))?;
             let output = AVCaptureVideoDataOutput::new();
             let input = AVCaptureDeviceInput::from_device(&device).map_err(|err| invalid_error!(err.to_string()))?;
-            let mut delegate = OutputDelegate::new();
-            let queue = Queue::new("com.x-device.video-capture", dispatch2::QueueAttribute::Serial);
+            let delegate = OutputDelegate::new();
+            let queue = DispatchQueue::new("com.x-device.video-capture", DispatchQueueAttr::SERIAL);
             let handler = self.handler.as_ref().ok_or_else(|| none_param_error!(handler))?;
-            let ivars = delegate.ivars_mut();
+            let ivars = delegate.ivars();
 
             ivars.set_infomation(self.info.clone());
             ivars.set_handler(handler.clone());
@@ -608,7 +600,7 @@ impl Device for AVFoundationCaptureDevice {
     }
 }
 
-impl CaptureDevice for AVFoundationCaptureDevice {
+impl CaptureHanlder for AVFoundationCaptureDevice {
     fn set_output_handler<F>(&mut self, handler: F) -> Result<()>
     where
         F: Fn(Frame) -> Result<()> + Send + Sync + 'static,

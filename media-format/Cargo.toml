@@ -20,7 +20,7 @@ media-format-isomp4 = { version = "0.1.0", default-features = false, path = "for
 media-format-matroska = { version = "0.1.0", default-features = false, path = "formats/matroska", optional = true }
 
 [features]
-default = ["audio", "video", "demuxer", "all-formats"]
+default = ["audio", "video", "demuxer", "muxer", "all-formats"]
 all-formats = ["all-demuxers", "all-muxers"]
 all-demuxers = ["isomp4", "matroska"]
 all-muxers = []

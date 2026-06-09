@@ -22,7 +22,7 @@ use media_core::{
     Result,
 };
 use media_device_types::{
-    capture::CaptureDevice,
+    capture::CaptureHanlder,
     device::{Device, DeviceEvent, DeviceEventHandler, DeviceInformation, DeviceManager, OutputHandler},
 };
 use windows::{
@@ -794,7 +794,7 @@ impl Device for MediaFoundationDevice {
     }
 }
 
-impl CaptureDevice for MediaFoundationDevice {
+impl CaptureHanlder for MediaFoundationDevice {
     fn set_output_handler<F>(&mut self, handler: F) -> Result<()>
     where
         F: Fn(Frame) -> Result<()> + Send + Sync + 'static,

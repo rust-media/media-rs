@@ -18,19 +18,19 @@ media-device-types = { workspace = true, features = ["capture", "video"] }
 os-ver.workspace = true
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
-av-foundation = "0.7.0"
-dispatch2 = "0.1"
+av-foundation = "0.8.1"
+dispatch2 = "0.3"
 core-foundation.workspace = true
 core-media.workspace = true
 core-video.workspace = true
-objc2 = "0.5"
-objc2-foundation = { version = "0.2", features = ["NSArray", "NSDictionary", "NSObject"] }
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSDictionary", "NSObject"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows-core = "0.61"
+windows-core = "0.62"
 
 [target.'cfg(target_os = "windows")'.dependencies.windows]
-version = "0.61"
+version = "0.62"
 features = [
     "Win32",
     "Win32_Foundation",
@@ -41,15 +41,9 @@ features = [
 ]
 
 [features]
-default = ["capture", "video", "av-foundation-capture", "media-foundation-capture"]
-audio = ["media-device-types/audio"]
-video = [
-    "media-core/video",
-    "media-device-types/video",
-]
-capture = ["media-device-types/capture"]
-av-foundation-capture = []
-media-foundation-capture = []
+default = ["av-foundation", "media-foundation"]
+av-foundation = []
+media-foundation = []
 
 [package.metadata.docs.rs]
 default-target = "x86_64-pc-windows-msvc"

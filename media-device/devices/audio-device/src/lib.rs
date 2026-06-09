@@ -1,39 +1,30 @@
 use cfg_if::cfg_if;
-use media_core::{
-    video::{ColorRange, VideoFormat},
-    Result,
-};
+use media_core::Result;
 use media_device_types::{DeviceEvent, DeviceManager};
 
 cfg_if! {
-    if #[cfg(target_os = "windows")] {
-        #[path = "windows/mod.rs"]
-        pub mod backend;
-
-        pub use backend::media_foundation::MediaFoundationDeviceManager as DefaultCameraManager;
-    } else if #[cfg(any(target_os = "macos", target_os = "ios"))] {
+    if #[cfg(any(target_os = "macos", target_os = "ios"))] {
         #[path = "mac/mod.rs"]
         pub mod backend;
 
-        pub use backend::av_foundation::AVFoundationCaptureDeviceManager as DefaultCameraManager;
+        #[cfg(feature = "capture")]
+        pub use backend::core_audio::CoreAudioInputDeviceManager as DefaultMicrophoneManager;
+        #[cfg(feature = "render")]
+        pub use backend::core_audio::CoreAudioOutputDeviceManager as DefaultSpeakerManager;
     }
 }
 
-#[allow(dead_code)]
-#[derive(Clone, Debug)]
-pub(crate) struct CameraFormat {
-    pub format: VideoFormat,
-    pub color_range: ColorRange,
-    pub width: u32,
-    pub height: u32,
-    pub frame_rates: Vec<f32>,
-}
-
-pub struct CameraManager<T: DeviceManager> {
+/// A generic audio device manager that wraps a platform-specific
+/// [`DeviceManager`] backend.
+///
+/// Use it together with one of the default backends, e.g.
+/// `AudioDeviceManager::<DefaultMicrophoneManager>::new()` for microphones, or
+/// `AudioDeviceManager::<DefaultSpeakerManager>::new()` for speakers.
+pub struct AudioDeviceManager<T: DeviceManager> {
     backend: T,
 }
 
-impl<T: DeviceManager> CameraManager<T> {
+impl<T: DeviceManager> AudioDeviceManager<T> {
     pub fn new() -> Result<Self> {
         let mut backend = T::init()?;
         backend.refresh()?;
@@ -78,7 +69,7 @@ impl<T: DeviceManager> CameraManager<T> {
     }
 }
 
-impl<T: DeviceManager> Drop for CameraManager<T> {
+impl<T: DeviceManager> Drop for AudioDeviceManager<T> {
     fn drop(&mut self) {
         self.backend.deinit();
     }

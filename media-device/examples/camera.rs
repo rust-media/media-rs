@@ -1,4 +1,4 @@
-use std::sync::RwLock;
+use std::sync::{Arc, Condvar, Mutex, RwLock};
 
 use env_logger;
 use log::{error, info, warn};
@@ -8,7 +8,7 @@ use media_core::{
 };
 use media_device::{
     camera::{CameraManager, DefaultCameraManager},
-    capture::CaptureDevice,
+    capture::CaptureHanlder,
     Device,
 };
 
@@ -94,7 +94,20 @@ fn main() {
         }
     }
 
-    std::thread::sleep(std::time::Duration::from_secs(5));
+    let running = Arc::new((Mutex::new(true), Condvar::new()));
+    let stop_flag = running.clone();
+    ctrlc::set_handler(move || {
+        let (lock, cvar) = &*stop_flag;
+        *lock.lock().unwrap() = false;
+        cvar.notify_one();
+    })
+    .expect("failed to install Ctrl+C handler");
+
+    let (lock, cvar) = &*running;
+    let mut guard = lock.lock().unwrap();
+    while *guard {
+        guard = cvar.wait(guard).unwrap();
+    }
 
     // Stop the camera
     if let Err(e) = device.stop() {

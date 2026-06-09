@@ -45,6 +45,19 @@ impl AudioDataCreator {
             planes,
         })
     }
+
+    fn create_from_mut_buffer<'a>(format: SampleFormat, channels: NonZeroU8, samples: NonZeroU32, buffer: &'a mut [u8]) -> Result<MemoryData<'a>> {
+        let (size, planes) = format.calc_data_size(channels.get(), samples.get(), 1);
+
+        if buffer.len() != size {
+            return Err(invalid_error!("buffer size"));
+        }
+
+        Ok(MemoryData {
+            data: Data::from_slice_mut(buffer),
+            planes,
+        })
+    }
 }
 
 pub struct AudioFrameCreator;
@@ -76,6 +89,25 @@ impl AudioFrameCreator {
         T: Into<Cow<'a, [u8]>>,
     {
         let data = AudioDataCreator::create_from_buffer(desc.format, desc.channels(), desc.samples, buffer)?;
+
+        Ok(Frame::from_data(FrameDescriptor::Audio(desc), FrameData::Memory(data)))
+    }
+
+    pub fn create_from_mut_buffer<'a>(
+        &self,
+        format: SampleFormat,
+        channels: u8,
+        samples: u32,
+        sample_rate: u32,
+        buffer: &'a mut [u8],
+    ) -> Result<Frame<'a>> {
+        let desc = AudioFrameDescriptor::try_new(format, channels, samples, sample_rate)?;
+
+        self.create_from_mut_buffer_with_descriptor(desc, buffer)
+    }
+
+    pub fn create_from_mut_buffer_with_descriptor<'a>(&self, desc: AudioFrameDescriptor, buffer: &'a mut [u8]) -> Result<Frame<'a>> {
+        let data = AudioDataCreator::create_from_mut_buffer(desc.format, desc.channels(), desc.samples, buffer)?;
 
         Ok(Frame::from_data(FrameDescriptor::Audio(desc), FrameData::Memory(data)))
     }
@@ -146,6 +178,22 @@ impl AudioFrame<'_> {
         T: Into<Cow<'a, [u8]>>,
     {
         let data = AudioDataCreator::create_from_buffer(desc.format, desc.channels(), desc.samples, buffer)?;
+
+        Ok(Frame::from_data_with_generic_descriptor(desc, FrameData::Memory(data)))
+    }
+
+    /// Borrow `buffer` mutably as frame storage without copying.
+    ///
+    /// Useful for in-place fill paths; the frame is valid only for the lifetime
+    /// of `buffer`.
+    pub fn from_mut_buffer<'a>(format: SampleFormat, channels: u8, samples: u32, sample_rate: u32, buffer: &'a mut [u8]) -> Result<AudioFrame<'a>> {
+        let desc = AudioFrameDescriptor::try_new(format, channels, samples, sample_rate)?;
+
+        Self::from_mut_buffer_with_descriptor(desc, buffer)
+    }
+
+    pub fn from_mut_buffer_with_descriptor<'a>(desc: AudioFrameDescriptor, buffer: &'a mut [u8]) -> Result<AudioFrame<'a>> {
+        let data = AudioDataCreator::create_from_mut_buffer(desc.format, desc.channels(), desc.samples, buffer)?;
 
         Ok(Frame::from_data_with_generic_descriptor(desc, FrameData::Memory(data)))
     }

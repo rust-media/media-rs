@@ -17,6 +17,7 @@ members = [
     "media-codec/codecs/h265",
     "media-codec/codecs/video-toolbox",
     # Devices
+    "media-device/devices/audio-device",
     "media-device/devices/camera",
     # Formats
     "media-format/formats/isomp4",
@@ -32,7 +33,7 @@ license = "MIT OR Apache-2.0"
 categories = ["multimedia", "multimedia::audio", "multimedia::video"]
 keywords = ["audio", "media", "video"]
 edition = "2021"
-rust-version = "1.85.0"
+rust-version = "1.85"
 
 [workspace.dependencies]
 media-core = { version = "0.9.1", default-features = false, path = "./media-core" }
@@ -43,18 +44,21 @@ media-codec-h264 = { version = "0.1.1", default-features = false, path = "./medi
 media-codec-h265 = { version = "0.1.1", default-features = false, path = "./media-codec/codecs/h265" }
 media-codec-types = { version = "0.9.1", default-features = false, path = "./media-codec/types" }
 media-device = { version = "0.9.1", default-features = false, path = "./media-device" }
+media-device-audio-device = { version = "0.1.0", default-features = false, path = "./media-device/devices/audio-device" }
 media-device-camera = { version = "0.1.0", default-features = false, path = "./media-device/devices/camera" }
 media-device-types = { version = "0.9.1", default-features = false, path = "./media-device/types" }
 media-format = { version = "0.9.1", default-features = false, path = "./media-format" }
 media-format-types = { version = "0.9.1", default-features = false, path = "./media-format/types" }
 aligned-vec = "0.6"
+audio-toolbox = { version = "0.1.1", default-features = false, features = ["std"] }
 bitflags = "2.11"
 bytemuck = { version = "1.25", features = ["derive"] }
 cfg-if = "1.0"
-core-audio-types = "0.2.0"
+core-audio = { version = "0.1.0", default-features = false, features = ["std"] }
+core-audio-types = { version = "0.3.0", default-features = false, features = ["std"] }
 core-foundation = "0.10"
-core-media = "0.7.1"
-core-video = { version = "0.5.2", default-features = false, features = ["link"] }
+core-media = { version = "0.8.1", default-features = false, features = ["link"] }
+core-video = { version = "0.6.1", default-features = false, features = ["link"] }
 ctor = "0.6.3"
 num_enum = "0.7"
 num-rational = "0.4"

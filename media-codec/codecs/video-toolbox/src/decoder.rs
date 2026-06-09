@@ -65,8 +65,7 @@ impl Decoder<VideoDecoder> for VTDecoder {
         }
 
         let block_buffer = unsafe {
-            CMBlockBuffer::new_with_memory_block(None, data.len(), None, 0, data.len(), 0)
-                .map_err(|_| Error::CreationFailed("CMBlockBuffer".into()))?
+            CMBlockBuffer::new_with_memory_block_from_slice(data, 0, data.len(), 0).map_err(|_| Error::CreationFailed("CMBlockBuffer".into()))?
         };
 
         block_buffer.replace_data_bytes(data, 0).map_err(|err| failed_error!(err))?;

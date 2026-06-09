@@ -1,0 +1,39 @@
+[package]
+name = "media-device-audio-device"
+description = "A cross-platform audio capture and playback device implementation"
+homepage.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/media-device-audio-device"
+version = "0.1.0"
+authors.workspace = true
+license.workspace = true
+categories = ["multimedia", "multimedia::audio"]
+keywords = ["audio", "microphone", "speaker", "capture", "playback"]
+edition.workspace = true
+
+[dependencies]
+cfg-if.workspace = true
+media-core = { workspace = true, features = ["audio"] }
+media-device-types = { workspace = true, features = ["audio"] }
+
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+audio-toolbox.workspace = true
+core-audio.workspace = true
+core-audio-types.workspace = true
+core-foundation.workspace = true
+libc = "0.2"
+
+[features]
+default = ["capture", "render", "core-audio"]
+capture = ["media-device-types/capture"]
+render = ["media-device-types/render"]
+core-audio = []
+
+[package.metadata.docs.rs]
+default-target = "x86_64-apple-darwin"
+targets = [
+    "x86_64-apple-darwin",
+    "x86_64-apple-ios",
+    "aarch64-apple-darwin",
+    "aarch64-apple-ios",
+]

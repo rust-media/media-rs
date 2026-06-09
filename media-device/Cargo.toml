@@ -18,6 +18,7 @@ workspace = true
 workspace = true
 
 [dependencies]
+media-device-audio-device = { workspace = true, optional = true }
 media-device-camera = { workspace = true, optional = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
@@ -48,33 +49,33 @@ console_error_panic_hook = "0.1"
 [dev-dependencies]
 env_logger = "0.11"
 log = "0.4"
+ctrlc = "3"
 
 [features]
 default = ["audio", "video", "capture", "render", "all-devices"]
 all-devices = ["all-capture-devices", "all-render-devices"]
-all-capture-devices = ["av-foundation-capture", "media-foundation-capture"]
-all-render-devices = []
+all-capture-devices = ["camera", "microphone"]
+all-render-devices = ["speaker"]
 audio = [
     "media-core/audio",
     "media-device-types/audio",
-    "media-device-camera?/audio",
 ]
 video = [
     "media-core/video",
     "media-device-types/video",
-    "media-device-camera?/video",
 ]
 capture = [
     "media-device-types/capture",
-    "media-device-camera?/capture",
+    "media-device-audio-device?/capture",
 ]
 render = [
     "media-device-types/render",
+    "media-device-audio-device?/render",
 ]
 # Devices
-camera = ["dep:media-device-camera", "capture", "video"]
-av-foundation-capture = ["camera", "media-device-camera?/av-foundation-capture"]
-media-foundation-capture = ["camera", "media-device-camera?/media-foundation-capture"]
+camera = ["dep:media-device-camera", "video", "capture"]
+microphone = ["dep:media-device-audio-device", "audio", "capture"]
+speaker = ["dep:media-device-audio-device", "audio", "render"]
 
 [package.metadata.docs.rs]
 default-target = "x86_64-pc-windows-msvc"

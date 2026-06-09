@@ -20,7 +20,7 @@ os-ver = "0.2.1"
 core-foundation.workspace = true
 core-media.workspace = true
 core-video.workspace = true
-video-toolbox = "0.2.1"
+video-toolbox = "0.3.1"
 
 [features]
 default = ["decoder", "encoder"]
