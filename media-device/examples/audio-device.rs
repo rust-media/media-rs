@@ -3,7 +3,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use env_logger;
 use log::{error, info, warn};
 use media_core::{
-    audio::{circular_buffer::AudioCircularBuffer, SampleFormat},
+    audio::{SAMPLE_RATE_48K, SampleFormat, circular_buffer::AudioCircularBuffer},
     variant::Variant,
 };
 use media_device::{
@@ -13,7 +13,7 @@ use media_device::{
     Device,
 };
 
-const SAMPLE_RATE: u32 = 48_000;
+const SAMPLE_RATE: u32 = SAMPLE_RATE_48K;
 const CHANNELS: u8 = 1;
 const MAX_BUFFERED_SAMPLES: u32 = SAMPLE_RATE;
 

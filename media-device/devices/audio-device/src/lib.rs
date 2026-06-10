@@ -11,6 +11,14 @@ cfg_if! {
         pub use backend::core_audio::CoreAudioInputDeviceManager as DefaultMicrophoneManager;
         #[cfg(feature = "render")]
         pub use backend::core_audio::CoreAudioOutputDeviceManager as DefaultSpeakerManager;
+    } else if #[cfg(target_os = "windows")] {
+        #[path = "windows/mod.rs"]
+        pub mod backend;
+
+        #[cfg(feature = "capture")]
+        pub use backend::wasapi::WasapiInputDeviceManager as DefaultMicrophoneManager;
+        #[cfg(feature = "render")]
+        pub use backend::wasapi::WasapiOutputDeviceManager as DefaultSpeakerManager;
     }
 }
 

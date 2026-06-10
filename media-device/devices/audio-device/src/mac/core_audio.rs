@@ -2,18 +2,15 @@
 use std::mem::ManuallyDrop;
 #[cfg(feature = "render")]
 use std::slice;
-#[cfg(any(feature = "capture", feature = "render"))]
 use std::{
     ffi::c_void,
+    mem, ptr,
     ptr::NonNull,
+    slice::{Iter, IterMut},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
-};
-use std::{
-    mem, ptr,
-    slice::{Iter, IterMut},
 };
 
 #[cfg(feature = "render")]
@@ -22,45 +19,45 @@ use audio_toolbox::{
     audio_component::{Component, ComponentInstance},
     kAudioOutputUnitProperty_CurrentDevice, kAudioOutputUnitProperty_EnableIO, kAudioUnitManufacturer_Apple, kAudioUnitProperty_StreamFormat,
     kAudioUnitScope_Global, kAudioUnitScope_Input, kAudioUnitScope_Output, kAudioUnitSubType_HALOutput, kAudioUnitType_Output,
-    AudioComponentDescription, AudioUnitElement,
+    AURenderCallbackStruct, AudioComponentDescription, AudioUnitElement, AudioUnitRenderActionFlags,
 };
 #[cfg(feature = "capture")]
 use audio_toolbox::{audio_unit::Unit, kAudioOutputUnitProperty_SetInputCallback, AudioUnit};
-#[cfg(any(feature = "capture", feature = "render"))]
-use audio_toolbox::{AURenderCallbackStruct, AudioUnitRenderActionFlags};
-#[cfg(any(feature = "capture", feature = "render"))]
-use core_audio::host_time::host_time_to_nanos;
 #[cfg(feature = "capture")]
 use core_audio::kAudioObjectPropertyScopeInput;
 #[cfg(feature = "render")]
 use core_audio::kAudioObjectPropertyScopeOutput;
 use core_audio::{
     audio_hardware::{global_property_address, property_address, AudioObject},
+    host_time::host_time_to_nanos,
     kAudioDevicePropertyAvailableNominalSampleRates, kAudioDevicePropertyDeviceUID, kAudioDevicePropertyNominalSampleRate,
     kAudioDevicePropertyStreamConfiguration, kAudioHardwarePropertyDevices, kAudioObjectPropertyElementMain, kAudioObjectPropertyName, AudioObjectID,
     AudioObjectPropertyScope,
 };
-#[cfg(any(feature = "capture", feature = "render"))]
-use core_audio_types::AudioTimeStamp;
 use core_audio_types::{
     kAudioFormatFlagIsFloat, kAudioFormatFlagIsPacked, kAudioFormatLinearPCM, AudioBuffer, AudioBufferList as CoreAudioBufferList,
-    AudioStreamBasicDescription, AudioValueRange,
+    AudioStreamBasicDescription, AudioTimeStamp, AudioValueRange,
 };
 use core_foundation::{
     base::{OSStatus, TCFType},
     string::{CFString, CFStringRef},
 };
-#[cfg(any(feature = "capture", feature = "render"))]
-use media_core::audio::AudioFrameDescriptor;
-#[cfg(any(feature = "capture", feature = "render"))]
-use media_core::time::NSEC_PER_MSEC;
 #[cfg(feature = "render")]
 use media_core::FrameDescriptor;
 #[cfg(feature = "capture")]
 use media_core::{audio::AudioFrame, frame::MappedGuard};
-use media_core::{audio::SampleFormat, failed_error, invalid_error, not_found_error, unsupported_error, variant::Variant, Result};
-#[cfg(any(feature = "capture", feature = "render"))]
-use media_core::{error::Error, frame::Frame, frame_pool::FramePool, none_param_error};
+use media_core::{
+    audio::{AudioFrameDescriptor, SampleFormat, SAMPLE_RATE_48K, STANDARD_SAMPLE_RATES},
+    error::Error,
+    failed_error,
+    frame::Frame,
+    frame_pool::FramePool,
+    invalid_error, none_param_error, not_found_error,
+    time::NSEC_PER_MSEC,
+    unsupported_error,
+    variant::Variant,
+    Result,
+};
 use media_device_types::device::{Device, DeviceEvent, DeviceEventHandler, DeviceInformation, DeviceManager};
 #[cfg(feature = "capture")]
 use media_device_types::{capture::CaptureHanlder, device::OutputHandler};
@@ -72,12 +69,121 @@ const OUTPUT_ELEMENT: AudioUnitElement = 0;
 /// AUHAL input bus (element 1).
 const INPUT_ELEMENT: AudioUnitElement = 1;
 /// Sample rate used when a device does not advertise a nominal sample rate.
-const DEFAULT_SAMPLE_RATE: u32 = 48_000;
+const DEFAULT_SAMPLE_RATE: u32 = SAMPLE_RATE_48K;
 /// Fixed client sample format: 32-bit float, interleaved.
 const CLIENT_SAMPLE_FORMAT: SampleFormat = SampleFormat::F32;
 /// Defensive upper bound for CoreAudio render callback buffer lists.
 #[cfg(feature = "render")]
 const MAX_AUDIO_BUFFER_COUNT: usize = 32;
+
+/// Capture (input) uses the input scope, render (output) uses the output scope.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Direction {
+    #[cfg(feature = "capture")]
+    Input,
+    #[cfg(feature = "render")]
+    Output,
+}
+
+impl Direction {
+    #[inline]
+    fn scope(self) -> AudioObjectPropertyScope {
+        match self {
+            #[cfg(feature = "capture")]
+            Direction::Input => kAudioObjectPropertyScopeInput,
+            #[cfg(feature = "render")]
+            Direction::Output => kAudioObjectPropertyScopeOutput,
+        }
+    }
+}
+
+/// Read a `CFString` device property as an owned `String`.
+fn cfstring_property(obj: AudioObject, selector: u32) -> Option<String> {
+    let address = global_property_address(selector);
+    let raw: CFStringRef = obj.get_property(&address).ok()?;
+    if raw.is_null() {
+        return None;
+    }
+    Some(unsafe { CFString::wrap_under_create_rule(raw) }.to_string())
+}
+
+/// Count the number of channels the device exposes on the given scope.
+fn channel_count(obj: AudioObject, scope: AudioObjectPropertyScope) -> u32 {
+    let address = property_address(kAudioDevicePropertyStreamConfiguration, scope, kAudioObjectPropertyElementMain);
+    let bytes = match obj.get_property_bytes(&address) {
+        Ok(bytes) => bytes,
+        Err(_) => return 0,
+    };
+
+    let number_buffers_offset = mem::offset_of!(CoreAudioBufferList, mNumberBuffers);
+    let buffers_offset = mem::offset_of!(CoreAudioBufferList, mBuffers);
+    let channels_offset = mem::offset_of!(AudioBuffer, mNumberChannels);
+    let buffer_stride = mem::size_of::<AudioBuffer>();
+    let u32_size = mem::size_of::<u32>();
+
+    if bytes.len() < number_buffers_offset + u32_size {
+        return 0;
+    }
+
+    let num_buffers = unsafe { ptr::read_unaligned(bytes[number_buffers_offset..].as_ptr().cast::<u32>()) } as usize;
+    let mut total = 0u32;
+    for index in 0..num_buffers {
+        let Some(buffer_offset) = index.checked_mul(buffer_stride).and_then(|offset| buffers_offset.checked_add(offset)) else {
+            break;
+        };
+        let Some(offset) = buffer_offset.checked_add(channels_offset) else {
+            break;
+        };
+        let Some(end) = offset.checked_add(u32_size) else {
+            break;
+        };
+        if end > bytes.len() {
+            break;
+        }
+        total = total.saturating_add(unsafe { ptr::read_unaligned(bytes[offset..].as_ptr().cast::<u32>()) });
+    }
+
+    total
+}
+
+/// Query the device nominal sample rate, falling back to
+/// [`DEFAULT_SAMPLE_RATE`].
+fn nominal_sample_rate(obj: AudioObject) -> u32 {
+    let address = global_property_address(kAudioDevicePropertyNominalSampleRate);
+    obj.get_property::<f64>(&address).ok().filter(|rate| *rate > 0.0).map(|rate| rate as u32).unwrap_or(DEFAULT_SAMPLE_RATE)
+}
+
+/// Query the discrete set of sample rates supported by the device.
+fn available_sample_rates(obj: AudioObject, scope: AudioObjectPropertyScope) -> Vec<u32> {
+    let address = property_address(kAudioDevicePropertyAvailableNominalSampleRates, scope, kAudioObjectPropertyElementMain);
+    let ranges: Vec<AudioValueRange> = match obj.get_property_array(&address) {
+        Ok(ranges) => ranges,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut rates = Vec::with_capacity(ranges.len());
+    for range in ranges {
+        if range.mMinimum <= 0.0 || range.mMaximum <= 0.0 {
+            continue;
+        }
+        if (range.mMaximum - range.mMinimum).abs() < f64::EPSILON {
+            rates.push(range.mMinimum as u32);
+        } else {
+            // Continuous range: pick well-known anchors inside it.
+            let lo = range.mMinimum;
+            let hi = range.mMaximum;
+            for &anchor in STANDARD_SAMPLE_RATES {
+                let value = anchor as f64;
+                if value >= lo && value <= hi {
+                    rates.push(anchor);
+                }
+            }
+        }
+    }
+    rates.sort_unstable();
+    rates.dedup();
+    rates
+}
 
 /// Enumerate all hardware devices that expose channels on the given direction.
 fn enumerate(direction: Direction) -> Result<Vec<AudioDeviceDescriptor>> {
@@ -207,27 +313,6 @@ fn check(result: std::result::Result<(), OSStatus>, ctx: &'static str) -> Result
     result.map_err(|status| failed_error!(format!("{ctx} (OSStatus {status})")))
 }
 
-/// Capture (input) uses the input scope, render (output) uses the output scope.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Direction {
-    #[cfg(feature = "capture")]
-    Input,
-    #[cfg(feature = "render")]
-    Output,
-}
-
-impl Direction {
-    #[inline]
-    fn scope(self) -> AudioObjectPropertyScope {
-        match self {
-            #[cfg(feature = "capture")]
-            Direction::Input => kAudioObjectPropertyScopeInput,
-            #[cfg(feature = "render")]
-            Direction::Output => kAudioObjectPropertyScopeOutput,
-        }
-    }
-}
-
 /// Build an interleaved `AudioStreamBasicDescription` matching
 /// [`CLIENT_SAMPLE_FORMAT`].
 fn make_asbd(sample_rate: f64, channels: u32) -> AudioStreamBasicDescription {
@@ -247,100 +332,6 @@ fn make_asbd(sample_rate: f64, channels: u32) -> AudioStreamBasicDescription {
         mBitsPerChannel: CLIENT_SAMPLE_FORMAT.bits() as u32,
         mReserved: 0,
     }
-}
-
-/// Read a `CFString` device property as an owned `String`.
-fn cfstring_property(obj: AudioObject, selector: u32) -> Option<String> {
-    let address = global_property_address(selector);
-    let raw: CFStringRef = obj.get_property(&address).ok()?;
-    if raw.is_null() {
-        return None;
-    }
-    Some(unsafe { CFString::wrap_under_create_rule(raw) }.to_string())
-}
-
-/// Count the number of channels the device exposes on the given scope.
-fn channel_count(obj: AudioObject, scope: AudioObjectPropertyScope) -> u32 {
-    let address = property_address(kAudioDevicePropertyStreamConfiguration, scope, kAudioObjectPropertyElementMain);
-    let bytes = match obj.get_property_bytes(&address) {
-        Ok(bytes) => bytes,
-        Err(_) => return 0,
-    };
-
-    let number_buffers_offset = mem::offset_of!(CoreAudioBufferList, mNumberBuffers);
-    let buffers_offset = mem::offset_of!(CoreAudioBufferList, mBuffers);
-    let channels_offset = mem::offset_of!(AudioBuffer, mNumberChannels);
-    let buffer_stride = mem::size_of::<AudioBuffer>();
-    let u32_size = mem::size_of::<u32>();
-
-    if bytes.len() < number_buffers_offset + u32_size {
-        return 0;
-    }
-
-    let num_buffers = unsafe { ptr::read_unaligned(bytes[number_buffers_offset..].as_ptr().cast::<u32>()) } as usize;
-    let mut total = 0u32;
-    for index in 0..num_buffers {
-        let Some(buffer_offset) = index.checked_mul(buffer_stride).and_then(|offset| buffers_offset.checked_add(offset)) else {
-            break;
-        };
-        let Some(offset) = buffer_offset.checked_add(channels_offset) else {
-            break;
-        };
-        let Some(end) = offset.checked_add(u32_size) else {
-            break;
-        };
-        if end > bytes.len() {
-            break;
-        }
-        total = total.saturating_add(unsafe { ptr::read_unaligned(bytes[offset..].as_ptr().cast::<u32>()) });
-    }
-
-    total
-}
-
-/// Query the device nominal sample rate, falling back to
-/// [`DEFAULT_SAMPLE_RATE`].
-fn nominal_sample_rate(obj: AudioObject) -> u32 {
-    let address = global_property_address(kAudioDevicePropertyNominalSampleRate);
-    obj.get_property::<f64>(&address).ok().filter(|rate| *rate > 0.0).map(|rate| rate as u32).unwrap_or(DEFAULT_SAMPLE_RATE)
-}
-
-/// Standard nominal sample rates expanded for continuous device-reported
-/// ranges. CoreAudio reports each supported rate as an [`AudioValueRange`];
-/// hardware that exposes a continuous span (rare, e.g. some aggregate or USB
-/// devices) is unrolled to these well-known anchors that fall inside it.
-const STANDARD_SAMPLE_RATES: &[u32] = &[8_000, 11_025, 16_000, 22_050, 32_000, 44_100, 48_000, 88_200, 96_000, 176_400, 192_000];
-
-/// Query the discrete set of sample rates supported by the device.
-fn available_sample_rates(obj: AudioObject, scope: AudioObjectPropertyScope) -> Vec<u32> {
-    let address = property_address(kAudioDevicePropertyAvailableNominalSampleRates, scope, kAudioObjectPropertyElementMain);
-    let ranges: Vec<AudioValueRange> = match obj.get_property_array(&address) {
-        Ok(ranges) => ranges,
-        Err(_) => return Vec::new(),
-    };
-
-    let mut rates = Vec::with_capacity(ranges.len());
-    for range in ranges {
-        if range.mMinimum <= 0.0 || range.mMaximum <= 0.0 {
-            continue;
-        }
-        if (range.mMaximum - range.mMinimum).abs() < f64::EPSILON {
-            rates.push(range.mMinimum as u32);
-        } else {
-            // Continuous range: pick well-known anchors inside it.
-            let lo = range.mMinimum;
-            let hi = range.mMaximum;
-            for &anchor in STANDARD_SAMPLE_RATES {
-                let value = anchor as f64;
-                if value >= lo && value <= hi {
-                    rates.push(anchor);
-                }
-            }
-        }
-    }
-    rates.sort_unstable();
-    rates.dedup();
-    rates
 }
 
 /// A device descriptor shared by both capture and render devices.
@@ -450,17 +441,14 @@ fn configure_descriptor(desc: &mut AudioDeviceDescriptor, options: &Variant, run
     Ok(())
 }
 
-#[cfg(any(feature = "capture", feature = "render"))]
 trait CallbackControl {
     fn deactivate(&self);
 }
 
-#[cfg(any(feature = "capture", feature = "render"))]
 struct CallbackContext<T> {
     ptr: Option<NonNull<T>>,
 }
 
-#[cfg(any(feature = "capture", feature = "render"))]
 impl<T> CallbackContext<T> {
     fn new(value: T) -> Self {
         let ptr = Arc::into_raw(Arc::new(value)).cast_mut();
@@ -503,7 +491,6 @@ impl<T> CallbackContext<T> {
     }
 }
 
-#[cfg(any(feature = "capture", feature = "render"))]
 impl<T> Default for CallbackContext<T> {
     fn default() -> Self {
         Self {
@@ -512,14 +499,12 @@ impl<T> Default for CallbackContext<T> {
     }
 }
 
-#[cfg(any(feature = "capture", feature = "render"))]
 impl<T> Drop for CallbackContext<T> {
     fn drop(&mut self) {
         self.clear();
     }
 }
 
-#[cfg(any(feature = "capture", feature = "render"))]
 enum AudioBufferListStorage<'a> {
     #[cfg(feature = "capture")]
     Owned(CoreAudioBufferList),
@@ -530,13 +515,11 @@ enum AudioBufferListStorage<'a> {
     Marker(std::marker::PhantomData<&'a mut CoreAudioBufferList>),
 }
 
-#[cfg(any(feature = "capture", feature = "render"))]
 struct AudioBufferList<'a> {
     storage: AudioBufferListStorage<'a>,
     _marker: std::marker::PhantomData<&'a mut CoreAudioBufferList>,
 }
 
-#[cfg(any(feature = "capture", feature = "render"))]
 impl<'a> AudioBufferList<'a> {
     #[cfg(feature = "capture")]
     fn from_contiguous_parts(channels: u32, data: *mut u8, len: usize) -> Self {

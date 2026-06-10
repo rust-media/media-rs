@@ -17,12 +17,59 @@ use crate::{
 
 pub const DEFAULT_MAX_CHANNELS: usize = 16;
 
-pub const SAMPLE_RATE_TELEPHONE: u32 = 8000;
-pub const SAMPLE_RATE_VOIP: u32 = 16000;
-pub const SAMPLE_RATE_CD: u32 = 44100;
-pub const SAMPLE_RATE_DVD: u32 = 48000;
-pub const SAMPLE_RATE_HIGH: u32 = 96000;
-pub const SAMPLE_RATE_ULTRA_HIGH: u32 = 192000;
+// Common audio sample rate constants
+/// 8 kHz - Telephone quality
+pub const SAMPLE_RATE_8K: u32 = 8_000;
+pub const SAMPLE_RATE_TELEPHONE: u32 = SAMPLE_RATE_8K;
+/// 11.025 kHz - 1/4 CD sample rate
+pub const SAMPLE_RATE_11025: u32 = 11_025;
+/// 16 kHz - VoIP/Wideband speech
+pub const SAMPLE_RATE_16K: u32 = 16_000;
+pub const SAMPLE_RATE_VOIP: u32 = SAMPLE_RATE_16K;
+/// 22.05 kHz - 1/2 CD sample rate
+pub const SAMPLE_RATE_22050: u32 = 22_050;
+/// 32 kHz - Broadcast/DAB (Digital Audio Broadcasting) quality
+pub const SAMPLE_RATE_32K: u32 = 32_000;
+pub const SAMPLE_RATE_DAB: u32 = SAMPLE_RATE_32K;
+/// 44.1 kHz - CD quality
+pub const SAMPLE_RATE_44100: u32 = 44_100;
+pub const SAMPLE_RATE_CD: u32 = SAMPLE_RATE_44100;
+/// 48 kHz - DVD/Professional audio
+pub const SAMPLE_RATE_48K: u32 = 48_000;
+pub const SAMPLE_RATE_DVD: u32 = SAMPLE_RATE_48K;
+/// 88.2 kHz - 2x CD sample rate
+pub const SAMPLE_RATE_88200: u32 = 88_200;
+/// 96 kHz - High-resolution audio
+pub const SAMPLE_RATE_96K: u32 = 96_000;
+pub const SAMPLE_RATE_HIGH: u32 = SAMPLE_RATE_96K;
+/// 176.4 kHz - 4x CD sample rate
+pub const SAMPLE_RATE_176400: u32 = 176_400;
+/// 192 kHz - Ultra high-resolution audio
+pub const SAMPLE_RATE_192K: u32 = 192_000;
+pub const SAMPLE_RATE_ULTRA_HIGH: u32 = SAMPLE_RATE_192K;
+/// 352.8 kHz - DXD (Digital eXtreme Definition)
+pub const SAMPLE_RATE_352800: u32 = 352_800;
+pub const SAMPLE_RATE_DXD: u32 = 352_800;
+/// 384 kHz - Extreme high-resolution audio
+pub const SAMPLE_RATE_384K: u32 = 384_000;
+pub const SAMPLE_RATE_EXTREME_HIGH: u32 = SAMPLE_RATE_384K;
+
+/// Standard audio sample rates
+pub const STANDARD_SAMPLE_RATES: &[u32] = &[
+    SAMPLE_RATE_8K,
+    SAMPLE_RATE_11025,
+    SAMPLE_RATE_16K,
+    SAMPLE_RATE_22050,
+    SAMPLE_RATE_32K,
+    SAMPLE_RATE_44100,
+    SAMPLE_RATE_48K,
+    SAMPLE_RATE_88200,
+    SAMPLE_RATE_96K,
+    SAMPLE_RATE_176400,
+    SAMPLE_RATE_192K,
+    SAMPLE_RATE_352800,
+    SAMPLE_RATE_384K,
+];
 
 #[derive(Clone, Copy, Debug, EnumCount, Eq, PartialEq)]
 pub enum SampleFormat {
